@@ -160,7 +160,7 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
             const minsAgo    = Math.floor((Date.now() - new Date(conv.last_message_at)) / 60000)
             const timeLabel  = minsAgo === 0 ? 'now' : minsAgo < 60 ? `${minsAgo}m` : `${Math.floor(minsAgo/60)}h`
             // Room number — check multiple fields
-            const roomNum    = guest.room || guest.guest_room || guest.guest_room_number || '?'
+            const roomNum    = guest.room || guest.guest_room || guest.guest_room_number || '—'
 
             return (
               <div key={conv.id} onClick={() => { setSelectedConv(conv); setCentreMode('chat') }}
@@ -178,7 +178,7 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
                   </div>
                 </div>
                 <div style={{ fontSize:'12px', fontWeight:'500', color:'#6B7280', marginBottom:'5px' }}>
-                  Room {roomNum}
+                  {roomNum !== '—' ? `Room ${roomNum}` : 'No room assigned'}
                 </div>
                 <div style={{ fontSize:'11px', color:'#9CA3AF', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:'200px' }}>
                   {isEsc
