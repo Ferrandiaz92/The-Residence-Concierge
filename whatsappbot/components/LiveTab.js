@@ -140,7 +140,7 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
   )
 
   return (
-    <div style={{ display:'grid', gridTemplateColumns:'240px 1fr 260px', height:'100%', overflow:'hidden' }}>
+    <div style={{ display:'grid', gridTemplateColumns:'336px 1fr 364px', height:'100%', overflow:'hidden' }}>
 
       {/* ── LEFT: Conversations ── */}
       <div style={{ borderRight:'0.5px solid var(--border)', display:'flex', flexDirection:'column', background:'white', overflow:'hidden' }}>
