@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from 'react'
 import LiveTab       from '../../components/LiveTab'
 import GuestsTab     from '../../components/GuestsTab'
 import AnalyticsTab  from '../../components/AnalyticsTab'
-import '../dashboard.css'
 
 export default function DashboardPage() {
   const [activeTab, setActiveTab]         = useState('live')
