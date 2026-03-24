@@ -123,7 +123,7 @@ export default function GuestsTab({ hotelId, selectedGuest }) {
               <span style={{ fontSize:'12px', color:'#9CA3AF' }}>Welcome sent ✓</span>
             )}
           </div>
-          <div style={{ display:'flex', gap:'6px', marginTop:'6px', flexWrap:'wrap', alignItems:'center' }}>
+          <div style={{ display:'flex', gap:'6px', marginTop:'5px', flexWrap:'wrap', alignItems:'center' }}>
             <span style={{ fontSize:'13px', fontWeight:'600', padding:'3px 10px', borderRadius:'6px', background:'#F3F4F6', color:'#374151' }}>
               {guestRooms.length > 0 ? guestRooms.map(r => `Room ${r.room}`).join(' & ') : guest.room ? `Room ${guest.room}` : 'No room'}
             </span>
@@ -138,23 +138,6 @@ export default function GuestsTab({ hotelId, selectedGuest }) {
               </span>
             )}
           </div>
-```
-
-Commit. Result:
-```
-Ferran Díaz
-+35799534296
-EN
-Room 101   In: 24 Mar   Out: 28 Mar
-          </div>
-```
-
-Commit → result:
-```
-Ferran Diaz
-+357 99 123 456
-EN  Welcome sent ✓
-Room 312  In: 24 Mar  Out: 28 Mar
         </div>
         <button
           onClick={() => setShowCheckin(!showCheckin)}
