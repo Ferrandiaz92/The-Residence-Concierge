@@ -5,8 +5,8 @@
 // GET  /api/tickets — get open tickets for a hotel
 // ============================================================
 
-import { createTicket, getOpenTickets } from '../../../src/lib/ticketing.js'
-import { supabase } from '../../../src/lib/supabase.js'
+import { createTicket, getOpenTickets } from '@/src/lib/ticketing.js'
+import { supabase } from '@/src/lib/supabase.js'
 
 export async function POST(request) {
   try {
