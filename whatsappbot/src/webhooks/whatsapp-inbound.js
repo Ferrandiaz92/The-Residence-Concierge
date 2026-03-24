@@ -1,22 +1,25 @@
-// src/webhooks/whatsapp-inbound.js (updated with ticket routing)
+// src/webhooks/whatsapp-inbound.js
+// Updated to use knowledge base + create notifications
+
 import {
   getHotelByWhatsappNumber, getOrCreateGuest, updateGuest,
   getOrCreateConversation, appendMessage, getConversationHistory,
-  getPartners, createBooking,
+  getPartners, createBooking, supabase,
 } from '../lib/supabase.js'
 import { sendWhatsApp, parseIncomingMessage } from '../lib/twilio.js'
-import { detectLanguage, buildSystemPrompt, parseBookingRequest, formatPartnerAlert } from '../lib/language.js'
+import { detectLanguage, parseBookingRequest, formatPartnerAlert } from '../lib/language.js'
 import { callClaude } from '../lib/claude.js'
 import { handleTicketReply } from '../lib/ticketing.js'
+import { buildSystemPromptWithKB } from '../lib/knowledge.js'
 
 export async function handleInboundWhatsApp(rawBody) {
   const { from, to, message, profileName } = parseIncomingMessage(rawBody)
   console.log(`Inbound: ${from} → ${to}: "${message.slice(0, 80)}"`)
   if (!message.trim()) return
 
-  // 1. Check if dept staff replying to a ticket (👍 ✅ ❌)
+  // 1. Check ticket reply
   const isTicketReply = await handleTicketReply(from, message)
-  if (isTicketReply) { console.log(`Ticket reply from ${from}`); return }
+  if (isTicketReply) return
 
   // 2. Load hotel
   let hotel
@@ -39,14 +42,23 @@ export async function handleInboundWhatsApp(rawBody) {
   const conv    = await getOrCreateConversation(guest.id, hotel.id)
   const history = (await getConversationHistory(conv.id)).slice(-20)
 
-  // 6. Build prompt
+  // 6. Build prompt WITH knowledge base
   const partners     = await getPartners(hotel.id)
-  const systemPrompt = buildSystemPrompt(hotel, guest, partners)
+  const systemPrompt = await buildSystemPromptWithKB(hotel, guest, partners)
 
   // 7. Save user message
   await appendMessage(conv.id, 'user', message)
 
-  // 8. Claude
+  // 8. Create notification for staff
+  await createNotification(hotel.id, {
+    type:      'guest_message',
+    title:     `${guest.name || 'Guest'} · Room ${guest.room || '?'}`,
+    body:      message.slice(0, 100),
+    link_type: 'conversation',
+    link_id:   conv.id,
+  })
+
+  // 9. Claude
   let aiResponse
   try { aiResponse = await callClaude(systemPrompt, history, message) }
   catch {
@@ -54,26 +66,52 @@ export async function handleInboundWhatsApp(rawBody) {
     await sendWhatsApp(from, fb[guest.language]||fb.en); return
   }
 
-  // 9. Reply
-  const { hasBooking, booking, cleanResponse } = parseBookingRequest(aiResponse)
-  await sendWhatsApp(from, cleanResponse || aiResponse)
-  await appendMessage(conv.id, 'assistant', cleanResponse || aiResponse)
+  // 10. Check for handoff signal
+  const isHandoff = aiResponse.toLowerCase().includes('[handoff]') ||
+                    aiResponse.toLowerCase().includes('connect you with our') ||
+                    aiResponse.toLowerCase().includes('connect you with reception')
 
-  // 10. Booking
-  if (hasBooking && booking) await processBooking(booking, hotel, guest, partners)
+  if (isHandoff) {
+    await createNotification(hotel.id, {
+      type:      'bot_handoff',
+      title:     `Handoff needed — ${guest.name || 'Guest'} · Room ${guest.room || '?'}`,
+      body:      `Bot escalated: "${message.slice(0, 80)}"`,
+      link_type: 'conversation',
+      link_id:   conv.id,
+    })
+    // Mark conversation as escalated
+    await supabase.from('conversations').update({ status: 'escalated' }).eq('id', conv.id)
+  }
+
+  // 11. Reply
+  const { hasBooking, booking, cleanResponse } = parseBookingRequest(aiResponse)
+  const replyText = cleanResponse || aiResponse
+  await sendWhatsApp(from, replyText)
+  await appendMessage(conv.id, 'assistant', replyText)
+
+  // 12. Booking
+  if (hasBooking && booking) await processBooking(booking, hotel, guest, partners, conv.id)
 }
 
-async function processBooking(booking, hotel, guest, partners) {
+async function createNotification(hotelId, { type, title, body, link_type, link_id }) {
+  try {
+    await supabase.from('notifications').insert({ hotel_id: hotelId, type, title, body, link_type, link_id })
+  } catch (e) { console.error('Notification error:', e.message) }
+}
+
+async function processBooking(booking, hotel, guest, partners, convId) {
   const partner = partners.find(p =>
     p.name.toLowerCase().includes((booking.partner||'').toLowerCase()) || p.type === booking.type)
   if (!partner) return
+
   const base = booking.details?.price || (partner.details?.price_per_person
     ? partner.details.price_per_person * (booking.details?.passengers||1) : 0)
   const comm = base > 0 ? +(base * partner.commission_rate / 100).toFixed(2) : 0
+
   const saved = await createBooking(hotel.id, guest.id, partner.id, booking.type, booking.details||{}, comm)
+
   try {
     const msg = await sendWhatsApp(partner.phone, formatPartnerAlert(booking, guest, hotel))
-    const { supabase } = await import('../lib/supabase.js')
     await supabase.from('bookings').update({ partner_alert_sid: msg.sid }).eq('id', saved.id)
   } catch(e) { console.error('Partner alert failed:', e.message) }
 }
