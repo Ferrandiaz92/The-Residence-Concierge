@@ -100,14 +100,14 @@ export default function AnalyticsTab({ hotelId }) {
 
       {/* Export bar */}
       <div style={{ display:'flex',alignItems:'center',gap:'10px',marginBottom:'12px',padding:'10px 14px',background:'white',borderRadius:'var(--radius-lg)',border:'0.5px solid var(--border)' }}>
-        <div style={{ flex:1,fontSize:'12px',fontWeight:'500',color:'var(--gray-900)' }}>Monthly commission report</div>
+        <div style={{ flex:1,fontSize:'12px',fontWeight:'500',color:'var(--gray-900)' }}>Activity Report</div>
         <div style={{ fontSize:'11px',color:'var(--gray-500)' }}>Period:</div>
         <input type="month" value={exportMonth} onChange={e=>setExportMonth(e.target.value)}
           style={{ padding:'5px 10px',border:'0.5px solid var(--border-md)',borderRadius:'var(--radius-sm)',fontSize:'11px',fontFamily:'var(--font)',outline:'none',color:'var(--gray-800)' }}
         />
         <button onClick={handleExport} disabled={exporting}
           style={{ padding:'7px 16px',background:'var(--green-800)',border:'none',borderRadius:'var(--radius-sm)',fontSize:'11px',fontWeight:'500',color:'white',cursor:'pointer',fontFamily:'var(--font)' }}>
-          {exporting ? 'Opening...' : 'Export PDF'}
+         {exporting ? 'Opening...' : 'Export Activity Report'}
         </button>
       </div>
 
