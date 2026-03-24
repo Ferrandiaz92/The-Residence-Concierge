@@ -70,7 +70,7 @@ export default function DashboardPage() {
           color: 'var(--gold)', whiteSpace: 'nowrap',
           letterSpacing: '0.2px',
         }}>
-          The <span style={{ color: 'white', fontWeight: '400' }}>Residence</span>
+         The <span style={{ color: 'white', fontWeight: '400' }}>Residence</span> <span style={{ color: 'var(--gold)' }}>Concierge</span>
         </div>
 
         {/* Search */}
