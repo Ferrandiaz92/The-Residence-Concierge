@@ -1,10 +1,4 @@
-// components/AnalyticsTab.js (fixed)
-// Fixes:
-// 1. Revenue by Service chart now shows (was using CSS vars that don't resolve in SVG)
-// 2. Partners ranking at bottom now visible
-// 3. Better typography throughout
-// 4. Renamed Commission → Revenue
-
+// components/AnalyticsTab.js (fixes: chart data, wider layout, bigger QA fonts)
 'use client'
 import { useState, useEffect } from 'react'
 import BotQA from './BotQA'
@@ -34,27 +28,33 @@ export default function AnalyticsTab({ hotelId }) {
   }
 
   if (loading) return (
-    <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100%', color:'#9CA3AF', fontFamily:'var(--font)', fontSize:'13px' }}>
+    <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100%', color:'#6B7280', fontFamily:"'DM Sans',sans-serif", fontSize:'15px' }}>
       Loading analytics...
     </div>
   )
 
+  // ── Always use real + fallback data ──────────────────────────
   const s = stats || {}
 
-  // Use hardcoded colors — CSS vars don't work in inline SVG context
-  const GREEN   = '#1C3D2E'
-  const GOLD    = '#C9A84C'
-  const BLUE    = '#2563EB'
-  const TEAL    = '#0F766E'
-  const RED     = '#DC2626'
-  const AMBER   = '#D97706'
-  const PURPLE  = '#7C3AED'
+  // Build commission data — use real data if available, otherwise show demo
+  const realComm = s.commByType && Object.keys(s.commByType).length > 0
+  const commByCategory = realComm ? s.commByType : {
+    Activities: 520, 'Late checkout': 315, Restaurant: 230, Taxi: 175
+  }
+  const totalComm = Object.values(commByCategory).reduce((a,b) => a + Number(b), 0)
+  const maxComm   = Math.max(...Object.values(commByCategory).map(Number), 1)
 
-  const commByCategory = s.commByType || { activity:520, late_checkout:315, restaurant:230, taxi:175 }
-  const maxComm = Math.max(...Object.values(commByCategory))
-  const totalComm = Object.values(commByCategory).reduce((a,b)=>a+b,0)
+  const GREEN  = '#1C3D2E'
+  const GOLD   = '#C9A84C'
+  const BLUE   = '#2563EB'
+  const TEAL   = '#0F766E'
+  const RED    = '#DC2626'
+  const AMBER  = '#D97706'
+  const PURPLE = '#7C3AED'
 
-  const catColors = { activity:GREEN, late_checkout:GOLD, restaurant:BLUE, taxi:TEAL }
+  // Assign colors to each category
+  const catColorList = [GREEN, GOLD, BLUE, TEAL, AMBER, PURPLE, RED]
+  const catEntries = Object.entries(commByCategory)
 
   const internalServices = [
     { label:'Housekeeping', value:54, color:GREEN },
@@ -64,7 +64,7 @@ export default function AnalyticsTab({ hotelId }) {
     { label:'Maintenance', value:13, color:AMBER },
     { label:'Luggage', value:11, color:PURPLE },
   ]
-  const maxInternal = Math.max(...internalServices.map(i=>i.value))
+  const maxInternal = 54
 
   const issueCategories = [
     { label:'Partner reply', resolved:44, open:6 },
@@ -88,25 +88,25 @@ export default function AnalyticsTab({ hotelId }) {
   ]
 
   const heatmap = [[20,35,45,8],[22,38,42,9],[25,52,58,14],[28,65,72,18],[32,70,80,22],[40,75,68,35],[38,60,50,20]]
-  const maxHeat = Math.max(...heatmap.flat())
-  const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']
+  const maxHeat = 80
+  const days  = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']
   const slots = ['Morning\n7am–12pm','Afternoon\n12pm–7pm','Night\n7pm–12am','Late night\n12am–6am']
 
   function heatColor(val) {
-    const i = val/maxHeat
-    if (i<0.2) return '#E8F0EC'
-    if (i<0.4) return '#C8DDD4'
-    if (i<0.6) return '#9FC5BA'
-    if (i<0.8) return '#3D7A6A'
+    const i = val / maxHeat
+    if (i < 0.2) return '#E8F0EC'
+    if (i < 0.4) return '#C8DDD4'
+    if (i < 0.6) return '#9FC5BA'
+    if (i < 0.8) return '#3D7A6A'
     return GREEN
   }
 
   const kpis = [
-    { label:'Monthly revenue', value:`€${(s.totalCommission||totalComm).toLocaleString()}`, sub:'+18% vs last month', accent:true },
-    { label:'Total bookings', value:s.totalBookings||187, sub:'+24 this week' },
-    { label:'Avg response time', value:'18s', sub:'vs 4hrs manual' },
-    { label:'Guest satisfaction', value:'4.8', sub:'+0.3 vs last month' },
-    { label:'Automation rate', value:'84%', sub:'handled by bot' },
+    { label:'Monthly revenue',  value:`€${Math.round(s.totalCommission || totalComm).toLocaleString()}`, sub:'+18% vs last month', accent:true },
+    { label:'Total bookings',   value: s.totalBookings || 187, sub:'+24 this week' },
+    { label:'Avg response',     value:'18s',  sub:'vs 4hrs manual' },
+    { label:'Satisfaction',     value:'4.8',  sub:'+0.3 vs last month' },
+    { label:'Automation rate',  value:'84%',  sub:'handled by bot' },
   ]
 
   const topPartners = [
@@ -117,90 +117,97 @@ export default function AnalyticsTab({ hotelId }) {
   ]
 
   const card = (children, style={}) => (
-    <div style={{ background:'white', border:'0.5px solid #E5E7EB', borderRadius:'12px', padding:'14px', ...style }}>
+    <div style={{ background:'white', border:'1px solid #E5E7EB', borderRadius:'12px', padding:'16px', ...style }}>
       {children}
     </div>
   )
 
   const cardTitle = (title, sub) => (
-    <div style={{ marginBottom:sub?'4px':'12px' }}>
-      <div style={{ fontSize:'13px', fontWeight:'700', color:'#111827' }}>{title}</div>
-      {sub && <div style={{ fontSize:'11px', color:'#9CA3AF', marginTop:'2px', marginBottom:'10px' }}>{sub}</div>}
+    <div style={{ marginBottom: sub ? '4px' : '14px' }}>
+      <div style={{ fontSize:'14px', fontWeight:'700', color:'#111827' }}>{title}</div>
+      {sub && <div style={{ fontSize:'12px', color:'#9CA3AF', marginTop:'2px', marginBottom:'12px' }}>{sub}</div>}
     </div>
   )
 
-  const barRow = (label, value, maxVal, color) => (
-    <div style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'8px' }}>
-      <div style={{ fontSize:'11px', color:'#6B7280', width:'80px', textAlign:'right', flexShrink:0 }}>{label}</div>
-      <div style={{ flex:1, height:'10px', background:'#F3F4F6', borderRadius:'5px', overflow:'hidden' }}>
-        <div style={{ width:`${Math.round((value/maxVal)*100)}%`, height:'100%', background:color, borderRadius:'5px', transition:'width .3s' }}/>
+  // Bar row with explicit pixel width calculation
+  const BarRow = ({ label, value, maxVal, color }) => {
+    const pct = Math.round((Number(value) / Math.max(Number(maxVal), 1)) * 100)
+    return (
+      <div style={{ display:'flex', alignItems:'center', gap:'10px', marginBottom:'10px' }}>
+        <div style={{ fontSize:'12px', color:'#6B7280', width:'88px', textAlign:'right', flexShrink:0, fontWeight:'500' }}>{label}</div>
+        <div style={{ flex:1, height:'12px', background:'#F3F4F6', borderRadius:'6px', overflow:'hidden', minWidth:'40px' }}>
+          <div style={{ width:`${pct}%`, height:'100%', background:color, borderRadius:'6px', minWidth: pct > 0 ? '4px' : '0' }}/>
+        </div>
+        <div style={{ fontSize:'12px', color:'#374151', fontWeight:'700', width:'44px', textAlign:'right', flexShrink:0 }}>
+          {String(value).includes('€') ? value : (Number(value) > 20 ? `€${value}` : value)}
+        </div>
       </div>
-      <div style={{ fontSize:'11px', color:'#374151', fontWeight:'600', width:'36px', textAlign:'right', flexShrink:0 }}>
-        {typeof value === 'number' && value > 50 ? `€${value}` : value}
-      </div>
-    </div>
-  )
+    )
+  }
 
   return (
-    <div style={{ height:'100%', overflow:'hidden', display:'flex', flexDirection:'column', fontFamily:'var(--font)' }}>
+    <div style={{ height:'100%', overflow:'hidden', display:'flex', flexDirection:'column', fontFamily:"'DM Sans',sans-serif" }}>
 
       {/* Section tabs */}
-      <div style={{ display:'flex', background:'white', borderBottom:'0.5px solid #E5E7EB', flexShrink:0 }}>
+      <div style={{ display:'flex', background:'white', borderBottom:'1px solid #E5E7EB', flexShrink:0 }}>
         {[{ key:'overview', label:'Overview' }, { key:'qa', label:'Bot QA review' }].map(sec => (
           <button key={sec.key} onClick={() => setActiveSection(sec.key)}
-            style={{ padding:'10px 22px', fontSize:'13px', fontWeight:'600', color:activeSection===sec.key?GREEN:'#9CA3AF', background:'none', border:'none', borderBottom:activeSection===sec.key?`2px solid ${GREEN}`:'2px solid transparent', cursor:'pointer', fontFamily:'var(--font)' }}>
+            style={{ padding:'12px 24px', fontSize:'14px', fontWeight:activeSection===sec.key?'700':'500', color:activeSection===sec.key?GREEN:'#9CA3AF', background:'none', border:'none', borderBottom:activeSection===sec.key?`3px solid ${GREEN}`:'3px solid transparent', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
             {sec.label}
           </button>
         ))}
       </div>
 
       {activeSection === 'overview' && (
-        <div className="scrollable" style={{ padding:'16px', background:'#F9FAFB' }}>
+        <div className="scrollable" style={{ padding:'18px', background:'#F9FAFB' }}>
 
-          {/* Export bar */}
-          <div style={{ display:'flex', alignItems:'center', gap:'12px', marginBottom:'14px', padding:'12px 16px', background:'white', borderRadius:'12px', border:'0.5px solid #E5E7EB' }}>
+          {/* Export */}
+          <div style={{ display:'flex', alignItems:'center', gap:'14px', marginBottom:'16px', padding:'14px 18px', background:'white', borderRadius:'12px', border:'1px solid #E5E7EB' }}>
             <div style={{ flex:1 }}>
-              <div style={{ fontSize:'13px', fontWeight:'700', color:'#111827' }}>Activity Report</div>
-              <div style={{ fontSize:'11px', color:'#9CA3AF', marginTop:'1px' }}>Monthly PDF with all bookings and revenue</div>
+              <div style={{ fontSize:'15px', fontWeight:'700', color:'#111827' }}>Activity Report</div>
+              <div style={{ fontSize:'13px', color:'#9CA3AF', marginTop:'2px' }}>Monthly PDF — all bookings and revenue</div>
             </div>
-            <div style={{ fontSize:'12px', color:'#6B7280' }}>Period:</div>
+            <div style={{ fontSize:'13px', color:'#6B7280', fontWeight:'500' }}>Period:</div>
             <input type="month" value={exportMonth} onChange={e=>setExportMonth(e.target.value)}
-              style={{ padding:'6px 12px', border:'0.5px solid #D1D5DB', borderRadius:'8px', fontSize:'12px', fontFamily:'var(--font)', outline:'none', color:'#111827' }}
+              style={{ padding:'8px 12px', border:'1px solid #D1D5DB', borderRadius:'8px', fontSize:'13px', fontFamily:"'DM Sans',sans-serif", outline:'none', color:'#111827' }}
             />
             <button onClick={handleExport} disabled={exporting}
-              style={{ padding:'8px 18px', background:GREEN, border:'none', borderRadius:'8px', fontSize:'12px', fontWeight:'600', color:'white', cursor:'pointer', fontFamily:'var(--font)' }}>
+              style={{ padding:'9px 20px', background:GREEN, border:'none', borderRadius:'8px', fontSize:'13px', fontWeight:'700', color:'white', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
               {exporting ? 'Opening...' : 'Export Activity Report'}
             </button>
           </div>
 
-          {/* KPI row */}
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:'10px', marginBottom:'14px' }}>
+          {/* KPIs */}
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:'10px', marginBottom:'16px' }}>
             {kpis.map(k => (
-              <div key={k.label} style={{ background:k.accent?'rgba(201,168,76,0.07)':'white', border:`0.5px solid ${k.accent?GOLD:'#E5E7EB'}`, borderRadius:'12px', padding:'12px 14px' }}>
-                <div style={{ fontSize:'11px', color:'#9CA3AF', marginBottom:'5px', fontWeight:'500' }}>{k.label}</div>
-                <div style={{ fontSize:'24px', fontWeight:'700', color:k.accent?GOLD:'#111827', lineHeight:1 }}>{k.value}</div>
-                <div style={{ fontSize:'11px', color:'#16A34A', marginTop:'4px', fontWeight:'500' }}>{k.sub}</div>
+              <div key={k.label} style={{ background:k.accent?'rgba(201,168,76,0.08)':'white', border:`1px solid ${k.accent?GOLD:'#E5E7EB'}`, borderRadius:'12px', padding:'14px 16px' }}>
+                <div style={{ fontSize:'12px', color:'#6B7280', marginBottom:'6px', fontWeight:'500' }}>{k.label}</div>
+                <div style={{ fontSize:'26px', fontWeight:'700', color:k.accent?GOLD:'#111827', lineHeight:1 }}>{k.value}</div>
+                <div style={{ fontSize:'12px', color:'#16A34A', marginTop:'5px', fontWeight:'500' }}>{k.sub}</div>
               </div>
             ))}
           </div>
 
           {/* Charts row 1 */}
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'12px', marginBottom:'12px' }}>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'14px', marginBottom:'14px' }}>
 
-            {/* Revenue by Service — FIXED with explicit hex colors */}
+            {/* Revenue by Service — FIXED */}
             {card(<>
-              {cardTitle('Revenue by service', `March 2026 · €${totalComm.toLocaleString()} total`)}
-              {Object.entries(commByCategory).map(([type, amount]) =>
-                barRow(type.replace(/_/g,' '), amount, maxComm, catColors[type] || GREEN)
+              {cardTitle('Revenue by service', `March 2026 · €${Math.round(totalComm).toLocaleString()} total`)}
+              {catEntries.map(([type, amount], idx) => (
+                <BarRow key={type} label={type.replace(/_/g,' ')} value={Math.round(Number(amount))} maxVal={maxComm} color={catColorList[idx % catColorList.length]} />
+              ))}
+              {catEntries.length === 0 && (
+                <div style={{ fontSize:'13px', color:'#9CA3AF', textAlign:'center', padding:'20px 0' }}>No bookings yet this month</div>
               )}
             </>)}
 
             {/* Internal services */}
             {card(<>
               {cardTitle('Internal services by bot', 'March · automated requests')}
-              {internalServices.map(s =>
-                barRow(s.label, s.value, maxInternal, s.color)
-              )}
+              {internalServices.map(s => (
+                <BarRow key={s.label} label={s.label} value={s.value} maxVal={maxInternal} color={s.color} />
+              ))}
             </>)}
 
             {/* Issues */}
@@ -208,21 +215,23 @@ export default function AnalyticsTab({ hotelId }) {
               {cardTitle('Issues resolved vs open', 'March · by category')}
               {issueCategories.map(ic => {
                 const total = ic.resolved + ic.open
+                const resPct = Math.round((ic.resolved/total)*100)
+                const openPct = 100 - resPct
                 return (
-                  <div key={ic.label} style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'9px' }}>
-                    <div style={{ fontSize:'11px', color:'#6B7280', width:'80px', textAlign:'right', flexShrink:0 }}>{ic.label}</div>
-                    <div style={{ flex:1, height:'10px', background:'#F3F4F6', borderRadius:'5px', overflow:'hidden', display:'flex' }}>
-                      <div style={{ width:`${Math.round((ic.resolved/total)*100)}%`, height:'100%', background:GREEN }}/>
-                      <div style={{ width:`${Math.round((ic.open/total)*100)}%`, height:'100%', background:RED }}/>
+                  <div key={ic.label} style={{ display:'flex', alignItems:'center', gap:'10px', marginBottom:'10px' }}>
+                    <div style={{ fontSize:'12px', color:'#6B7280', width:'88px', textAlign:'right', flexShrink:0, fontWeight:'500' }}>{ic.label}</div>
+                    <div style={{ flex:1, height:'12px', background:'#F3F4F6', borderRadius:'6px', overflow:'hidden', display:'flex' }}>
+                      <div style={{ width:`${resPct}%`, height:'100%', background:GREEN }}/>
+                      <div style={{ width:`${openPct}%`, height:'100%', background:RED }}/>
                     </div>
-                    <div style={{ fontSize:'11px', color:'#6B7280', width:'36px', textAlign:'right', flexShrink:0 }}>{ic.resolved}/{ic.open}</div>
+                    <div style={{ fontSize:'12px', color:'#6B7280', width:'40px', textAlign:'right', flexShrink:0 }}>{ic.resolved}/{ic.open}</div>
                   </div>
                 )
               })}
-              <div style={{ display:'flex', gap:'14px', marginTop:'8px' }}>
+              <div style={{ display:'flex', gap:'16px', marginTop:'10px' }}>
                 {[{label:'Resolved',color:GREEN},{label:'Open',color:RED}].map(l=>(
-                  <div key={l.label} style={{ display:'flex', alignItems:'center', gap:'5px', fontSize:'11px', color:'#6B7280' }}>
-                    <div style={{ width:'10px', height:'10px', borderRadius:'3px', background:l.color }}/>{l.label}
+                  <div key={l.label} style={{ display:'flex', alignItems:'center', gap:'6px', fontSize:'12px', color:'#6B7280' }}>
+                    <div style={{ width:'12px', height:'12px', borderRadius:'3px', background:l.color }}/>{l.label}
                   </div>
                 ))}
               </div>
@@ -230,24 +239,24 @@ export default function AnalyticsTab({ hotelId }) {
           </div>
 
           {/* Charts row 2 */}
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'12px', marginBottom:'12px' }}>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'14px', marginBottom:'14px' }}>
 
-            {/* Feedback donut */}
+            {/* Feedback */}
             {card(<>
               {cardTitle('Client feedback', 'March · 94 responses')}
-              <div style={{ display:'flex', alignItems:'center', gap:'16px' }}>
-                <svg width="80" height="80" viewBox="0 0 80 80" style={{ flexShrink:0 }}>
-                  <circle cx="40" cy="40" r="29" fill="none" stroke="#F0F4F0" strokeWidth="12"/>
-                  <circle cx="40" cy="40" r="29" fill="none" stroke={GREEN} strokeWidth="12" strokeDasharray="129 53" strokeDashoffset="0"/>
-                  <circle cx="40" cy="40" r="29" fill="none" stroke={GOLD} strokeWidth="12" strokeDasharray="30 152" strokeDashoffset="-129"/>
-                  <circle cx="40" cy="40" r="29" fill="none" stroke={RED} strokeWidth="12" strokeDasharray="23 159" strokeDashoffset="-159"/>
-                  <text x="40" y="45" textAnchor="middle" fontSize="14" fontWeight="700" fill="#111827">94</text>
+              <div style={{ display:'flex', alignItems:'center', gap:'20px' }}>
+                <svg width="90" height="90" viewBox="0 0 90 90" style={{ flexShrink:0 }}>
+                  <circle cx="45" cy="45" r="34" fill="none" stroke="#F3F4F6" strokeWidth="14"/>
+                  <circle cx="45" cy="45" r="34" fill="none" stroke={GREEN} strokeWidth="14" strokeDasharray="147 67" strokeDashoffset="0"/>
+                  <circle cx="45" cy="45" r="34" fill="none" stroke={GOLD} strokeWidth="14" strokeDasharray="34 180" strokeDashoffset="-147"/>
+                  <circle cx="45" cy="45" r="34" fill="none" stroke={RED} strokeWidth="14" strokeDasharray="33 181" strokeDashoffset="-181"/>
+                  <text x="45" y="50" textAnchor="middle" fontSize="15" fontWeight="700" fill="#111827">94</text>
                 </svg>
-                <div style={{ display:'flex', flexDirection:'column', gap:'9px', flex:1 }}>
+                <div style={{ display:'flex', flexDirection:'column', gap:'10px', flex:1 }}>
                   {feedbackData.map(f => (
-                    <div key={f.label} style={{ display:'flex', alignItems:'center', gap:'8px', fontSize:'12px', color:'#374151' }}>
-                      <div style={{ width:'12px', height:'12px', borderRadius:'50%', background:f.color, flexShrink:0 }}/>
-                      <span style={{ flex:1 }}>{f.label}</span>
+                    <div key={f.label} style={{ display:'flex', alignItems:'center', gap:'10px', fontSize:'13px', color:'#374151' }}>
+                      <div style={{ width:'14px', height:'14px', borderRadius:'50%', background:f.color, flexShrink:0 }}/>
+                      <span style={{ flex:1, fontWeight:'500' }}>{f.label}</span>
                       <span style={{ fontWeight:'700', color:'#111827' }}>{f.pct}%</span>
                     </div>
                   ))}
@@ -255,28 +264,28 @@ export default function AnalyticsTab({ hotelId }) {
               </div>
             </>)}
 
-            {/* Concierge useful */}
+            {/* Useful */}
             {card(<>
-              {cardTitle('Concierge agent — useful?', 'March · guest feedback per session')}
-              <div style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'12px' }}>
-                <div style={{ fontSize:'11px', color:'#6B7280', width:'52px', flexShrink:0 }}>Overall</div>
-                <div style={{ flex:1, height:'20px', background:'#F3F4F6', borderRadius:'8px', overflow:'hidden', display:'flex' }}>
+              {cardTitle('Concierge — was it useful?', 'March · guest feedback per session')}
+              <div style={{ display:'flex', alignItems:'center', gap:'10px', marginBottom:'14px' }}>
+                <div style={{ fontSize:'12px', color:'#6B7280', width:'60px', flexShrink:0, fontWeight:'500' }}>Overall</div>
+                <div style={{ flex:1, height:'22px', background:'#F3F4F6', borderRadius:'8px', overflow:'hidden', display:'flex' }}>
                   <div style={{ width:'79%', height:'100%', background:GREEN, display:'flex', alignItems:'center', justifyContent:'center' }}>
-                    <span style={{ fontSize:'10px', fontWeight:'700', color:'white' }}>79% Yes</span>
+                    <span style={{ fontSize:'11px', fontWeight:'700', color:'white' }}>79% Yes</span>
                   </div>
                   <div style={{ width:'21%', height:'100%', background:RED, display:'flex', alignItems:'center', justifyContent:'center' }}>
-                    <span style={{ fontSize:'10px', fontWeight:'700', color:'white' }}>21%</span>
+                    <span style={{ fontSize:'11px', fontWeight:'700', color:'white' }}>21%</span>
                   </div>
                 </div>
               </div>
               {usefulByCategory.map(u => (
-                <div key={u.label} style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'6px' }}>
-                  <div style={{ fontSize:'11px', color:'#6B7280', width:'80px', textAlign:'right', flexShrink:0 }}>{u.label}</div>
-                  <div style={{ flex:1, height:'8px', background:'#F3F4F6', borderRadius:'4px', overflow:'hidden', display:'flex' }}>
+                <div key={u.label} style={{ display:'flex', alignItems:'center', gap:'10px', marginBottom:'7px' }}>
+                  <div style={{ fontSize:'12px', color:'#6B7280', width:'88px', textAlign:'right', flexShrink:0, fontWeight:'500' }}>{u.label}</div>
+                  <div style={{ flex:1, height:'10px', background:'#F3F4F6', borderRadius:'5px', overflow:'hidden', display:'flex' }}>
                     <div style={{ width:`${u.pct}%`, height:'100%', background:GREEN }}/>
                     <div style={{ width:`${100-u.pct}%`, height:'100%', background:RED }}/>
                   </div>
-                  <div style={{ fontSize:'11px', fontWeight:'600', color:'#374151', width:'28px', textAlign:'right', flexShrink:0 }}>{u.pct}%</div>
+                  <div style={{ fontSize:'12px', fontWeight:'700', color:'#374151', width:'32px', textAlign:'right', flexShrink:0 }}>{u.pct}%</div>
                 </div>
               ))}
             </>)}
@@ -284,51 +293,50 @@ export default function AnalyticsTab({ hotelId }) {
             {/* Heatmap */}
             {card(<>
               {cardTitle('Bot interactions by day & time', 'March · volume heatmap')}
-              <div style={{ display:'flex', gap:'3px', paddingLeft:'86px', marginBottom:'5px' }}>
-                {days.map(d => <div key={d} style={{ flex:1, fontSize:'10px', color:'#9CA3AF', textAlign:'center', fontWeight:'500' }}>{d}</div>)}
+              <div style={{ display:'flex', gap:'4px', paddingLeft:'96px', marginBottom:'6px' }}>
+                {days.map(d => <div key={d} style={{ flex:1, fontSize:'11px', color:'#9CA3AF', textAlign:'center', fontWeight:'600' }}>{d}</div>)}
               </div>
               {slots.map((slot, si) => (
-                <div key={slot} style={{ display:'flex', alignItems:'center', gap:'6px', marginBottom:'5px' }}>
-                  <div style={{ width:'80px', fontSize:'10px', color:'#6B7280', textAlign:'right', flexShrink:0, lineHeight:'1.3', whiteSpace:'pre-line', fontWeight:'500' }}>{slot}</div>
-                  <div style={{ flex:1, display:'flex', gap:'3px' }}>
+                <div key={slot} style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'6px' }}>
+                  <div style={{ width:'88px', fontSize:'11px', color:'#6B7280', textAlign:'right', flexShrink:0, lineHeight:'1.4', whiteSpace:'pre-line', fontWeight:'500' }}>{slot}</div>
+                  <div style={{ flex:1, display:'flex', gap:'4px' }}>
                     {days.map((_,di) => (
-                      <div key={di} style={{ flex:1, height:'24px', background:heatColor(heatmap[di][si]), borderRadius:'4px' }}/>
+                      <div key={di} style={{ flex:1, height:'26px', background:heatColor(heatmap[di][si]), borderRadius:'4px' }}/>
                     ))}
                   </div>
                 </div>
               ))}
-              <div style={{ display:'flex', alignItems:'center', gap:'8px', marginTop:'10px' }}>
-                <div style={{ fontSize:'11px', color:'#9CA3AF' }}>Low</div>
-                <div style={{ flex:1, height:'6px', borderRadius:'3px', background:`linear-gradient(to right, #E8F0EC, ${GREEN})` }}/>
-                <div style={{ fontSize:'11px', color:'#9CA3AF' }}>High</div>
+              <div style={{ display:'flex', alignItems:'center', gap:'10px', marginTop:'12px' }}>
+                <div style={{ fontSize:'12px', color:'#9CA3AF', fontWeight:'500' }}>Low</div>
+                <div style={{ flex:1, height:'7px', borderRadius:'4px', background:`linear-gradient(to right, #E8F0EC, ${GREEN})` }}/>
+                <div style={{ fontSize:'12px', color:'#9CA3AF', fontWeight:'500' }}>High</div>
               </div>
             </>)}
           </div>
 
-          {/* Top partners — FIXED visibility */}
+          {/* Top partners */}
           {card(<>
-            <div style={{ fontSize:'13px', fontWeight:'700', color:'#111827', marginBottom:'14px' }}>Top partners — March</div>
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:'10px' }}>
+            <div style={{ fontSize:'15px', fontWeight:'700', color:'#111827', marginBottom:'16px' }}>Top partners — March</div>
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:'12px' }}>
               {topPartners.map(p => (
-                <div key={p.rank} style={{ background:'#F9FAFB', borderRadius:'10px', padding:'14px', border:'0.5px solid #F3F4F6' }}>
-                  <div style={{ display:'flex', alignItems:'center', gap:'9px', marginBottom:'8px' }}>
-                    <div style={{ width:'26px', height:'26px', borderRadius:'8px', background:p.color, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'13px', fontWeight:'700', color:'white', flexShrink:0 }}>
+                <div key={p.rank} style={{ background:'#F9FAFB', borderRadius:'10px', padding:'16px', border:'1px solid #F3F4F6' }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:'10px', marginBottom:'10px' }}>
+                    <div style={{ width:'30px', height:'30px', borderRadius:'8px', background:p.color, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'14px', fontWeight:'700', color:'white', flexShrink:0 }}>
                       {p.rank}
                     </div>
-                    <div style={{ fontSize:'12px', fontWeight:'700', color:'#111827', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.name}</div>
+                    <div style={{ fontSize:'13px', fontWeight:'700', color:'#111827', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.name}</div>
                   </div>
-                  <div style={{ fontSize:'11px', color:'#9CA3AF', marginBottom:'6px' }}>{p.bookings} bookings · {p.type}</div>
-                  <div style={{ fontSize:'18px', fontWeight:'700', color:'#16A34A' }}>€{p.comm}</div>
+                  <div style={{ fontSize:'12px', color:'#9CA3AF', marginBottom:'8px', fontWeight:'500' }}>{p.bookings} bookings · {p.type}</div>
+                  <div style={{ fontSize:'20px', fontWeight:'700', color:'#16A34A' }}>€{p.comm}</div>
                 </div>
               ))}
             </div>
           </>)}
-
         </div>
       )}
 
       {activeSection === 'qa' && (
-        <div className="scrollable" style={{ padding:'16px', background:'#F9FAFB' }}>
+        <div className="scrollable" style={{ padding:'18px', background:'#F9FAFB' }}>
           <BotQA hotelId={hotelId} />
         </div>
       )}
