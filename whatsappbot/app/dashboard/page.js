@@ -6,7 +6,7 @@ import GuestsTab      from '../../components/GuestsTab'
 import AnalyticsTab   from '../../components/AnalyticsTab'
 import SettingsTab    from '../../components/SettingsTab'
 import NotificationBell from '../../components/NotificationBell'
-import '../dashboard.css'
+import '../../dashboard.css'
 
 export default function DashboardPage() {
   const [activeTab, setActiveTab]         = useState('live')
