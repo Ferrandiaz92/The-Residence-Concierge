@@ -1,10 +1,11 @@
-// app/dashboard/page.js (typography fix)
+// app/dashboard/page.js (updated - adds Scheduled tab)
 'use client'
 import { useState, useEffect } from 'react'
-import LiveTab        from '../../components/LiveTab'
-import GuestsTab      from '../../components/GuestsTab'
-import AnalyticsTab   from '../../components/AnalyticsTab'
-import SettingsTab    from '../../components/SettingsTab'
+import LiveTab          from '../../components/LiveTab'
+import GuestsTab        from '../../components/GuestsTab'
+import AnalyticsTab     from '../../components/AnalyticsTab'
+import SettingsTab      from '../../components/SettingsTab'
+import ScheduledTab     from '../../components/ScheduledTab'
 import NotificationBell from '../../components/NotificationBell'
 import '../../dashboard.css'
 
@@ -44,28 +45,26 @@ export default function DashboardPage() {
       .then(() => { window.location.href = '/login' })
   }
 
-  const hotelId   = session?.hotelId
-  const isManager = ['manager','admin'].includes(session?.role)
+  const hotelId = session?.hotelId
 
   const tabs = [
-    { key:'live',      label:'Live',            roles:['receptionist','manager','admin','maintenance','housekeeping','concierge','fnb','security','valet','frontdesk'] },
-    { key:'guests',    label:'Guests',           roles:['receptionist','manager','admin'] },
-    { key:'analytics', label:'Analytics',        roles:['manager','admin'] },
-    { key:'settings',  label:'Concierge Setup',  roles:['manager','admin'] },
+    { key:'live',      label:'Live',              roles:['receptionist','manager','admin','maintenance','housekeeping','concierge','fnb','security','valet','frontdesk'] },
+    { key:'guests',    label:'Guests',             roles:['receptionist','manager','admin'] },
+    { key:'analytics', label:'Analytics',          roles:['manager','admin'] },
+    { key:'scheduled', label:'Messaging',          roles:['manager','admin'] },
+    { key:'settings',  label:'Concierge Setup',   roles:['manager','admin'] },
   ].filter(t => !session || t.roles.includes(session.role))
 
   return (
     <div style={{ display:'flex', flexDirection:'column', height:'100vh', overflow:'hidden', background:'#F9FAFB', fontFamily:"'DM Sans', sans-serif" }}>
 
-      {/* ── TOPBAR — bigger, clearer ── */}
+      {/* TOPBAR */}
       <div style={{ height:'56px', background:'#1C3D2E', display:'flex', alignItems:'center', padding:'0 20px', gap:'16px', flexShrink:0, borderBottom:'1px solid #2A5A42' }}>
-
-        {/* Logo */}
-        <div style={{ fontSize:'16px', fontWeight:'700', color:'#C9A84C', whiteSpace:'nowrap', letterSpacing:'0.3px', flexShrink:0 }}>
+        <div style={{ fontSize:'16px', fontWeight:'700', color:'#C9A84C', whiteSpace:'nowrap', flexShrink:0 }}>
           The <span style={{ color:'white', fontWeight:'400' }}>Residence</span> <span style={{ color:'#C9A84C' }}>Concierge</span>
         </div>
 
-        {/* Search — wider */}
+        {/* Search */}
         <div style={{ flex:1, maxWidth:'560px', margin:'0 auto', position:'relative' }}>
           <div style={{ display:'flex', alignItems:'center', gap:'10px', height:'36px', background:'rgba(255,255,255,0.12)', border:'1px solid rgba(255,255,255,0.2)', borderRadius:'10px', padding:'0 14px' }}>
             <svg width="15" height="15" viewBox="0 0 15 15" fill="none" style={{ flexShrink:0, opacity:0.6 }}>
@@ -82,7 +81,6 @@ export default function DashboardPage() {
             )}
           </div>
 
-          {/* Search results */}
           {searchResults.length > 0 && (
             <div style={{ position:'absolute', top:'44px', left:0, right:0, background:'white', borderRadius:'12px', border:'0.5px solid #E5E7EB', boxShadow:'0 8px 24px rgba(0,0,0,0.12)', zIndex:200, overflow:'hidden' }}>
               {searchResults.map(guest => {
@@ -113,9 +111,7 @@ export default function DashboardPage() {
         {/* Right */}
         <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:'14px' }}>
           <NotificationBell />
-          <div style={{ fontSize:'13px', color:'rgba(255,255,255,0.6)', fontWeight:'500' }}>
-            {session?.hotelName}
-          </div>
+          <div style={{ fontSize:'13px', color:'rgba(255,255,255,0.6)', fontWeight:'500' }}>{session?.hotelName}</div>
           <div style={{ width:'34px', height:'34px', borderRadius:'50%', background:'#C9A84C', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'13px', fontWeight:'700', color:'#1C3D2E', flexShrink:0 }}>
             {session?.name?.[0]||'?'}
           </div>
@@ -126,21 +122,22 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ── TABS — bigger, bolder ── */}
+      {/* TABS */}
       <div style={{ display:'flex', background:'#163228', borderBottom:'1px solid #2A5040', flexShrink:0 }}>
         {tabs.map(tab => (
           <button key={tab.key} onClick={() => setActiveTab(tab.key)}
-            style={{ padding:'13px 24px', fontSize:'14px', fontWeight:activeTab===tab.key?'700':'500', color:activeTab===tab.key?'#C9A84C':'rgba(255,255,255,0.55)', background:'none', border:'none', borderBottom:activeTab===tab.key?'3px solid #C9A84C':'3px solid transparent', cursor:'pointer', fontFamily:"'DM Sans', sans-serif", whiteSpace:'nowrap', letterSpacing:'0.2px', transition:'all .15s' }}>
+            style={{ padding:'13px 22px', fontSize:'14px', fontWeight:activeTab===tab.key?'700':'500', color:activeTab===tab.key?'#C9A84C':'rgba(255,255,255,0.55)', background:'none', border:'none', borderBottom:activeTab===tab.key?'3px solid #C9A84C':'3px solid transparent', cursor:'pointer', fontFamily:"'DM Sans', sans-serif", whiteSpace:'nowrap', transition:'all .15s' }}>
             {tab.label}
           </button>
         ))}
       </div>
 
-      {/* ── CONTENT ── */}
+      {/* CONTENT */}
       <div style={{ flex:1, overflow:'hidden', minHeight:0 }}>
         {activeTab === 'live'      && <LiveTab hotelId={hotelId} session={session} onSelectGuest={selectGuest} />}
         {activeTab === 'guests'    && <GuestsTab hotelId={hotelId} selectedGuest={selectedGuest} />}
         {activeTab === 'analytics' && <AnalyticsTab hotelId={hotelId} />}
+        {activeTab === 'scheduled' && <ScheduledTab hotelId={hotelId} />}
         {activeTab === 'settings'  && <SettingsTab hotelId={hotelId} />}
       </div>
     </div>
