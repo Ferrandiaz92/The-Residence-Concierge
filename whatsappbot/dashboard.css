@@ -1,0 +1,61 @@
+/* app/dashboard.css */
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap');
+
+:root {
+  --green-900: #0D2318;
+  --green-800: #1C3D2E;
+  --green-700: #2A5A42;
+  --green-600: #3B7A5A;
+  --green-200: #9FD4B8;
+  --green-100: #D4EDE1;
+  --green-50:  #F0F8F4;
+  --gold:      #C9A84C;
+  --gold-light:#F0DFA0;
+  --gold-dim:  rgba(201,168,76,0.12);
+  --white:     #FFFFFF;
+  --gray-50:   #F8F8F6;
+  --gray-100:  #F0EFEB;
+  --gray-200:  #E0DED8;
+  --gray-300:  #C8C6BF;
+  --gray-400:  #9E9C95;
+  --gray-500:  #6E6C66;
+  --gray-600:  #4A4844;
+  --gray-900:  #1A1916;
+  --red:       #D94040;
+  --red-light: #FDEAEA;
+  --amber:     #D97706;
+  --amber-light:#FEF3C7;
+  --blue:      #2563EB;
+  --blue-light:#EFF6FF;
+  --success:   #16A34A;
+  --success-light:#F0FDF4;
+  --border:    rgba(0,0,0,0.08);
+  --border-md: rgba(0,0,0,0.12);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --font:      'DM Sans', sans-serif;
+  --font-mono: 'DM Mono', monospace;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--font);
+  background: var(--gray-50);
+  color: var(--gray-900);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbars */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--gray-300); border-radius: 2px; }
+
+/* Utility */
+.truncate { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.scrollable { overflow-y: auto; flex: 1; min-height: 0; }
