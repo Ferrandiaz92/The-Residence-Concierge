@@ -186,3 +186,4 @@ async function processBooking(booking, hotel, guest, partners) {
     const msg = await sendWhatsApp(partner.phone, formatPartnerAlert(booking, guest, hotel))
     await supabase.from('bookings').update({ partner_alert_sid: msg.sid }).eq('id', saved.id)
   } catch(e) { console.error('Partner alert failed:', e.message) }
+}
