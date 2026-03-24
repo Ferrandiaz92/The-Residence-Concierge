@@ -115,7 +115,15 @@ export default function GuestsTab({ hotelId, selectedGuest }) {
         <div style={{ flex:1 }}>
           <div style={{ fontSize:'20px', fontWeight:'700', color:'#111827' }}>{guest.name} {guest.surname}</div>
           <div style={{ fontSize:'14px', color:'#6B7280', marginTop:'3px' }}>{guest.phone}{guest.email ? ` · ${guest.email}` : ''}</div>
-          <div style={{ display:'flex', gap:'6px', marginTop:'8px', flexWrap:'wrap', alignItems:'center' }}>
+          <div style={{ display:'flex', gap:'6px', marginTop:'6px', flexWrap:'wrap', alignItems:'center' }}>
+            <span style={{ fontSize:'13px', fontWeight:'700', padding:'3px 10px', borderRadius:'6px', background:lc.bg, color:lc.color }}>
+              {(guest.language||'EN').toUpperCase()}
+            </span>
+            {guest.welcome_sent_at && (
+              <span style={{ fontSize:'12px', color:'#9CA3AF' }}>Welcome sent ✓</span>
+            )}
+          </div>
+          <div style={{ display:'flex', gap:'6px', marginTop:'5px', flexWrap:'wrap', alignItems:'center' }}>
             {guestRooms.length > 0 ? guestRooms.map(r => (
               <span key={r.id} style={{ fontSize:'13px', fontWeight:'600', padding:'3px 10px', borderRadius:'6px', background:r.primary_room?'#1C3D2E':'#F3F4F6', color:r.primary_room?'white':'#374151' }}>
                 Room {r.room}{r.room_type ? ` · ${r.room_type}` : ''}
@@ -135,13 +143,15 @@ export default function GuestsTab({ hotelId, selectedGuest }) {
                 Out: {new Date(guest.check_out).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}
               </span>
             )}
-            <span style={{ fontSize:'13px', fontWeight:'700', padding:'3px 10px', borderRadius:'6px', background:lc.bg, color:lc.color }}>
-              {(guest.language||'EN').toUpperCase()}
-            </span>
-            {guest.welcome_sent_at && (
-              <span style={{ fontSize:'12px', color:'#9CA3AF' }}>Welcome sent ✓</span>
-            )}
           </div>
+```
+
+Commit → result:
+```
+Ferran Diaz
++357 99 123 456
+EN  Welcome sent ✓
+Room 312  In: 24 Mar  Out: 28 Mar
         </div>
         <button
           onClick={() => setShowCheckin(!showCheckin)}
