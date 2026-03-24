@@ -11,7 +11,7 @@
 // and sends the next alert in the chain automatically.
 // ============================================================
 
-import { checkEscalations } from '../../../../src/lib/ticketing.js'
+import { checkEscalations } from '@/src/lib/ticketing.js'
 
 export async function GET(request) {
   // Verify this is called by Vercel Cron (not a random visitor)
