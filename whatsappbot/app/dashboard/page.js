@@ -57,7 +57,7 @@ export default function DashboardPage() {
     { key: 'live',      label: 'Live',      roles: ['receptionist','manager','admin','maintenance','housekeeping'] },
     { key: 'guests',    label: 'Guests',    roles: ['receptionist','manager','admin'] },
     { key: 'analytics', label: 'Analytics', roles: ['manager','admin'] },
-    { key: 'settings',  label: 'Settings',  roles: ['manager','admin'] },
+    { key: 'settings',  label: 'Concierge Setup',  roles: ['manager','admin'] },
   ].filter(t => !session || t.roles.includes(session.role))
 
   return (
