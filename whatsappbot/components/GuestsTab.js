@@ -123,16 +123,10 @@ export default function GuestsTab({ hotelId, selectedGuest }) {
               <span style={{ fontSize:'12px', color:'#9CA3AF' }}>Welcome sent ✓</span>
             )}
           </div>
-          <div style={{ display:'flex', gap:'6px', marginTop:'5px', flexWrap:'wrap', alignItems:'center' }}>
-            {guestRooms.length > 0 ? guestRooms.map(r => (
-              <span key={r.id} style={{ fontSize:'13px', fontWeight:'600', padding:'3px 10px', borderRadius:'6px', background:r.primary_room?'#1C3D2E':'#F3F4F6', color:r.primary_room?'white':'#374151' }}>
-                Room {r.room}{r.room_type ? ` · ${r.room_type}` : ''}
-              </span>
-            )) : guest.room && (
-              <span style={{ fontSize:'13px', fontWeight:'600', padding:'3px 10px', borderRadius:'6px', background:'#F3F4F6', color:'#374151' }}>
-                Room {guest.room}
-              </span>
-            )}
+          <div style={{ display:'flex', gap:'6px', marginTop:'6px', flexWrap:'wrap', alignItems:'center' }}>
+            <span style={{ fontSize:'13px', fontWeight:'600', padding:'3px 10px', borderRadius:'6px', background:'#F3F4F6', color:'#374151' }}>
+              {guestRooms.length > 0 ? guestRooms.map(r => `Room ${r.room}`).join(' & ') : guest.room ? `Room ${guest.room}` : 'No room'}
+            </span>
             {guest.check_in && (
               <span style={{ fontSize:'13px', fontWeight:'500', padding:'3px 10px', borderRadius:'6px', background:'#DCFCE7', color:'#14532D' }}>
                 In: {new Date(guest.check_in).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}
@@ -143,6 +137,15 @@ export default function GuestsTab({ hotelId, selectedGuest }) {
                 Out: {new Date(guest.check_out).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}
               </span>
             )}
+          </div>
+```
+
+Commit. Result:
+```
+Ferran Díaz
++35799534296
+EN
+Room 101   In: 24 Mar   Out: 28 Mar
           </div>
 ```
 
