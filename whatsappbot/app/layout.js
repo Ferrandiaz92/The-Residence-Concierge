@@ -1,4 +1,5 @@
-// app/layout.js
+import '../dashboard.css'
+
 export const metadata = {
   title: 'The Residence Concierge',
   description: 'Intelligent Hotel Concierge Platform',
