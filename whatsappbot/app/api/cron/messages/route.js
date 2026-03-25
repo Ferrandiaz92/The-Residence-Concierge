@@ -3,7 +3,7 @@
 // Processes all scheduled messages for all hotels
 
 import { createClient } from '@supabase/supabase-js'
-import { processScheduledMessages } from '../../../src/lib/scheduled.js'
+import { processScheduledMessages } from '../../../../src/lib/scheduled.js'
 
 export const dynamic = 'force-dynamic'
 
