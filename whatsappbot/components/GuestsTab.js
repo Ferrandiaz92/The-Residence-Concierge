@@ -118,25 +118,40 @@ export default function GuestsTab({ hotelId, selectedGuest }) {
   const isDayVisit = guest.guest_type === 'day_visitor' || guest.guest_type === 'event'
   const isReturning= (guest.visit_count || 1) > 1 || (guest.visit_count_day || 0) > 0
 
-  // Build timeline
-  const allMessages = conversations.flatMap(conv =>
-    (conv.messages||[]).map(m => ({ ...m, convId: conv.id }))
-  ).sort((a,b) => new Date(a.ts) - new Date(b.ts))
+  // Build timeline — fully null-safe
+  const allMessages = []
+  try {
+    ;(conversations||[]).forEach(conv => {
+      ;(conv?.messages||[]).forEach(m => {
+        if (m && m.ts) allMessages.push({ ...m, convId: conv.id })
+      })
+    })
+    allMessages.sort((a,b) => {
+      try { return new Date(a.ts) - new Date(b.ts) } catch { return 0 }
+    })
+  } catch(e) { console.error('timeline build:', e) }
 
   const grouped = {}
-  allMessages.forEach(m => {
-    const date = new Date(m.ts).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})
-    if (!grouped[date]) grouped[date] = []
-    grouped[date].push(m)
-  })
-  bookings.forEach(b => {
-    const date = new Date(b.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})
-    if (!grouped[date]) grouped[date] = []
-    grouped[date].push({ ...b, _isBooking:true, ts:b.created_at })
-  })
-  Object.keys(grouped).forEach(date => {
-    grouped[date].sort((a,b) => new Date(a.ts)-new Date(b.ts))
-  })
+  try {
+    allMessages.forEach(m => {
+      try {
+        const date = new Date(m.ts).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})
+        if (!grouped[date]) grouped[date] = []
+        grouped[date].push(m)
+      } catch {}
+    })
+    ;(bookings||[]).forEach(b => {
+      try {
+        if (!b?.created_at) return
+        const date = new Date(b.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})
+        if (!grouped[date]) grouped[date] = []
+        grouped[date].push({ ...b, _isBooking:true, ts:b.created_at })
+      } catch {}
+    })
+    Object.keys(grouped).forEach(date => {
+      try { grouped[date].sort((a,b) => new Date(a.ts)-new Date(b.ts)) } catch {}
+    })
+  } catch(e) { console.error('grouped build:', e) }
 
   const TYPE_COLORS = {
     taxi:          {bg:'#DCFCE7',color:'#14532D',label:'T'},
@@ -148,8 +163,10 @@ export default function GuestsTab({ hotelId, selectedGuest }) {
   }
 
   const isCheckinDate = (dateStr) => {
-    if (!guest.check_in) return false
-    return new Date(guest.check_in).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) === dateStr
+    try {
+      if (!guest?.check_in) return false
+      return new Date(guest.check_in).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) === dateStr
+    } catch { return false }
   }
 
   // Badge component
@@ -300,7 +317,7 @@ export default function GuestsTab({ hotelId, selectedGuest }) {
                         <div style={{ width:'26px', height:'26px', borderRadius:'5px', background:tc.bg, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'11px', fontWeight:'700', color:tc.color, flexShrink:0 }}>{tc.label}</div>
                         <div style={{ flex:1 }}>
                           <div style={{ fontSize:'13px', fontWeight:'600', color:'#111827' }}>{item.partners?.name||item.type}</div>
-                          <div style={{ fontSize:'12px', color:'#9CA3AF' }}>{new Date(item.ts).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}</div>
+                          <div style={{ fontSize:'12px', color:'#9CA3AF' }}>{(() => { try { return new Date(item.ts).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}) } catch { return '' } })()}</div>
                         </div>
                         <div style={{ fontSize:'12px', fontWeight:'600', color:isDone?'#9CA3AF':'#C9A84C' }}>{isDone?'Done':item.status}</div>
                       </div>
@@ -315,7 +332,7 @@ export default function GuestsTab({ hotelId, selectedGuest }) {
                         {item.sent_by === 'scheduled' && <div style={{ fontSize:'10px', opacity:0.5, marginTop:'3px' }}>📅 scheduled</div>}
                       </div>
                       <div style={{ fontSize:'11px', color:'#9CA3AF', flexShrink:0, paddingBottom:'3px' }}>
-                        {new Date(item.ts).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}
+                        {(() => { try { return new Date(item.ts).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}) } catch { return '' } })()}
                       </div>
                     </div>
                   )
@@ -381,7 +398,7 @@ export default function GuestsTab({ hotelId, selectedGuest }) {
                       </div>
                       <div style={{ fontSize:'12px', color:'#9CA3AF' }}>
                         {stay.room && `Room ${stay.room}`}
-                        {stay.check_in && stay.check_out && ` · ${Math.round((new Date(stay.check_out)-new Date(stay.check_in))/(1000*60*60*24))} nights`}
+                        {stay.check_in && stay.check_out ? (() => { try { return ` · ${Math.round((new Date(stay.check_out)-new Date(stay.check_in))/(1000*60*60*24))} nights` } catch { return '' } })() : ''}
                         {stay.bookings_made > 0 && ` · ${stay.bookings_made} bookings`}
                       </div>
                     </div>
@@ -404,7 +421,7 @@ export default function GuestsTab({ hotelId, selectedGuest }) {
                       <div key={b.id} style={{ display:'flex', alignItems:'center', gap:'10px', padding:'9px 12px', background:'#F9FAFB', borderRadius:'8px' }}>
                         <div style={{ width:'22px', height:'22px', borderRadius:'5px', background:tc.bg, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'10px', fontWeight:'700', color:tc.color, flexShrink:0 }}>{tc.label}</div>
                         <div style={{ flex:1, fontSize:'13px', color:'#374151', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                          {b.partners?.name||b.type} · {new Date(b.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}
+                          {b.partners?.name||b.type} · {(() => { try { return new Date(b.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'}) } catch { return '' } })()}
                         </div>
                         <div style={{ fontSize:'12px', fontWeight:'600', color:isDone?'#9CA3AF':'#C9A84C', flexShrink:0 }}>{isDone?'Done':'upcoming'}</div>
                       </div>
