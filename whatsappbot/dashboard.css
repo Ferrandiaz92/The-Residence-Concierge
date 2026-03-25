@@ -1,4 +1,4 @@
-/* dashboard.css — typography fix */
+/* dashboard.css — 17 language support */
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
 
 :root {
@@ -53,40 +53,28 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Scrollbars */
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 2px; }
 
-/* Utility */
 .truncate { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .scrollable { overflow-y: auto; flex: 1; min-height: 0; }
 
-/* Section headers — used in all columns */
-.section-header {
-  padding: 12px 16px;
-  font-size: 13px;
-  font-weight: 700;
-  color: #374151;
-  border-bottom: 1px solid #E5E7EB;
-  background: white;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-shrink: 0;
-}
-
-.section-header .sub {
-  font-size: 12px;
-  font-weight: 400;
-  color: #9CA3AF;
-}
-
-.section-header.warn {
-  background: #FFFBEB;
-  color: #92400E;
-}
-
-.section-header.warn .sub {
-  color: #B45309;
-}
+/* Language badge colors — 17 languages */
+.lang-en { background: #DCFCE7; color: #14532D; }
+.lang-ru { background: #DBEAFE; color: #1E3A5F; }
+.lang-he { background: #FEF3C7; color: #78350F; }
+.lang-de { background: #F3F4F6; color: #1F2937; }
+.lang-fr { background: #EDE9FE; color: #4C1D95; }
+.lang-zh { background: #FEF2F2; color: #7F1D1D; }
+.lang-pl { background: #FFF1F2; color: #881337; }
+.lang-sv { background: #EFF6FF; color: #1E3A8A; }
+.lang-fi { background: #F0F9FF; color: #0C4A6E; }
+.lang-uk { background: #FEFCE8; color: #713F12; }
+.lang-ar { background: #F0FDF4; color: #14532D; }
+.lang-nl { background: #FFF7ED; color: #7C2D12; }
+.lang-el { background: #EFF6FF; color: #1E3A8A; }
+.lang-es { background: #FFF7ED; color: #9A3412; }
+.lang-ca { background: #FEF9C3; color: #713F12; }
+.lang-it { background: #F0FDF4; color: #14532D; }
+.lang-pt { background: #ECFDF5; color: #064E3B; }
