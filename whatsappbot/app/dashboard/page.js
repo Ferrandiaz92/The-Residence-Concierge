@@ -1,7 +1,8 @@
-// app/dashboard/page.js — mobile-responsive, role-based
+// app/dashboard/page.js — mobile-responsive, role-based v2
 'use client'
 import { useState, useEffect } from 'react'
 import LiveTab          from '../../components/LiveTab'
+import MobileLiveTab    from '../../components/MobileLiveTab'
 import GuestsTab        from '../../components/GuestsTab'
 import AnalyticsTab     from '../../components/AnalyticsTab'
 import ScheduledTab     from '../../components/ScheduledTab'
@@ -11,73 +12,84 @@ import NotificationBell from '../../components/NotificationBell'
 import { useIsMobile }  from '../../lib/useIsMobile'
 import '../../dashboard.css'
 
-// ── Role helpers ────────────────────────────────────────────
+// ── Role helpers ─────────────────────────────────────────────
 const DEPT_ROLES = ['maintenance','housekeeping','concierge','fnb','security','valet','frontdesk']
-function isManager(role)   { return ['manager','admin'].includes(role) }
-function isReception(role) { return role === 'receptionist' }
-function isDept(role)      { return DEPT_ROLES.includes(role) }
+const isManager  = r => ['manager','admin'].includes(r)
+const isReception= r => r === 'receptionist'
+const isDept     = r => DEPT_ROLES.includes(r)
 
-function getTabsForRole(role) {
+// Desktop tabs (unchanged)
+function getDesktopTabs(role) {
+  return [
+    { key:'live',      label:'Live',           roles:['receptionist','manager','admin',...DEPT_ROLES] },
+    { key:'guests',    label:'Guests',          roles:['receptionist','manager','admin'] },
+    { key:'visitors',  label:'Day Visitors',    roles:['receptionist','manager','admin'] },
+    { key:'analytics', label:'Analytics',       roles:['manager','admin'] },
+    { key:'scheduled', label:'Messaging',       roles:['manager','admin'] },
+    { key:'settings',  label:'Concierge Setup', roles:['manager','admin'] },
+  ].filter(t => t.roles.includes(role))
+}
+
+// Mobile tabs — simplified per role
+// Manager/Admin: Live, Guests, Setup
+// Reception:     Live, Guests, Visitors
+// Dept:          Live only (full screen, no bottom nav needed)
+function getMobileTabs(role) {
   if (isManager(role)) return [
-    { key:'live',      label:'Live',      icon: IconLive      },
-    { key:'guests',    label:'Guests',    icon: IconGuests    },
-    { key:'visitors',  label:'Visitors',  icon: IconVisitors  },
-    { key:'analytics', label:'Analytics', icon: IconAnalytics },
-    { key:'scheduled', label:'Messaging', icon: IconScheduled },
-    { key:'settings',  label:'Setup',     icon: IconSettings  },
+    { key:'live',     label:'Live',   icon:IconLive     },
+    { key:'guests',   label:'Guests', icon:IconGuests   },
+    { key:'settings', label:'Setup',  icon:IconSettings },
   ]
   if (isReception(role)) return [
-    { key:'live',     label:'Live',     icon: IconLive     },
-    { key:'guests',   label:'Guests',   icon: IconGuests   },
-    { key:'visitors', label:'Visitors', icon: IconVisitors },
+    { key:'live',     label:'Live',     icon:IconLive     },
+    { key:'guests',   label:'Guests',   icon:IconGuests   },
+    { key:'visitors', label:'Visitors', icon:IconVisitors },
   ]
-  return [{ key:'live', label:'Queue', icon: IconLive }]
+  return [] // dept: no bottom nav
 }
 
 function roleBadge(role) {
-  if (isManager(role))   return { label:'Manager',   bg:'#C9A84C22', color:'#C9A84C' }
-  if (isReception(role)) return { label:'Reception', bg:'#3B7A5A22', color:'#9FD4B8' }
-  const label = role ? role.charAt(0).toUpperCase() + role.slice(1) : 'Staff'
-  return { label, bg:'#2563EB22', color:'#93C5FD' }
+  if (isManager(role))   return { label:'Manager',   bg:'rgba(201,168,76,0.15)',  color:'#C9A84C' }
+  if (isReception(role)) return { label:'Reception', bg:'rgba(159,212,184,0.15)', color:'#9FD4B8' }
+  const label = role ? role.charAt(0).toUpperCase()+role.slice(1) : 'Staff'
+  return { label, bg:'rgba(147,197,253,0.15)', color:'#93C5FD' }
 }
 
 // ── SVG Icons ────────────────────────────────────────────────
-function IconLive({ size=20, color='currentColor' }) {
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" fill={color}/><circle cx="12" cy="12" r="7" stroke={color} strokeWidth="1.5" fill="none" opacity="0.5"/><circle cx="12" cy="12" r="11" stroke={color} strokeWidth="1" fill="none" opacity="0.25"/></svg>
+function IconLive({ size=22, color='currentColor' }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" fill={color}/><circle cx="12" cy="12" r="7" stroke={color} strokeWidth="1.5" fill="none" opacity="0.5"/><circle cx="12" cy="12" r="11" stroke={color} strokeWidth="1" fill="none" opacity="0.2"/></svg>
 }
-function IconGuests({ size=20, color='currentColor' }) {
+function IconGuests({ size=22, color='currentColor' }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none"><circle cx="9" cy="7" r="3.5" stroke={color} strokeWidth="1.5"/><path d="M2 20c0-4 3.1-7 7-7s7 3 7 7" stroke={color} strokeWidth="1.5" strokeLinecap="round"/><circle cx="17" cy="8" r="2.5" stroke={color} strokeWidth="1.5"/><path d="M16 20h6c0-3-2-5-4.5-5" stroke={color} strokeWidth="1.5" strokeLinecap="round"/></svg>
 }
-function IconVisitors({ size=20, color='currentColor' }) {
+function IconVisitors({ size=22, color='currentColor' }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" stroke={color} strokeWidth="1.5"/><circle cx="12" cy="9" r="2.5" stroke={color} strokeWidth="1.5"/></svg>
 }
-function IconAnalytics({ size=20, color='currentColor' }) {
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none"><rect x="3" y="13" width="4" height="8" rx="1" stroke={color} strokeWidth="1.5"/><rect x="10" y="8" width="4" height="13" rx="1" stroke={color} strokeWidth="1.5"/><rect x="17" y="3" width="4" height="18" rx="1" stroke={color} strokeWidth="1.5"/></svg>
-}
-function IconScheduled({ size=20, color='currentColor' }) {
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="17" rx="2" stroke={color} strokeWidth="1.5"/><path d="M3 9h18" stroke={color} strokeWidth="1.5"/><path d="M8 2v4M16 2v4" stroke={color} strokeWidth="1.5" strokeLinecap="round"/><circle cx="12" cy="15" r="2.5" stroke={color} strokeWidth="1.5"/></svg>
-}
-function IconSettings({ size=20, color='currentColor' }) {
+function IconSettings({ size=22, color='currentColor' }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke={color} strokeWidth="1.5"/><path d="M12 2v2M12 20v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M2 12h2M20 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" stroke={color} strokeWidth="1.5" strokeLinecap="round"/></svg>
 }
-function IconMenu({ size=20, color='currentColor' }) {
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h16" stroke={color} strokeWidth="1.5" strokeLinecap="round"/></svg>
+function IconLogout({ size=18, color='currentColor' }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" stroke={color} strokeWidth="2" strokeLinecap="round"/><path d="M16 17l5-5-5-5M21 12H9" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
 }
 
-// ── Tab content renderer ──────────────────────────────────────
-function TabContent({ tab, hotelId, session, selectedGuest, onSelectGuest }) {
+// ── Tab content ──────────────────────────────────────────────
+function TabContent({ tab, hotelId, session, selectedGuest, onSelectGuest, isMobile }) {
   switch (tab) {
-    case 'live':      return <LiveTab hotelId={hotelId} session={session} onSelectGuest={onSelectGuest} />
-    case 'guests':    return <GuestsTab hotelId={hotelId} selectedGuest={selectedGuest} />
-    case 'visitors':  return <VisitorsTab hotelId={hotelId} />
+    case 'live':      return isMobile
+      ? <MobileLiveTab hotelId={hotelId} session={session} onSelectGuest={onSelectGuest} />
+      : <LiveTab       hotelId={hotelId} session={session} onSelectGuest={onSelectGuest} />
+    case 'guests':    return <GuestsTab    hotelId={hotelId} selectedGuest={selectedGuest} />
+    case 'visitors':  return <VisitorsTab  hotelId={hotelId} />
     case 'analytics': return <AnalyticsTab hotelId={hotelId} />
     case 'scheduled': return <ScheduledTab hotelId={hotelId} />
-    case 'settings':  return <SettingsTab hotelId={hotelId} />
+    case 'settings':  return <SettingsTab  hotelId={hotelId} />
     default:          return null
   }
 }
 
-// ── DESKTOP layout (original, unchanged) ─────────────────────
+// ══════════════════════════════════════════════════════════════
+//  DESKTOP DASHBOARD (original layout, untouched)
+// ══════════════════════════════════════════════════════════════
 function DesktopDashboard({ session, tabs, activeTab, setActiveTab, searchQuery, setSearchQuery, searchResults, setSearchResults, selectedGuest, onSelectGuest, handleLogout, hotelId }) {
   return (
     <div style={{ display:'flex', flexDirection:'column', height:'100vh', overflow:'hidden', background:'#F9FAFB', fontFamily:"'DM Sans', sans-serif" }}>
@@ -152,27 +164,29 @@ function DesktopDashboard({ session, tabs, activeTab, setActiveTab, searchQuery,
       </div>
       {/* CONTENT */}
       <div style={{ flex:1, overflow:'hidden', minHeight:0 }}>
-        <TabContent tab={activeTab} hotelId={hotelId} session={session} selectedGuest={selectedGuest} onSelectGuest={onSelectGuest} />
+        <TabContent tab={activeTab} hotelId={hotelId} session={session} selectedGuest={selectedGuest} onSelectGuest={onSelectGuest} isMobile={false} />
       </div>
     </div>
   )
 }
 
-// ── MOBILE Topbar ─────────────────────────────────────────────
-function MobileTopbar({ session, badge, onLogout, tabLabel, onMenuToggle, showMenu, onSelectGuest }) {
+// ══════════════════════════════════════════════════════════════
+//  MOBILE TOPBAR — prominent logout for all roles
+// ══════════════════════════════════════════════════════════════
+function MobileTopbar({ session, badge, handleLogout, tabLabel, showSearch, onSelectGuest, onNavigate }) {
   const [searchOpen,  setSearchOpen]  = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [results,     setResults]     = useState([])
 
   useEffect(() => {
-    if (searchQuery.length < 2) { setResults([]); return }
+    if (!showSearch || searchQuery.length < 2) { setResults([]); return }
     const t = setTimeout(async () => {
       const res = await fetch(`/api/guests/search?q=${encodeURIComponent(searchQuery)}`)
       const d   = await res.json()
       setResults(d.guests || [])
     }, 300)
     return () => clearTimeout(t)
-  }, [searchQuery])
+  }, [searchQuery, showSearch])
 
   function selectGuest(guest) {
     onSelectGuest?.(guest)
@@ -180,66 +194,88 @@ function MobileTopbar({ session, badge, onLogout, tabLabel, onMenuToggle, showMe
   }
 
   return (
-    <div style={{ flexShrink:0, background:'#1C3D2E', borderBottom:'1px solid #2A5042' }}>
-      <div style={{ height:'56px', display:'flex', alignItems:'center', padding:'0 16px', gap:'10px' }}>
+    <div style={{ flexShrink:0 }}>
+
+      {/* Main topbar row */}
+      <div style={{ height:'58px', background:'#1C3D2E', display:'flex', alignItems:'center', padding:'0 16px', gap:'10px', borderBottom:'1px solid #2A5042' }}>
+
+        {/* Logo / current tab */}
         {!searchOpen && (
-          <div style={{ flex:1 }}>
-            <div style={{ fontSize:'13px', fontWeight:'700', color:'#C9A84C', lineHeight:1 }}>The Residence</div>
-            <div style={{ fontSize:'11px', color:'rgba(255,255,255,0.45)', marginTop:'2px' }}>{tabLabel || 'Dashboard'}</div>
+          <div style={{ flex:1, minWidth:0 }}>
+            <div style={{ fontSize:'14px', fontWeight:'700', color:'#C9A84C', lineHeight:1.1 }}>
+              The Residence <span style={{ color:'rgba(255,255,255,0.6)', fontWeight:'400' }}>Concierge</span>
+            </div>
+            <div style={{ fontSize:'11px', color:'rgba(255,255,255,0.4)', marginTop:'2px' }}>{tabLabel}</div>
           </div>
         )}
+
+        {/* Inline search input */}
         {searchOpen && (
-          <div style={{ flex:1, display:'flex', alignItems:'center', gap:'8px', height:'36px', background:'rgba(255,255,255,0.12)', border:'1px solid rgba(255,255,255,0.2)', borderRadius:'10px', padding:'0 12px' }}>
-            <svg width="14" height="14" viewBox="0 0 15 15" fill="none" style={{ opacity:0.6, flexShrink:0 }}>
+          <div style={{ flex:1, display:'flex', alignItems:'center', gap:'8px', height:'38px', background:'rgba(255,255,255,0.12)', border:'1px solid rgba(255,255,255,0.2)', borderRadius:'10px', padding:'0 12px' }}>
+            <svg width="14" height="14" viewBox="0 0 15 15" fill="none" style={{ opacity:0.5, flexShrink:0 }}>
               <circle cx="6.5" cy="6.5" r="5" stroke="white" strokeWidth="1.5"/>
               <line x1="10" y1="10" x2="14" y2="14" stroke="white" strokeWidth="1.5" strokeLinecap="round"/>
             </svg>
             <input autoFocus value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
               placeholder="Search guest…"
-              style={{ flex:1, background:'none', border:'none', color:'white', fontSize:'14px', outline:'none', fontFamily:"'DM Sans', sans-serif" }}
+              style={{ flex:1, background:'none', border:'none', color:'white', fontSize:'15px', outline:'none', fontFamily:"'DM Sans', sans-serif" }}
             />
           </div>
         )}
-        <div style={{ display:'flex', alignItems:'center', gap:'8px', flexShrink:0 }}>
+
+        {/* Right-side actions */}
+        <div style={{ display:'flex', alignItems:'center', gap:'6px', flexShrink:0 }}>
+
           <NotificationBell />
-          <button onClick={() => { setSearchOpen(s => !s); if (searchOpen) { setSearchQuery(''); setResults([]) } }}
-            style={{ background:'none', border:'none', cursor:'pointer', padding:'6px', display:'flex', alignItems:'center', color:'rgba(255,255,255,0.7)' }}>
-            {searchOpen
-              ? <span style={{ fontSize:'20px', lineHeight:1, color:'white' }}>×</span>
-              : <svg width="18" height="18" viewBox="0 0 15 15" fill="none"><circle cx="6.5" cy="6.5" r="5" stroke="currentColor" strokeWidth="1.5"/><line x1="10" y1="10" x2="14" y2="14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
-            }
-          </button>
-          <div style={{ width:'30px', height:'30px', borderRadius:'50%', background:'#C9A84C', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'12px', fontWeight:'700', color:'#1C3D2E', flexShrink:0 }}>
-            {session?.name?.[0]||'?'}
-          </div>
-          {onMenuToggle && (
-            <button onClick={onMenuToggle}
-              style={{ background: showMenu ? 'rgba(201,168,76,0.15)' : 'none', border:'none', cursor:'pointer', padding:'6px', borderRadius:'8px', display:'flex', alignItems:'center' }}>
-              <IconMenu size={18} color={showMenu ? '#C9A84C' : 'rgba(255,255,255,0.7)'} />
+
+          {/* Search toggle — only for roles that can search */}
+          {showSearch && (
+            <button onClick={() => { setSearchOpen(s => !s); if (searchOpen) { setSearchQuery(''); setResults([]) } }}
+              style={{ background: searchOpen?'rgba(255,255,255,0.12)':'none', border:'none', cursor:'pointer', padding:'7px', borderRadius:'8px', display:'flex', alignItems:'center', color:'rgba(255,255,255,0.7)' }}>
+              {searchOpen
+                ? <span style={{ fontSize:'20px', lineHeight:1, color:'white' }}>×</span>
+                : <svg width="18" height="18" viewBox="0 0 15 15" fill="none"><circle cx="6.5" cy="6.5" r="5" stroke="currentColor" strokeWidth="1.5"/><line x1="10" y1="10" x2="14" y2="14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+              }
             </button>
           )}
+
+          {/* Avatar */}
+          <div style={{ width:'32px', height:'32px', borderRadius:'50%', background:'#C9A84C', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'13px', fontWeight:'700', color:'#1C3D2E', flexShrink:0 }}>
+            {session?.name?.[0]||'?'}
+          </div>
+
+          {/* LOGOUT — always visible, prominent */}
+          <button onClick={handleLogout}
+            style={{ display:'flex', alignItems:'center', gap:'5px', padding:'7px 12px', background:'rgba(220,38,38,0.15)', border:'1px solid rgba(220,38,38,0.35)', borderRadius:'8px', cursor:'pointer', fontFamily:"'DM Sans', sans-serif" }}>
+            <IconLogout size={15} color='#FCA5A5' />
+            <span style={{ fontSize:'12px', fontWeight:'600', color:'#FCA5A5' }}>Out</span>
+          </button>
         </div>
       </div>
-      {/* Role + hotel strip */}
-      <div style={{ height:'26px', display:'flex', alignItems:'center', padding:'0 16px', gap:'8px', background:'#163228' }}>
-        <span style={{ fontSize:'10px', fontWeight:'700', padding:'2px 8px', borderRadius:'20px', background:badge.bg, color:badge.color, letterSpacing:'0.05em', textTransform:'uppercase' }}>
+
+      {/* Role + name strip */}
+      <div style={{ height:'28px', display:'flex', alignItems:'center', padding:'0 16px', gap:'8px', background:'#163228', borderBottom:'1px solid #2A5040' }}>
+        <span style={{ fontSize:'10px', fontWeight:'700', padding:'2px 9px', borderRadius:'20px', background:badge.bg, color:badge.color, textTransform:'uppercase', letterSpacing:'0.05em' }}>
           {badge.label}
         </span>
-        <span style={{ fontSize:'11px', color:'rgba(255,255,255,0.35)', fontWeight:'500' }}>{session?.hotelName}</span>
+        <span style={{ fontSize:'11px', color:'rgba(255,255,255,0.35)' }}>{session?.name}</span>
+        <span style={{ fontSize:'11px', color:'rgba(255,255,255,0.2)' }}>·</span>
+        <span style={{ fontSize:'11px', color:'rgba(255,255,255,0.35)' }}>{session?.hotelName}</span>
       </div>
+
       {/* Search results */}
       {results.length > 0 && searchOpen && (
-        <div style={{ background:'white', borderTop:'1px solid #E5E7EB', maxHeight:'260px', overflowY:'auto' }}>
+        <div style={{ background:'white', maxHeight:'260px', overflowY:'auto', borderBottom:'1px solid #E5E7EB' }}>
           {results.map(guest => (
             <div key={guest.id} onClick={() => selectGuest(guest)}
-              style={{ padding:'11px 16px', borderBottom:'1px solid #F3F4F6', display:'flex', alignItems:'center', gap:'12px', cursor:'pointer' }}>
-              <div style={{ width:'34px', height:'34px', borderRadius:'50%', background:'#1C3D2E', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'13px', color:'#C9A84C', fontWeight:'700', flexShrink:0 }}>
+              style={{ padding:'12px 16px', borderBottom:'1px solid #F3F4F6', display:'flex', alignItems:'center', gap:'12px', cursor:'pointer' }}>
+              <div style={{ width:'36px', height:'36px', borderRadius:'50%', background:'#1C3D2E', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'14px', color:'#C9A84C', fontWeight:'700', flexShrink:0 }}>
                 {(guest.name?.[0]||'?')}{(guest.surname?.[0]||'')}
               </div>
               <div style={{ flex:1, minWidth:0 }}>
                 <div style={{ fontSize:'14px', fontWeight:'600', color:'#111827' }}>{guest.name} {guest.surname}</div>
                 <div style={{ fontSize:'12px', color:'#6B7280', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
-                  {guest.guest_type === 'day_visitor' ? '🌟 Day visitor' : `Room ${guest.room}`} · {guest.phone}
+                  {guest.guest_type==='day_visitor'?'🌟 Day visitor':`Room ${guest.room}`} · {guest.phone}
                 </div>
               </div>
             </div>
@@ -250,18 +286,19 @@ function MobileTopbar({ session, badge, onLogout, tabLabel, onMenuToggle, showMe
   )
 }
 
-// ── MOBILE Bottom Nav ─────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+//  MOBILE BOTTOM NAV
+// ══════════════════════════════════════════════════════════════
 function MobileBottomNav({ tabs, activeTab, setActiveTab }) {
-  const primaryTabs = tabs.slice(0, 3)
   return (
     <div style={{ flexShrink:0, background:'#1C3D2E', borderTop:'1px solid #2A5040', display:'flex', paddingBottom:'env(safe-area-inset-bottom, 0px)' }}>
-      {primaryTabs.map(tab => {
+      {tabs.map(tab => {
         const active = activeTab === tab.key
         return (
           <button key={tab.key} onClick={() => setActiveTab(tab.key)}
-            style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:'4px', padding:'10px 4px', background: active ? 'rgba(201,168,76,0.1)' : 'none', border:'none', borderTop: active ? '2px solid #C9A84C' : '2px solid transparent', cursor:'pointer', fontFamily:"'DM Sans', sans-serif", transition:'all .15s' }}>
-            <tab.icon size={22} color={active ? '#C9A84C' : 'rgba(255,255,255,0.4)'} />
-            <span style={{ fontSize:'10px', fontWeight: active ? '700' : '500', color: active ? '#C9A84C' : 'rgba(255,255,255,0.4)', lineHeight:1 }}>
+            style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:'4px', padding:'10px 4px', background: active?'rgba(201,168,76,0.1)':'none', border:'none', borderTop: active?'2px solid #C9A84C':'2px solid transparent', cursor:'pointer', fontFamily:"'DM Sans', sans-serif", transition:'all .15s' }}>
+            <tab.icon size={22} color={active?'#C9A84C':'rgba(255,255,255,0.38)'} />
+            <span style={{ fontSize:'10px', fontWeight: active?'700':'500', color: active?'#C9A84C':'rgba(255,255,255,0.38)', lineHeight:1 }}>
               {tab.label}
             </span>
           </button>
@@ -271,66 +308,57 @@ function MobileBottomNav({ tabs, activeTab, setActiveTab }) {
   )
 }
 
-// ── MOBILE Dashboard ──────────────────────────────────────────
-function MobileDashboard({ session, tabs, activeTab, setActiveTab, selectedGuest, onSelectGuest, handleLogout, hotelId }) {
-  const [showMenu, setShowMenu] = useState(false)
-  const badge = roleBadge(session?.role)
+// ══════════════════════════════════════════════════════════════
+//  MOBILE DASHBOARD
+// ══════════════════════════════════════════════════════════════
+function MobileDashboard({ session, activeTab, setActiveTab, selectedGuest, onSelectGuest, handleLogout, hotelId }) {
+  const role    = session?.role
+  const badge   = roleBadge(role)
+  const tabs    = getMobileTabs(role)
 
-  // Dept roles: simple full-screen, no nav
-  if (isDept(session?.role)) {
+  // Dept roles: full-screen queue, no bottom nav, no search
+  if (isDept(role)) {
     return (
       <div style={{ display:'flex', flexDirection:'column', height:'100dvh', background:'#F9FAFB', fontFamily:"'DM Sans', sans-serif" }}>
-        <MobileTopbar session={session} badge={badge} onLogout={handleLogout} tabLabel="My Queue" showSearch={false} />
+        <MobileTopbar
+          session={session}
+          badge={badge}
+          handleLogout={handleLogout}
+          tabLabel="My Queue"
+          showSearch={false}
+        />
         <div style={{ flex:1, overflow:'hidden', minHeight:0 }}>
-          <TabContent tab="live" hotelId={hotelId} session={session} selectedGuest={selectedGuest} onSelectGuest={onSelectGuest} />
+          <TabContent tab="live" hotelId={hotelId} session={session} selectedGuest={selectedGuest} onSelectGuest={onSelectGuest} isMobile={true} />
         </div>
       </div>
     )
   }
 
   const currentTab = tabs.find(t => t.key === activeTab) || tabs[0]
+  // Search available for reception and manager on guests / visitors tabs
+  const showSearch = ['guests','visitors'].includes(activeTab) && !isDept(role)
 
   return (
-    <div style={{ display:'flex', flexDirection:'column', height:'100dvh', background:'#F9FAFB', fontFamily:"'DM Sans', sans-serif", position:'relative' }}>
+    <div style={{ display:'flex', flexDirection:'column', height:'100dvh', background:'#F9FAFB', fontFamily:"'DM Sans', sans-serif" }}>
       <MobileTopbar
         session={session}
         badge={badge}
-        onLogout={handleLogout}
-        tabLabel={currentTab?.label}
-        onMenuToggle={tabs.length > 3 ? () => setShowMenu(s => !s) : undefined}
-        showMenu={showMenu}
+        handleLogout={handleLogout}
+        tabLabel={currentTab?.label || 'Dashboard'}
+        showSearch={showSearch}
         onSelectGuest={onSelectGuest}
       />
-
-      {/* Overflow menu for manager extra tabs */}
-      {showMenu && (
-        <div style={{ position:'absolute', top:'82px', left:0, right:0, zIndex:300, background:'#1C3D2E', borderBottom:'1px solid #2A5040', boxShadow:'0 8px 32px rgba(0,0,0,0.3)' }}>
-          {tabs.filter(t => !tabs.slice(0,3).find(p => p.key === t.key)).map(tab => (
-            <button key={tab.key} onClick={() => { setActiveTab(tab.key); setShowMenu(false) }}
-              style={{ display:'flex', alignItems:'center', gap:'14px', width:'100%', padding:'16px 20px', background: activeTab===tab.key ? 'rgba(201,168,76,0.1)' : 'none', border:'none', borderBottom:'1px solid rgba(255,255,255,0.06)', color: activeTab===tab.key ? '#C9A84C' : 'rgba(255,255,255,0.75)', fontSize:'15px', fontWeight: activeTab===tab.key ? '700' : '500', fontFamily:"'DM Sans', sans-serif", cursor:'pointer', textAlign:'left' }}>
-              <tab.icon size={20} color={activeTab===tab.key ? '#C9A84C' : 'rgba(255,255,255,0.5)'} />
-              {tab.label}
-              {activeTab===tab.key && <div style={{ marginLeft:'auto', width:'7px', height:'7px', borderRadius:'50%', background:'#C9A84C' }} />}
-            </button>
-          ))}
-          <button onClick={handleLogout}
-            style={{ display:'flex', alignItems:'center', gap:'14px', width:'100%', padding:'16px 20px', background:'none', border:'none', color:'#F87171', fontSize:'15px', fontWeight:'500', fontFamily:"'DM Sans', sans-serif", cursor:'pointer' }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" stroke="#F87171" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-            Logout
-          </button>
-        </div>
-      )}
-
       <div style={{ flex:1, overflow:'hidden', minHeight:0 }}>
-        <TabContent tab={activeTab} hotelId={hotelId} session={session} selectedGuest={selectedGuest} onSelectGuest={onSelectGuest} />
+        <TabContent tab={activeTab} hotelId={hotelId} session={session} selectedGuest={selectedGuest} onSelectGuest={onSelectGuest} isMobile={true} />
       </div>
-
-      <MobileBottomNav tabs={tabs} activeTab={activeTab} setActiveTab={key => { setActiveTab(key); setShowMenu(false) }} />
+      <MobileBottomNav tabs={tabs} activeTab={activeTab} setActiveTab={setActiveTab} />
     </div>
   )
 }
 
-// ── Main page ─────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+//  MAIN PAGE
+// ══════════════════════════════════════════════════════════════
 export default function DashboardPage() {
   const [activeTab,     setActiveTab]     = useState('live')
   const [session,       setSession]       = useState(null)
@@ -373,17 +401,23 @@ export default function DashboardPage() {
     )
   }
 
-  const tabs     = getTabsForRole(session.role)
-  const hotelId  = session.hotelId
-  const validTab = tabs.find(t => t.key === activeTab) ? activeTab : tabs[0]?.key
+  const desktopTabs = getDesktopTabs(session.role)
+  const hotelId     = session.hotelId
 
-  const sharedProps = { session, tabs, activeTab: validTab, setActiveTab, selectedGuest, onSelectGuest: selectGuest, handleLogout, hotelId }
+  // Ensure activeTab is valid for this role
+  const allValidKeys = isMobile
+    ? (getMobileTabs(session.role).map(t => t.key).concat(['live']))
+    : desktopTabs.map(t => t.key)
+  const validTab = allValidKeys.includes(activeTab) ? activeTab : (allValidKeys[0] || 'live')
+
+  const sharedProps = { session, activeTab: validTab, setActiveTab, selectedGuest, onSelectGuest: selectGuest, handleLogout, hotelId }
 
   if (isMobile) return <MobileDashboard {...sharedProps} />
 
   return (
     <DesktopDashboard
       {...sharedProps}
+      tabs={desktopTabs}
       searchQuery={searchQuery}
       setSearchQuery={setSearchQuery}
       searchResults={searchResults}
