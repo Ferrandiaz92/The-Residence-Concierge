@@ -9,6 +9,7 @@
 
 import webpush from 'web-push'
 import { createClient } from '@supabase/supabase-js'
+import { getOnShiftStaff } from './shifts.js'
 
 function getSupabase() {
   return createClient(
@@ -200,17 +201,31 @@ async function sendToSubscriptions(subscriptions, payload) {
 
 // ── PUBLIC API ────────────────────────────────────────────
 
-// Notify all dept staff when a new ticket is created
+// Notify on-shift dept staff when a new ticket is created
+// If nobody is on shift → queue silently (ticket stays pending, digest will catch planned ones)
 export async function notifyDeptStaff({ hotelId, ticket, guestName, room }) {
-  // Skip planned — they go in the daily digest
+  // Planned tickets go via daily digest only — never immediate push
   if (ticket.priority === 'planned') return
 
-  const supabase = getSupabase()
+  // Find who is currently on shift
+  const { onShift } = await getOnShiftStaff(hotelId, ticket.department)
+
+  // Nobody on shift → queue silently. Ticket stays pending.
+  // The next shift's workers will see it when they open the app.
+  if (!onShift || onShift.length === 0) {
+    console.log(`No staff on shift for ${ticket.department} — ticket #${ticket.ticket_number} queued silently`)
+    return
+  }
+
+  // Get push subscriptions for on-shift staff only
+  const supabase   = getSupabase()
+  const onShiftIds = onShift.map(s => s.id)
+
   const { data: subs } = await supabase
     .from('push_subscriptions')
     .select('*')
     .eq('hotel_id', hotelId)
-    .eq('department', ticket.department)
+    .in('staff_id', onShiftIds)
 
   if (!subs || subs.length === 0) return
 
