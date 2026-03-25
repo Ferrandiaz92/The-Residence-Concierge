@@ -351,7 +351,7 @@ export default function GuestsTab({ hotelId, selectedGuest }) {
 
             {/* KPIs */}
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'8px' }}>
-              {isDayVisit ? [
+              {(isDayVisit ? [
                 { label:'Total visits', value: guest.visit_count_day || 0, gold: true },
                 { label:'Bookings made', value: bookings.length },
               ] : [
@@ -361,7 +361,7 @@ export default function GuestsTab({ hotelId, selectedGuest }) {
                   { label:'Total visits', value: guest.visit_count || 1, gold: true },
                   { label:'All bookings', value: guest.total_bookings || bookings.length },
                 ] : [])
-              ].map(s => (
+              ]).map(s => (
                 <div key={s.label} style={{ background:s.gold?'rgba(201,168,76,0.08)':'#F9FAFB', borderRadius:'10px', padding:'12px 14px', border:s.gold?'1px solid rgba(201,168,76,0.2)':'none' }}>
                   <div style={{ fontSize:'12px', color:s.gold?'#78350F':'#6B7280', fontWeight:'500', marginBottom:'4px' }}>{s.label}</div>
                   <div style={{ fontSize:'24px', fontWeight:'700', color:s.gold?'#C9A84C':'#111827' }}>{s.value}</div>
