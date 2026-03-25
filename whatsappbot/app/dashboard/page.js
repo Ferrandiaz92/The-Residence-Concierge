@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import LiveTab          from '../../components/LiveTab'
 import MobileLiveTab    from '../../components/MobileLiveTab'
 import GuestsTab        from '../../components/GuestsTab'
+import MobileGuestsTab  from '../../components/MobileGuestsTab'
 import AnalyticsTab     from '../../components/AnalyticsTab'
 import ScheduledTab     from '../../components/ScheduledTab'
 import VisitorsTab      from '../../components/VisitorsTab'
@@ -32,18 +33,18 @@ function getDesktopTabs(role) {
 
 // Mobile tabs — simplified per role
 // Manager/Admin: Live, Guests, Setup
-// Reception:     Live, Guests, Visitors
-// Dept:          Live only (full screen, no bottom nav needed)
+// Reception:     Live, Guests (no Visitors)
+// Dept:          Live only (full screen queue, no bottom nav)
 function getMobileTabs(role) {
   if (isManager(role)) return [
     { key:'live',     label:'Live',   icon:IconLive     },
     { key:'guests',   label:'Guests', icon:IconGuests   },
     { key:'settings', label:'Setup',  icon:IconSettings },
   ]
+  // Reception: Live + Guests only (no Visitors)
   if (isReception(role)) return [
-    { key:'live',     label:'Live',     icon:IconLive     },
-    { key:'guests',   label:'Guests',   icon:IconGuests   },
-    { key:'visitors', label:'Visitors', icon:IconVisitors },
+    { key:'live',   label:'Live',   icon:IconLive   },
+    { key:'guests', label:'Guests', icon:IconGuests },
   ]
   return [] // dept: no bottom nav
 }
@@ -78,7 +79,9 @@ function TabContent({ tab, hotelId, session, selectedGuest, onSelectGuest, isMob
     case 'live':      return isMobile
       ? <MobileLiveTab hotelId={hotelId} session={session} onSelectGuest={onSelectGuest} />
       : <LiveTab       hotelId={hotelId} session={session} onSelectGuest={onSelectGuest} />
-    case 'guests':    return <GuestsTab    hotelId={hotelId} selectedGuest={selectedGuest} />
+    case 'guests':    return isMobile
+      ? <MobileGuestsTab hotelId={hotelId} selectedGuest={selectedGuest} />
+      : <GuestsTab       hotelId={hotelId} selectedGuest={selectedGuest} />
     case 'visitors':  return <VisitorsTab  hotelId={hotelId} />
     case 'analytics': return <AnalyticsTab hotelId={hotelId} />
     case 'scheduled': return <ScheduledTab hotelId={hotelId} />
@@ -336,7 +339,7 @@ function MobileDashboard({ session, activeTab, setActiveTab, selectedGuest, onSe
 
   const currentTab = tabs.find(t => t.key === activeTab) || tabs[0]
   // Search available for reception and manager on guests / visitors tabs
-  const showSearch = ['guests','visitors'].includes(activeTab) && !isDept(role)
+  const showSearch = activeTab === 'guests' && !isDept(role)
 
   return (
     <div style={{ display:'flex', flexDirection:'column', height:'100dvh', background:'#F9FAFB', fontFamily:"'DM Sans', sans-serif" }}>
