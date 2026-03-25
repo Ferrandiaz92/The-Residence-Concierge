@@ -19,6 +19,7 @@ export async function GET(request) {
     const hotelId   = searchParams.get('hotelId')
     const filter    = searchParams.get('filter') || 'all'
     const language  = searchParams.get('language') || 'all'
+    const guestType = searchParams.get('guestType') || 'all'
     const search    = searchParams.get('search') || ''
     const month     = searchParams.get('month') || ''
     const page      = parseInt(searchParams.get('page') || '1')
@@ -33,7 +34,7 @@ export async function GET(request) {
       .from('conversations')
       .select(`
         id, status, created_at, last_message_at, messages,
-        guests(id, room, language, check_in, check_out),
+        guests(id, room, language, check_in, check_out, guest_type, name, surname),
         qa_flags(id, flag_type, resolved, created_at)
       `)
       .eq('hotel_id', hotelId)
@@ -44,6 +45,7 @@ export async function GET(request) {
     if (filter === 'escalated')  query = query.eq('status', 'escalated')
     if (filter === 'flagged')    query = query.not('qa_flags', 'is', null)
     if (language !== 'all')      query = query.eq('guests.language', language)
+    if (guestType !== 'all')     query = query.eq('guests.guest_type', guestType)
 
     // Month filter
     if (month) {
