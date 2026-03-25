@@ -1,5 +1,4 @@
-// components/VisitorsTab.js
-// Day visitor analytics — top visitors, service usage, frequency
+// components/VisitorsTab.js (updated — prospects section + pipeline)
 'use client'
 import { useState, useEffect } from 'react'
 
@@ -21,28 +20,40 @@ const STATUS_CONFIG = {
   new:      { label:'New',      color:'#64748B', bg:'#F1F5F9', desc:'no visits yet' },
 }
 
+const PROSPECT_STATUS = {
+  new:          { label:'New',          color:'#64748B', bg:'#F1F5F9' },
+  followed_up:  { label:'Followed up',  color:'#2563EB', bg:'#DBEAFE' },
+  converted:    { label:'Converted',    color:'#16A34A', bg:'#DCFCE7' },
+  lost:         { label:'Lost',         color:'#DC2626', bg:'#FEE2E2' },
+}
+
+const PROSPECT_TOPICS = {
+  rooms:      { label:'Rooms',      icon:'🛏️' },
+  facilities: { label:'Facilities', icon:'🏊' },
+  pricing:    { label:'Pricing',    icon:'💶' },
+  events:     { label:'Events',     icon:'🎭' },
+  general:    { label:'General',    icon:'💬' },
+}
+
 const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']
 
 export default function VisitorsTab({ hotelId }) {
-  const [data, setData]         = useState(null)
-  const [loading, setLoading]   = useState(true)
-  const [section, setSection]   = useState('overview')
-  const [filter, setFilter]     = useState('all')
-  const [showAdd, setShowAdd]   = useState(false)
+  const [data, setData]           = useState(null)
+  const [loading, setLoading]     = useState(true)
+  const [section, setSection]     = useState('overview')
+  const [filter, setFilter]       = useState('day_visitor')
+  const [showAdd, setShowAdd]     = useState(false)
   const [newVisitor, setNewVisitor] = useState({ name:'', surname:'', phone:'', language:'en', preferredServices:[] })
-  const [saving, setSaving]     = useState(false)
+  const [saving, setSaving]       = useState(false)
   const [logVisitFor, setLogVisitFor] = useState(null)
   const [logService, setLogService]   = useState('tennis')
 
-  useEffect(() => {
-    if (!hotelId) return
-    loadData()
-  }, [hotelId, filter])
+  useEffect(() => { if (hotelId) loadData() }, [hotelId, filter])
 
   async function loadData() {
     setLoading(true)
     try {
-      const res  = await fetch(`/api/visitors?hotelId=${hotelId}&type=${filter}`)
+      const res  = await fetch(`/api/visitors?hotelId=${hotelId}&type=all`)
       const json = await res.json()
       setData(json)
     } finally { setLoading(false) }
@@ -64,9 +75,25 @@ export default function VisitorsTab({ hotelId }) {
   async function handleLogVisit(guestId) {
     await fetch('/api/visitors', {
       method:'PATCH', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ id: guestId, hotelId, logVisit: true, serviceType: logService }),
+      body: JSON.stringify({ id:guestId, hotelId, logVisit:true, serviceType:logService }),
     })
     setLogVisitFor(null)
+    loadData()
+  }
+
+  async function updateProspectStatus(guestId, status) {
+    await fetch('/api/visitors', {
+      method:'PATCH', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ id:guestId, prospect_status:status }),
+    })
+    loadData()
+  }
+
+  async function updateProspectTopic(guestId, topic) {
+    await fetch('/api/visitors', {
+      method:'PATCH', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ id:guestId, prospect_topic:topic }),
+    })
     loadData()
   }
 
@@ -79,19 +106,19 @@ export default function VisitorsTab({ hotelId }) {
     return 'inactive'
   }
 
-  function getServiceConfig(type) {
-    return SERVICE_COLORS[type?.toLowerCase()] || SERVICE_COLORS.other
-  }
+  function getSvc(type) { return SERVICE_COLORS[type?.toLowerCase()] || SERVICE_COLORS.other }
 
-  const s    = data?.stats || {}
-  const visitors = data?.visitors || []
-  const maxDay   = Math.max(...(s.visitsByDay || [0]), 1)
+  const s          = data?.stats || {}
+  const allVisitors= data?.visitors || []
+  const visitors   = allVisitors.filter(v => v.guest_type === 'day_visitor' || v.guest_type === 'event')
+  const prospects  = allVisitors.filter(v => v.guest_type === 'prospect')
+  const maxDay     = Math.max(...(s.visitsByDay||[0]), 1)
 
   const inp = { width:'100%', padding:'9px 12px', border:'1px solid #D1D5DB', borderRadius:'8px', fontSize:'13px', fontFamily:"'DM Sans',sans-serif", outline:'none', color:'#111827', background:'white' }
 
   if (loading) return (
     <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100%', color:'#6B7280', fontFamily:"'DM Sans',sans-serif", fontSize:'14px' }}>
-      Loading visitor data...
+      Loading...
     </div>
   )
 
@@ -103,7 +130,8 @@ export default function VisitorsTab({ hotelId }) {
         <div style={{ display:'flex' }}>
           {[
             { key:'overview', label:'Overview' },
-            { key:'visitors', label:'Top visitors' },
+            { key:'visitors', label:'Day visitors' },
+            { key:'prospects', label:`Prospects${prospects.length > 0 ? ` · ${prospects.length}` : ''}` },
           ].map(sec => (
             <button key={sec.key} onClick={() => setSection(sec.key)}
               style={{ padding:'11px 22px', fontSize:'14px', fontWeight:section===sec.key?'700':'500', color:section===sec.key?'#1C3D2E':'#9CA3AF', background:'none', border:'none', borderBottom:section===sec.key?'3px solid #1C3D2E':'3px solid transparent', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
@@ -111,14 +139,16 @@ export default function VisitorsTab({ hotelId }) {
             </button>
           ))}
         </div>
-        <button onClick={() => setShowAdd(!showAdd)}
-          style={{ padding:'7px 16px', background:'#1C3D2E', border:'none', borderRadius:'8px', fontSize:'13px', fontWeight:'600', color:'white', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-          + Add visitor
-        </button>
+        {section !== 'prospects' && (
+          <button onClick={() => setShowAdd(!showAdd)}
+            style={{ padding:'7px 16px', background:'#1C3D2E', border:'none', borderRadius:'8px', fontSize:'13px', fontWeight:'600', color:'white', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+            + Add visitor
+          </button>
+        )}
       </div>
 
       {/* Add visitor panel */}
-      {showAdd && (
+      {showAdd && section !== 'prospects' && (
         <div style={{ background:'#F9FAFB', borderBottom:'1px solid #E5E7EB', padding:'16px 20px', flexShrink:0 }}>
           <div style={{ fontSize:'14px', fontWeight:'700', color:'#111827', marginBottom:'12px' }}>Add day visitor</div>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr 1fr auto', gap:'10px', alignItems:'end' }}>
@@ -158,44 +188,37 @@ export default function VisitorsTab({ hotelId }) {
 
       <div className="scrollable" style={{ padding:'18px', background:'#F9FAFB' }}>
 
-        {/* OVERVIEW */}
+        {/* ── OVERVIEW ── */}
         {section === 'overview' && (
           <>
-            {/* KPI row */}
             <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:'10px', marginBottom:'16px' }}>
               {[
-                { label:'Total day visitors', value: s.total || 0 },
+                { label:'Day visitors',      value: s.total || 0 },
                 { label:'Visits this month', value: s.monthVisits || 0 },
-                { label:'Active visitors', value: s.statusCounts?.active || 0, gold: true },
-                { label:'Fading (need attention)', value: s.statusCounts?.fading || 0, warn: true },
+                { label:'Active this week',  value: s.statusCounts?.active || 0, gold: true },
+                { label:'Prospects',         value: s.totalProspects || 0, blue: true },
               ].map(k => (
-                <div key={k.label} style={{ background:k.warn?'#FEE2E2':k.gold?'rgba(201,168,76,0.08)':'white', border:`1px solid ${k.warn?'#FCA5A5':k.gold?'rgba(201,168,76,0.3)':'#E5E7EB'}`, borderRadius:'12px', padding:'14px 16px' }}>
-                  <div style={{ fontSize:'12px', color:k.warn?'#991B1B':k.gold?'#78350F':'#6B7280', fontWeight:'500', marginBottom:'5px' }}>{k.label}</div>
-                  <div style={{ fontSize:'28px', fontWeight:'700', color:k.warn?'#DC2626':k.gold?'#C9A84C':'#111827', lineHeight:1 }}>{k.value}</div>
+                <div key={k.label} style={{ background:k.gold?'rgba(201,168,76,0.08)':k.blue?'#EFF6FF':'white', border:`1px solid ${k.gold?'rgba(201,168,76,0.3)':k.blue?'#BFDBFE':'#E5E7EB'}`, borderRadius:'12px', padding:'14px 16px' }}>
+                  <div style={{ fontSize:'12px', color:k.gold?'#78350F':k.blue?'#1E40AF':'#6B7280', fontWeight:'500', marginBottom:'5px' }}>{k.label}</div>
+                  <div style={{ fontSize:'28px', fontWeight:'700', color:k.gold?'#C9A84C':k.blue?'#2563EB':'#111827', lineHeight:1 }}>{k.value}</div>
                 </div>
               ))}
             </div>
 
-            {/* Status breakdown + service usage */}
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'14px', marginBottom:'14px' }}>
-
               {/* Status breakdown */}
               <div style={{ background:'white', border:'1px solid #E5E7EB', borderRadius:'12px', padding:'16px' }}>
-                <div style={{ fontSize:'14px', fontWeight:'700', color:'#111827', marginBottom:'14px' }}>Visitor status breakdown</div>
+                <div style={{ fontSize:'14px', fontWeight:'700', color:'#111827', marginBottom:'14px' }}>Visitor status</div>
                 {Object.entries(STATUS_CONFIG).map(([key, cfg]) => {
                   const count = s.statusCounts?.[key] || 0
-                  const total = s.total || 1
-                  const pct   = Math.round((count/total)*100)
+                  const total = Math.max(s.total || 1, 1)
                   return (
-                    <div key={key} style={{ display:'flex', alignItems:'center', gap:'10px', marginBottom:'10px' }}>
-                      <div style={{ fontSize:'11px', fontWeight:'600', padding:'2px 8px', borderRadius:'20px', background:cfg.bg, color:cfg.color, width:'68px', textAlign:'center', flexShrink:0 }}>
-                        {cfg.label}
-                      </div>
+                    <div key={key} style={{ display:'flex', alignItems:'center', gap:'10px', marginBottom:'9px' }}>
+                      <div style={{ fontSize:'11px', fontWeight:'600', padding:'2px 8px', borderRadius:'20px', background:cfg.bg, color:cfg.color, width:'68px', textAlign:'center', flexShrink:0 }}>{cfg.label}</div>
                       <div style={{ flex:1, height:'10px', background:'#F3F4F6', borderRadius:'5px', overflow:'hidden' }}>
-                        <div style={{ width:`${pct}%`, height:'100%', background:cfg.color, borderRadius:'5px', minWidth:count>0?'4px':'0' }}/>
+                        <div style={{ width:`${Math.round((count/total)*100)}%`, height:'100%', background:cfg.color, borderRadius:'5px', minWidth:count>0?'4px':'0' }}/>
                       </div>
-                      <div style={{ fontSize:'13px', fontWeight:'600', color:'#374151', width:'28px', textAlign:'right', flexShrink:0 }}>{count}</div>
-                      <div style={{ fontSize:'11px', color:'#9CA3AF', flexShrink:0, width:'100px' }}>{cfg.desc}</div>
+                      <div style={{ fontSize:'13px', fontWeight:'600', color:'#374151', width:'28px', textAlign:'right' }}>{count}</div>
                     </div>
                   )
                 })}
@@ -204,11 +227,10 @@ export default function VisitorsTab({ hotelId }) {
               {/* Most used services */}
               <div style={{ background:'white', border:'1px solid #E5E7EB', borderRadius:'12px', padding:'16px' }}>
                 <div style={{ fontSize:'14px', fontWeight:'700', color:'#111827', marginBottom:'14px' }}>Most used services</div>
-                {(s.topServices || []).length === 0 ? (
-                  <div style={{ textAlign:'center', color:'#9CA3AF', fontSize:'13px', padding:'20px' }}>No service data yet</div>
-                ) : (
-                  (s.topServices || []).map((svc, idx) => {
-                    const cfg = getServiceConfig(svc.name)
+                {(s.topServices||[]).length === 0
+                  ? <div style={{ textAlign:'center', color:'#9CA3AF', fontSize:'13px', padding:'20px' }}>No service data yet</div>
+                  : (s.topServices||[]).map(svc => {
+                    const cfg = getSvc(svc.name)
                     const maxCount = s.topServices[0]?.count || 1
                     return (
                       <div key={svc.name} style={{ display:'flex', alignItems:'center', gap:'10px', marginBottom:'9px' }}>
@@ -217,157 +239,222 @@ export default function VisitorsTab({ hotelId }) {
                         <div style={{ flex:1, height:'10px', background:'#F3F4F6', borderRadius:'5px', overflow:'hidden' }}>
                           <div style={{ width:`${Math.round((svc.count/maxCount)*100)}%`, height:'100%', background:cfg.color, borderRadius:'5px' }}/>
                         </div>
-                        <div style={{ fontSize:'13px', fontWeight:'700', color:'#374151', width:'28px', textAlign:'right', flexShrink:0 }}>{svc.count}</div>
+                        <div style={{ fontSize:'13px', fontWeight:'700', color:'#374151', width:'28px', textAlign:'right' }}>{svc.count}</div>
                       </div>
                     )
                   })
-                )}
+                }
               </div>
             </div>
 
             {/* Visit frequency by day */}
             <div style={{ background:'white', border:'1px solid #E5E7EB', borderRadius:'12px', padding:'16px' }}>
-              <div style={{ fontSize:'14px', fontWeight:'700', color:'#111827', marginBottom:'16px' }}>Visit frequency by day of week — last 90 days</div>
+              <div style={{ fontSize:'14px', fontWeight:'700', color:'#111827', marginBottom:'16px' }}>Visit frequency by day — last 90 days</div>
               <div style={{ display:'flex', gap:'8px', alignItems:'flex-end', height:'80px' }}>
-                {(s.visitsByDay || [0,0,0,0,0,0,0]).map((count, idx) => {
-                  const pct = Math.round((count/maxDay)*100)
-                  return (
-                    <div key={idx} style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:'6px' }}>
-                      <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151' }}>{count}</div>
-                      <div style={{ width:'100%', background:`#1C3D2E`, borderRadius:'4px 4px 0 0', height:`${Math.max(pct * 0.5, count > 0 ? 4 : 0)}px`, minHeight: count > 0 ? '4px' : '0', transition:'height .3s' }}/>
-                      <div style={{ fontSize:'12px', color:'#9CA3AF', fontWeight:'500' }}>{DAYS[idx]}</div>
-                    </div>
-                  )
-                })}
+                {(s.visitsByDay||[0,0,0,0,0,0,0]).map((count, idx) => (
+                  <div key={idx} style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:'6px' }}>
+                    <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151' }}>{count}</div>
+                    <div style={{ width:'100%', background:'#1C3D2E', borderRadius:'4px 4px 0 0', height:`${Math.max(Math.round((count/maxDay)*50), count>0?4:0)}px`, transition:'height .3s' }}/>
+                    <div style={{ fontSize:'12px', color:'#9CA3AF', fontWeight:'500' }}>{DAYS[idx]}</div>
+                  </div>
+                ))}
               </div>
             </div>
           </>
         )}
 
-        {/* TOP VISITORS */}
+        {/* ── DAY VISITORS ── */}
         {section === 'visitors' && (
           <>
-            {/* Filter */}
-            <div style={{ display:'flex', gap:'8px', marginBottom:'14px', flexWrap:'wrap' }}>
+            <div style={{ display:'flex', gap:'8px', marginBottom:'14px', flexWrap:'wrap', alignItems:'center' }}>
               {[
-                { key:'all', label:'All visitors' },
                 { key:'day_visitor', label:'Day visitors' },
-                { key:'event', label:'Event guests' },
+                { key:'event',       label:'Event guests' },
               ].map(f => (
                 <button key={f.key} onClick={() => setFilter(f.key)}
                   style={{ padding:'7px 16px', borderRadius:'20px', fontSize:'13px', fontWeight:filter===f.key?'700':'500', border:`1px solid ${filter===f.key?'#1C3D2E':'#D1D5DB'}`, background:filter===f.key?'#1C3D2E':'white', color:filter===f.key?'white':'#374151', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                   {f.label}
                 </button>
               ))}
-              <div style={{ marginLeft:'auto', fontSize:'13px', color:'#9CA3AF', alignSelf:'center' }}>
-                {visitors.length} visitors
+              <div style={{ marginLeft:'auto', fontSize:'13px', color:'#9CA3AF' }}>
+                {visitors.filter(v => filter === 'all' || v.guest_type === filter).length} visitors
               </div>
             </div>
 
-            {/* Visitor list */}
-            {visitors.length === 0 ? (
-              <div style={{ textAlign:'center', padding:'60px', color:'#9CA3AF', fontSize:'14px' }}>
-                No day visitors yet — add your first one above
-              </div>
+            {visitors.filter(v => v.guest_type === filter).length === 0 ? (
+              <div style={{ textAlign:'center', padding:'60px', color:'#9CA3AF', fontSize:'14px' }}>No visitors yet</div>
             ) : (
               <div style={{ display:'flex', flexDirection:'column', gap:'8px' }}>
-                {visitors.map((v, idx) => {
-                  const status = getVisitorStatus(v)
-                  const sc     = STATUS_CONFIG[status]
+                {visitors.filter(v => v.guest_type === filter).map((v, idx) => {
+                  const status   = getVisitorStatus(v)
+                  const sc       = STATUS_CONFIG[status]
                   const initials = `${v.name?.[0]||'?'}${v.surname?.[0]||''}`
                   const daysAgo  = v.last_visit_at
                     ? Math.floor((Date.now() - new Date(v.last_visit_at)) / (1000*60*60*24))
                     : null
-                  const services = v.preferred_services || []
+                  const services  = v.preferred_services || []
                   const isLogging = logVisitFor === v.id
 
                   return (
                     <div key={v.id} style={{ background:'white', border:`1px solid ${status==='fading'?'#FCD34D':status==='inactive'?'#FCA5A5':'#E5E7EB'}`, borderRadius:'12px', overflow:'hidden' }}>
                       <div style={{ padding:'14px 16px', display:'flex', alignItems:'center', gap:'14px' }}>
-
-                        {/* Rank */}
-                        <div style={{ fontSize:'13px', fontWeight:'700', color:'#9CA3AF', width:'22px', textAlign:'center', flexShrink:0 }}>
-                          {idx + 1}
-                        </div>
-
-                        {/* Avatar */}
-                        <div style={{ width:'42px', height:'42px', borderRadius:'50%', background:'#1C3D2E', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'15px', color:'#C9A84C', fontWeight:'700', flexShrink:0 }}>
-                          {initials}
-                        </div>
-
-                        {/* Info */}
+                        <div style={{ fontSize:'13px', fontWeight:'700', color:'#9CA3AF', width:'22px', textAlign:'center', flexShrink:0 }}>{idx+1}</div>
+                        <div style={{ width:'42px', height:'42px', borderRadius:'50%', background:'#1C3D2E', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'15px', color:'#C9A84C', fontWeight:'700', flexShrink:0 }}>{initials}</div>
                         <div style={{ flex:1 }}>
                           <div style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'3px' }}>
                             <div style={{ fontSize:'15px', fontWeight:'700', color:'#111827' }}>{v.name} {v.surname}</div>
-                            <div style={{ fontSize:'11px', fontWeight:'600', padding:'2px 8px', borderRadius:'20px', background:sc.bg, color:sc.color }}>
-                              {sc.label}
-                            </div>
-                            {v.guest_type === 'event' && (
-                              <div style={{ fontSize:'11px', fontWeight:'600', padding:'2px 8px', borderRadius:'20px', background:'#EDE9FE', color:'#5B21B6' }}>Event</div>
-                            )}
+                            <div style={{ fontSize:'11px', fontWeight:'600', padding:'2px 8px', borderRadius:'20px', background:sc.bg, color:sc.color }}>{sc.label}</div>
                           </div>
                           <div style={{ fontSize:'12px', color:'#9CA3AF', marginBottom:'5px' }}>{v.phone}</div>
                           <div style={{ display:'flex', gap:'5px', flexWrap:'wrap' }}>
                             {services.map(svc => {
-                              const cfg = getServiceConfig(svc)
-                              return (
-                                <div key={svc} style={{ fontSize:'11px', fontWeight:'500', padding:'2px 8px', borderRadius:'20px', background:cfg.bg, color:cfg.color }}>
-                                  {cfg.icon} {svc}
-                                </div>
-                              )
+                              const cfg = getSvc(svc)
+                              return <div key={svc} style={{ fontSize:'11px', fontWeight:'500', padding:'2px 8px', borderRadius:'20px', background:cfg.bg, color:cfg.color }}>{cfg.icon} {svc}</div>
                             })}
                           </div>
                         </div>
-
-                        {/* Stats */}
                         <div style={{ display:'flex', gap:'20px', alignItems:'center', flexShrink:0 }}>
                           <div style={{ textAlign:'center' }}>
-                            <div style={{ fontSize:'22px', fontWeight:'700', color:'#C9A84C', lineHeight:1 }}>{v.visit_count_day || 0}</div>
+                            <div style={{ fontSize:'22px', fontWeight:'700', color:'#C9A84C', lineHeight:1 }}>{v.visit_count_day||0}</div>
                             <div style={{ fontSize:'11px', color:'#9CA3AF', marginTop:'2px' }}>visits</div>
                           </div>
                           <div style={{ textAlign:'center' }}>
-                            <div style={{ fontSize:'14px', fontWeight:'600', color:daysAgo === null ? '#9CA3AF' : daysAgo <= 7 ? '#16A34A' : daysAgo <= 21 ? '#2563EB' : '#DC2626', lineHeight:1 }}>
-                              {daysAgo === null ? '—' : daysAgo === 0 ? 'Today' : `${daysAgo}d ago`}
+                            <div style={{ fontSize:'14px', fontWeight:'600', color:daysAgo===null?'#9CA3AF':daysAgo<=7?'#16A34A':daysAgo<=21?'#2563EB':'#DC2626', lineHeight:1 }}>
+                              {daysAgo===null?'—':daysAgo===0?'Today':`${daysAgo}d ago`}
                             </div>
                             <div style={{ fontSize:'11px', color:'#9CA3AF', marginTop:'2px' }}>last visit</div>
                           </div>
                         </div>
-
-                        {/* Actions */}
-                        <div style={{ display:'flex', gap:'6px', flexShrink:0 }}>
-                          <button onClick={() => setLogVisitFor(isLogging ? null : v.id)}
-                            style={{ padding:'7px 14px', background:isLogging?'#1C3D2E':'white', border:'1px solid #D1D5DB', borderRadius:'8px', fontSize:'12px', fontWeight:'600', color:isLogging?'white':'#374151', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                            {isLogging ? 'Cancel' : '+ Log visit'}
-                          </button>
-                        </div>
+                        <button onClick={() => setLogVisitFor(isLogging?null:v.id)}
+                          style={{ padding:'7px 14px', background:isLogging?'#1C3D2E':'white', border:'1px solid #D1D5DB', borderRadius:'8px', fontSize:'12px', fontWeight:'600', color:isLogging?'white':'#374151', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", flexShrink:0 }}>
+                          {isLogging?'Cancel':'+ Log visit'}
+                        </button>
                       </div>
 
-                      {/* Log visit panel */}
                       {isLogging && (
                         <div style={{ padding:'12px 16px', borderTop:'1px solid #F3F4F6', background:'#F9FAFB', display:'flex', alignItems:'center', gap:'12px' }}>
                           <div style={{ fontSize:'13px', fontWeight:'500', color:'#374151' }}>Service used today:</div>
                           <div style={{ display:'flex', gap:'6px', flexWrap:'wrap', flex:1 }}>
-                            {Object.entries(SERVICE_COLORS).filter(([k])=>k!=='other').map(([key, cfg]) => (
-                              <button key={key} onClick={() => setLogService(key)}
+                            {Object.entries(SERVICE_COLORS).filter(([k])=>k!=='other').map(([key,cfg]) => (
+                              <button key={key} onClick={()=>setLogService(key)}
                                 style={{ padding:'5px 12px', borderRadius:'20px', fontSize:'12px', fontWeight:'600', border:`1px solid ${logService===key?cfg.color:'#D1D5DB'}`, background:logService===key?cfg.bg:'white', color:logService===key?cfg.color:'#374151', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                                 {cfg.icon} {key}
                               </button>
                             ))}
                           </div>
-                          <button onClick={() => handleLogVisit(v.id)}
+                          <button onClick={()=>handleLogVisit(v.id)}
                             style={{ padding:'8px 18px', background:'#1C3D2E', border:'none', borderRadius:'8px', fontSize:'13px', fontWeight:'700', color:'white', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", flexShrink:0 }}>
                             Save visit
                           </button>
                         </div>
                       )}
 
-                      {/* Staff notes */}
                       {v.notes && (
                         <div style={{ padding:'8px 16px 12px', borderTop:'1px solid #F9FAFB' }}>
                           <div style={{ fontSize:'11px', color:'#9CA3AF', marginBottom:'2px' }}>Staff notes</div>
                           <div style={{ fontSize:'12px', color:'#374151', fontStyle:'italic' }}>{v.notes}</div>
                         </div>
                       )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* ── PROSPECTS ── */}
+        {section === 'prospects' && (
+          <>
+            {/* Pipeline summary */}
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:'10px', marginBottom:'16px' }}>
+              {Object.entries(PROSPECT_STATUS).map(([key, cfg]) => (
+                <div key={key} style={{ background:cfg.bg, border:`1px solid ${cfg.color}30`, borderRadius:'12px', padding:'14px 16px', textAlign:'center' }}>
+                  <div style={{ fontSize:'12px', fontWeight:'600', color:cfg.color, marginBottom:'5px' }}>{cfg.label}</div>
+                  <div style={{ fontSize:'28px', fontWeight:'700', color:cfg.color, lineHeight:1 }}>{s.prospectCounts?.[key]||0}</div>
+                </div>
+              ))}
+            </div>
+
+            {prospects.length === 0 ? (
+              <div style={{ textAlign:'center', padding:'60px', color:'#9CA3AF', fontSize:'14px' }}>
+                No prospects yet — new WhatsApp enquiries will appear here automatically
+              </div>
+            ) : (
+              <div style={{ display:'flex', flexDirection:'column', gap:'8px' }}>
+                {prospects.map(p => {
+                  const ps       = PROSPECT_STATUS[p.prospect_status||'new']
+                  const initials = p.name ? `${p.name[0]}${p.surname?.[0]||''}` : '?'
+                  const daysAgo  = p.first_contact_at
+                    ? Math.floor((Date.now()-new Date(p.first_contact_at))/(1000*60*60*24))
+                    : null
+                  const topic = p.prospect_topic ? PROSPECT_TOPICS[p.prospect_topic] : null
+
+                  return (
+                    <div key={p.id} style={{ background:'white', border:'1px solid #E5E7EB', borderRadius:'12px', overflow:'hidden' }}>
+                      <div style={{ padding:'14px 16px', display:'flex', alignItems:'flex-start', gap:'14px' }}>
+
+                        {/* Avatar */}
+                        <div style={{ width:'42px', height:'42px', borderRadius:'50%', background:'#F1F5F9', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'15px', color:'#64748B', fontWeight:'700', flexShrink:0 }}>
+                          {initials}
+                        </div>
+
+                        {/* Info */}
+                        <div style={{ flex:1 }}>
+                          <div style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'4px', flexWrap:'wrap' }}>
+                            <div style={{ fontSize:'15px', fontWeight:'700', color:'#111827' }}>
+                              {p.name ? `${p.name} ${p.surname||''}`.trim() : 'Unknown'}
+                            </div>
+                            <div style={{ fontSize:'11px', fontWeight:'600', padding:'2px 8px', borderRadius:'20px', background:ps.bg, color:ps.color }}>{ps.label}</div>
+                            {topic && (
+                              <div style={{ fontSize:'11px', fontWeight:'600', padding:'2px 8px', borderRadius:'20px', background:'#F1F5F9', color:'#475569' }}>
+                                {topic.icon} {topic.label}
+                              </div>
+                            )}
+                          </div>
+                          <div style={{ fontSize:'12px', color:'#9CA3AF', marginBottom:'6px' }}>{p.phone}</div>
+                          {p.last_message_snippet && (
+                            <div style={{ fontSize:'12px', color:'#6B7280', fontStyle:'italic', background:'#F9FAFB', padding:'7px 10px', borderRadius:'8px', borderLeft:'3px solid #E5E7EB' }}>
+                              "{p.last_message_snippet}{p.last_message_snippet?.length >= 79 ? '...' : ''}"
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Meta */}
+                        <div style={{ display:'flex', flexDirection:'column', gap:'8px', alignItems:'flex-end', flexShrink:0 }}>
+                          <div style={{ textAlign:'right' }}>
+                            <div style={{ fontSize:'12px', color:'#9CA3AF' }}>First contact</div>
+                            <div style={{ fontSize:'13px', fontWeight:'600', color:'#374151' }}>
+                              {daysAgo === null ? '—' : daysAgo === 0 ? 'Today' : `${daysAgo}d ago`}
+                            </div>
+                          </div>
+                          {p.message_count > 0 && (
+                            <div style={{ fontSize:'11px', color:'#9CA3AF' }}>{p.message_count} messages</div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Pipeline controls */}
+                      <div style={{ padding:'10px 16px', borderTop:'1px solid #F3F4F6', background:'#F9FAFB', display:'flex', alignItems:'center', gap:'16px', flexWrap:'wrap' }}>
+                        <div style={{ fontSize:'12px', fontWeight:'600', color:'#6B7280' }}>Status:</div>
+                        <div style={{ display:'flex', gap:'5px' }}>
+                          {Object.entries(PROSPECT_STATUS).map(([key, cfg]) => (
+                            <button key={key} onClick={() => updateProspectStatus(p.id, key)}
+                              style={{ padding:'4px 10px', borderRadius:'20px', fontSize:'11px', fontWeight:'600', border:`1px solid ${(p.prospect_status||'new')===key?cfg.color:'#D1D5DB'}`, background:(p.prospect_status||'new')===key?cfg.bg:'white', color:(p.prospect_status||'new')===key?cfg.color:'#9CA3AF', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                              {cfg.label}
+                            </button>
+                          ))}
+                        </div>
+                        <div style={{ fontSize:'12px', fontWeight:'600', color:'#6B7280', marginLeft:'8px' }}>Topic:</div>
+                        <div style={{ display:'flex', gap:'5px' }}>
+                          {Object.entries(PROSPECT_TOPICS).map(([key, cfg]) => (
+                            <button key={key} onClick={() => updateProspectTopic(p.id, key)}
+                              style={{ padding:'4px 10px', borderRadius:'20px', fontSize:'11px', fontWeight:'600', border:`1px solid ${p.prospect_topic===key?'#475569':'#D1D5DB'}`, background:p.prospect_topic===key?'#F1F5F9':'white', color:p.prospect_topic===key?'#1E293B':'#9CA3AF', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                              {cfg.icon} {cfg.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   )
                 })}

@@ -23,6 +23,7 @@ export default function BotQA({ hotelId }) {
   const [loading, setLoading]             = useState(true)
   const [filter, setFilter]               = useState('all')
   const [language, setLanguage]           = useState('all')
+  const [guestType, setGuestType]         = useState('all')
   const [search, setSearch]               = useState('')
   const [searchInput, setSearchInput]     = useState('')
   const [selectedConv, setSelectedConv]   = useState(null)
@@ -38,12 +39,12 @@ export default function BotQA({ hotelId }) {
   useEffect(() => {
     if (!hotelId) return
     loadData()
-  }, [hotelId, filter, language, search, month])
+  }, [hotelId, filter, language, search, month, guestType])
 
   async function loadData() {
     setLoading(true)
     try {
-      const params = new URLSearchParams({ hotelId, filter, language, search, month })
+      const params = new URLSearchParams({ hotelId, filter, language, search, month, guestType })
       const res  = await fetch(`/api/qa?${params}`)
       const data = await res.json()
       setConversations(data.conversations || [])
@@ -124,6 +125,15 @@ export default function BotQA({ hotelId }) {
         </div>
 
         {/* Language selector */}
+        <select value={guestType} onChange={e=>setGuestType(e.target.value)}
+          style={{ padding:'8px 12px', border:'1px solid #E5E7EB', borderRadius:'8px', fontSize:'13px', color:'#374151', background:'white', fontFamily:"'DM Sans',sans-serif", cursor:'pointer' }}>
+          <option value="all">All guest types</option>
+          <option value="stay">🛏️ Stay guests</option>
+          <option value="day_visitor">☀️ Day visitors</option>
+          <option value="event">🎭 Event guests</option>
+          <option value="prospect">🔍 Prospects</option>
+        </select>
+
         <select value={language} onChange={e=>setLanguage(e.target.value)}
           style={{ padding:'8px 14px', borderRadius:'8px', fontSize:'13px', fontWeight:'500', border:'1px solid #D1D5DB', background:'white', color:'#374151', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", outline:'none' }}>
           <option value="all">All languages</option>
