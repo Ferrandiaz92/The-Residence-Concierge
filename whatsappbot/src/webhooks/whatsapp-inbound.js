@@ -12,6 +12,7 @@ import { buildSystemPromptWithKB } from '../lib/knowledge.js'
 import { getFacilities, formatFacilitiesForPrompt, parseFacilityRequest } from '../lib/facilities.js'
 import { handleFeedbackReply } from '../lib/scheduled.js'
 import { loadGuestMemory, formatMemoryForPrompt, updateGuestPreferences } from '../lib/memory.js'
+import { notifyReceptionEscalation, notifyReceptionMessage } from '../lib/push.js'
 
 export async function handleInboundWhatsApp(rawBody) {
   const { from, to, message, profileName } = parseIncomingMessage(rawBody)
@@ -148,6 +149,13 @@ export async function handleInboundWhatsApp(rawBody) {
       link_type: 'conversation',
       link_id:   conv.id,
     })
+    // 🔔 Push reception immediately
+    notifyReceptionEscalation({
+      hotelId:   hotel.id,
+      guestName: `${guest.name||''} ${guest.surname||''}`.trim() || 'Guest',
+      room:      guest.room || null,
+      convId:    conv.id,
+    }).catch(e => console.error('Push escalation error:', e))
   }
 
   // 13. Facility request check
