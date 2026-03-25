@@ -57,18 +57,26 @@ export default function GuestsTab({ hotelId, selectedGuest }) {
   async function loadProfile(guestId) {
     setLoading(true)
     try {
-      const [profileRes, roomsRes, staysRes] = await Promise.all([
+      const [profileRes, roomsRes] = await Promise.all([
         fetch(`/api/guests/${guestId}`),
         fetch(`/api/checkin?guestId=${guestId}`),
-        fetch(`/api/guests/${guestId}/stays`),
       ])
-      const [profileData, roomsData, staysData] = await Promise.all([
-        profileRes.json(), roomsRes.json(), staysRes.json()
+      const [profileData, roomsData] = await Promise.all([
+        profileRes.json(), roomsRes.json()
       ])
       setProfile(profileData)
       setNotes(profileData.guest?.notes || '')
       setGuestRooms(roomsData.rooms || [])
-      setPreviousStays(staysData.stays || [])
+
+      // Stays — only fetch if the endpoint exists (requires memory.sql to be run)
+      try {
+        const staysRes  = await fetch(`/api/guests/${guestId}/stays`)
+        const staysData = await staysRes.json()
+        setPreviousStays(staysData.stays || [])
+      } catch { setPreviousStays([]) }
+
+    } catch (err) {
+      console.error('loadProfile error:', err)
     } finally { setLoading(false) }
   }
 
@@ -100,9 +108,9 @@ export default function GuestsTab({ hotelId, selectedGuest }) {
     </div>
   )
 
-  if (!profile) return null
+  if (!profile || !profile.guest) return null
 
-  const { guest, conversations, bookings } = profile
+  const { guest, conversations = [], bookings = [] } = profile || {}
   const initials   = `${guest.name?.[0]||'?'}${guest.surname?.[0]||''}`
   const lang       = getLang(guest.language)
   const type       = getType(guest.guest_type)
