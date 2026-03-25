@@ -78,3 +78,83 @@ body {
 .lang-ca { background: #FEF9C3; color: #713F12; }
 .lang-it { background: #F0FDF4; color: #14532D; }
 .lang-pt { background: #ECFDF5; color: #064E3B; }
+
+/* ── MOBILE RESPONSIVE ─────────────────────────────────── */
+@media (max-width: 767px) {
+
+  /* LiveTab — convert 3-column flex into stacked layout */
+  .live-columns {
+    flex-direction: column !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+  }
+  .live-left-col,
+  .live-right-col {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: unset !important;
+    border-right: none !important;
+    border-bottom: 1px solid var(--border) !important;
+  }
+  .live-centre-col {
+    width: 100% !important;
+    min-width: unset !important;
+  }
+
+  /* GuestsTab — single column */
+  .guests-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* AnalyticsTab — stack metrics */
+  .analytics-metrics {
+    flex-direction: column !important;
+    gap: 10px !important;
+  }
+  .analytics-card {
+    width: 100% !important;
+    min-width: unset !important;
+  }
+
+  /* Cards / panels — remove fixed widths */
+  [style*="minWidth: '280px'"],
+  [style*="minWidth:'280px'"] {
+    min-width: unset !important;
+    width: 100% !important;
+  }
+
+  /* Tables — horizontal scroll */
+  table {
+    display: block !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  /* Conversation panel in LiveTab — full screen overlay */
+  .conv-panel-mobile {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 200 !important;
+    background: white !important;
+  }
+
+  /* Input / buttons — bigger tap targets */
+  input, textarea, select {
+    font-size: 16px !important; /* prevents iOS zoom */
+  }
+  button {
+    min-height: 40px;
+  }
+
+  /* Remove horizontal overflow on root panels */
+  .scrollable {
+    overflow-x: hidden !important;
+  }
+}
+
+/* iPhones with notch — respect safe areas */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .mobile-bottom-nav {
+    padding-bottom: env(safe-area-inset-bottom) !important;
+  }
+}
