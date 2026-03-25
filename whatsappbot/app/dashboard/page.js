@@ -1,11 +1,12 @@
-// app/dashboard/page.js (updated - adds Scheduled tab)
+// app/dashboard/page.js (updated — adds Visitors tab)
 'use client'
 import { useState, useEffect } from 'react'
 import LiveTab          from '../../components/LiveTab'
 import GuestsTab        from '../../components/GuestsTab'
 import AnalyticsTab     from '../../components/AnalyticsTab'
-import SettingsTab      from '../../components/SettingsTab'
 import ScheduledTab     from '../../components/ScheduledTab'
+import VisitorsTab      from '../../components/VisitorsTab'
+import SettingsTab      from '../../components/SettingsTab'
 import NotificationBell from '../../components/NotificationBell'
 import '../../dashboard.css'
 
@@ -41,17 +42,18 @@ export default function DashboardPage() {
   }
 
   function handleLogout() {
-    fetch('/api/auth/login', { method: 'DELETE' })
+    fetch('/api/auth/login', { method:'DELETE' })
       .then(() => { window.location.href = '/login' })
   }
 
   const hotelId = session?.hotelId
 
   const tabs = [
-    { key:'live',      label:'Live',              roles:['receptionist','manager','admin','maintenance','housekeeping','concierge','fnb','security','valet','frontdesk'] },
-    { key:'guests',    label:'Guests',             roles:['receptionist','manager','admin'] },
-    { key:'analytics', label:'Analytics',          roles:['manager','admin'] },
-    { key:'scheduled', label:'Messaging',          roles:['manager','admin'] },
+    { key:'live',      label:'Live',             roles:['receptionist','manager','admin','maintenance','housekeeping','concierge','fnb','security','valet','frontdesk'] },
+    { key:'guests',    label:'Guests',            roles:['receptionist','manager','admin'] },
+    { key:'visitors',  label:'Day Visitors',      roles:['receptionist','manager','admin'] },
+    { key:'analytics', label:'Analytics',         roles:['manager','admin'] },
+    { key:'scheduled', label:'Messaging',         roles:['manager','admin'] },
     { key:'settings',  label:'Concierge Setup',   roles:['manager','admin'] },
   ].filter(t => !session || t.roles.includes(session.role))
 
@@ -64,7 +66,6 @@ export default function DashboardPage() {
           The <span style={{ color:'white', fontWeight:'400' }}>Residence</span> <span style={{ color:'#C9A84C' }}>Concierge</span>
         </div>
 
-        {/* Search */}
         <div style={{ flex:1, maxWidth:'560px', margin:'0 auto', position:'relative' }}>
           <div style={{ display:'flex', alignItems:'center', gap:'10px', height:'36px', background:'rgba(255,255,255,0.12)', border:'1px solid rgba(255,255,255,0.2)', borderRadius:'10px', padding:'0 14px' }}>
             <svg width="15" height="15" viewBox="0 0 15 15" fill="none" style={{ flexShrink:0, opacity:0.6 }}>
@@ -80,7 +81,6 @@ export default function DashboardPage() {
                 style={{ background:'none', border:'none', color:'rgba(255,255,255,0.6)', cursor:'pointer', fontSize:'18px', lineHeight:1, padding:0 }}>×</button>
             )}
           </div>
-
           {searchResults.length > 0 && (
             <div style={{ position:'absolute', top:'44px', left:0, right:0, background:'white', borderRadius:'12px', border:'0.5px solid #E5E7EB', boxShadow:'0 8px 24px rgba(0,0,0,0.12)', zIndex:200, overflow:'hidden' }}>
               {searchResults.map(guest => {
@@ -96,7 +96,9 @@ export default function DashboardPage() {
                     </div>
                     <div style={{ flex:1 }}>
                       <div style={{ fontSize:'14px', fontWeight:'600', color:'#111827' }}>{guest.name} {guest.surname}</div>
-                      <div style={{ fontSize:'12px', color:'#6B7280', marginTop:'1px' }}>Room {guest.room} · {guest.phone}</div>
+                      <div style={{ fontSize:'12px', color:'#6B7280', marginTop:'1px' }}>
+                        {guest.guest_type === 'day_visitor' ? '🌟 Day visitor' : `Room ${guest.room}`} · {guest.phone}
+                      </div>
                     </div>
                     <div style={{ fontSize:'11px', fontWeight:'700', padding:'3px 8px', borderRadius:'5px', background:lc.bg, color:lc.color }}>
                       {(guest.language||'EN').toUpperCase()}
@@ -108,7 +110,6 @@ export default function DashboardPage() {
           )}
         </div>
 
-        {/* Right */}
         <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:'14px' }}>
           <NotificationBell />
           <div style={{ fontSize:'13px', color:'rgba(255,255,255,0.6)', fontWeight:'500' }}>{session?.hotelName}</div>
@@ -126,7 +127,7 @@ export default function DashboardPage() {
       <div style={{ display:'flex', background:'#163228', borderBottom:'1px solid #2A5040', flexShrink:0 }}>
         {tabs.map(tab => (
           <button key={tab.key} onClick={() => setActiveTab(tab.key)}
-            style={{ padding:'13px 22px', fontSize:'14px', fontWeight:activeTab===tab.key?'700':'500', color:activeTab===tab.key?'#C9A84C':'rgba(255,255,255,0.55)', background:'none', border:'none', borderBottom:activeTab===tab.key?'3px solid #C9A84C':'3px solid transparent', cursor:'pointer', fontFamily:"'DM Sans', sans-serif", whiteSpace:'nowrap', transition:'all .15s' }}>
+            style={{ padding:'13px 20px', fontSize:'14px', fontWeight:activeTab===tab.key?'700':'500', color:activeTab===tab.key?'#C9A84C':'rgba(255,255,255,0.55)', background:'none', border:'none', borderBottom:activeTab===tab.key?'3px solid #C9A84C':'3px solid transparent', cursor:'pointer', fontFamily:"'DM Sans', sans-serif", whiteSpace:'nowrap', transition:'all .15s' }}>
             {tab.label}
           </button>
         ))}
@@ -136,6 +137,7 @@ export default function DashboardPage() {
       <div style={{ flex:1, overflow:'hidden', minHeight:0 }}>
         {activeTab === 'live'      && <LiveTab hotelId={hotelId} session={session} onSelectGuest={selectGuest} />}
         {activeTab === 'guests'    && <GuestsTab hotelId={hotelId} selectedGuest={selectedGuest} />}
+        {activeTab === 'visitors'  && <VisitorsTab hotelId={hotelId} />}
         {activeTab === 'analytics' && <AnalyticsTab hotelId={hotelId} />}
         {activeTab === 'scheduled' && <ScheduledTab hotelId={hotelId} />}
         {activeTab === 'settings'  && <SettingsTab hotelId={hotelId} />}
