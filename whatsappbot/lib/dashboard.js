@@ -17,7 +17,7 @@ export async function searchGuests(hotelId, query) {
   if (!query || query.length < 2) return []
   const { data } = await supabase
     .from('guests')
-    .select('id, name, surname, room, phone, language, check_in, check_out')
+    .select('id, name, surname, room, phone, language, check_in, check_out, guest_type, visit_count_day, preferred_services, last_visit_at, visit_count')
     .eq('hotel_id', hotelId)
     .or(`room.ilike.%${query}%,surname.ilike.%${query}%,name.ilike.%${query}%,phone.ilike.%${query}%`)
     .limit(10)
@@ -31,12 +31,12 @@ export async function getActiveConversations(hotelId) {
     .from('conversations')
     .select(`
       id, status, last_message_at, messages,
-      guests(id, name, surname, room, phone, language)
+      guests(id, name, surname, room, phone, language, guest_type, visit_count_day, preferred_services, check_in, check_out, visit_count, favourite_services)
     `)
     .eq('hotel_id', hotelId)
-    .eq('status', 'active')
+    .in('status', ['active', 'escalated'])
     .order('last_message_at', { ascending: false })
-    .limit(30)
+    .limit(50)
   return data || []
 }
 
@@ -57,7 +57,7 @@ export async function getGuestProfile(guestId) {
 
   const { data: bookings } = await supabase
     .from('bookings')
-    .select(`*, partners(name, type)`)
+    .select(`*, partners(id, name, type)`)
     .eq('guest_id', guestId)
     .order('created_at', { ascending: false })
 
