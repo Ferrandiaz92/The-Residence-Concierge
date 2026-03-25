@@ -11,6 +11,7 @@ import VisitorsTab      from '../../components/VisitorsTab'
 import SettingsTab      from '../../components/SettingsTab'
 import NotificationBell from '../../components/NotificationBell'
 import { useIsMobile }  from '../../lib/useIsMobile'
+import PushPermission  from '../../components/PushPermission'
 import '../../dashboard.css'
 
 // ── Role helpers ─────────────────────────────────────────────
@@ -355,6 +356,7 @@ function MobileDashboard({ session, activeTab, setActiveTab, selectedGuest, onSe
         <TabContent tab={activeTab} hotelId={hotelId} session={session} selectedGuest={selectedGuest} onSelectGuest={onSelectGuest} isMobile={true} />
       </div>
       <MobileBottomNav tabs={tabs} activeTab={activeTab} setActiveTab={setActiveTab} />
+      <PushPermission session={session} isMobile={true} />
     </div>
   )
 }
