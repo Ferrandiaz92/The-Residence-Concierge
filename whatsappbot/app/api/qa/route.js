@@ -44,7 +44,13 @@ export async function GET(request) {
     // Filters
     if (filter === 'escalated')  query = query.eq('status', 'escalated')
     if (filter === 'flagged')    query = query.not('qa_flags', 'is', null)
-    if (language !== 'all')      query = query.eq('guests.language', language)
+    if (language === 'other') {
+      // 'other' means any language not in the 17 supported ones
+      const known = ['en','ru','he','de','fr','zh','pl','sv','fi','uk','ar','nl','el','es','ca','it','pt']
+      query = query.not('guests.language', 'in', `(${known.join(',')})`)
+    } else if (language !== 'all') {
+      query = query.eq('guests.language', language)
+    }
     if (guestType !== 'all')     query = query.eq('guests.guest_type', guestType)
 
     // Month filter
