@@ -91,12 +91,30 @@ export async function PATCH(request) {
     if (!ticketId || !status) return Response.json({ error: 'Missing ticketId or status' }, { status: 400 })
 
     const supabase = getSupabase()
-    const updates  = { status, updated_at: new Date().toISOString() }
-    if (status === 'in_progress') updates.accepted_at = new Date().toISOString()
-    if (status === 'resolved')    updates.resolved_at = new Date().toISOString()
-    if (assignedTo)               updates.assigned_to = assignedTo
 
-    const { data: ticket, error } = await supabase.from('internal_tickets').update(updates).eq('id', ticketId).select().single()
+    // ── Race-condition guard on accept ───────────────────────
+    // If two people tap Accept simultaneously, only the first wins
+    if (status === 'in_progress') {
+      const { data: current } = await supabase
+        .from('internal_tickets').select('status, assigned_to_name').eq('id', ticketId).single()
+      if (current?.status === 'in_progress' || current?.status === 'resolved') {
+        // Already accepted by someone else
+        return Response.json({ status:'already_accepted', assignedTo: current.assigned_to_name }, { status:409 })
+      }
+    }
+
+    const updates = { status, updated_at: new Date().toISOString() }
+    if (status === 'in_progress') {
+      updates.accepted_at      = new Date().toISOString()
+      // Store the display name of who accepted
+      updates.assigned_to_name = assignedTo || session.name || 'Staff'
+      // Also store the staff_id for proper linking
+      updates.assigned_to_staff_id = session.staffId || null
+    }
+    if (status === 'resolved') updates.resolved_at = new Date().toISOString()
+
+    const { data: ticket, error } = await supabase
+      .from('internal_tickets').update(updates).eq('id', ticketId).select().single()
     if (error) return Response.json({ error: error.message }, { status: 500 })
 
     // 🔔 Silent push to reception when resolved
