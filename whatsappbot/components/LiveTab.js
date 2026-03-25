@@ -78,7 +78,7 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
     if (!hotelId) return
     loadData()
     loadConfig()
-    const interval = setInterval(loadData, 20000)
+    const interval = setInterval(loadData, 10000)
     return () => clearInterval(interval)
   }, [hotelId])
 
@@ -106,9 +106,16 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
       fetch(`/api/tickets?hotelId=${hotelId}`),
     ])
     const [convData, bookData, tickData] = await Promise.all([convRes.json(), bookRes.json(), tickRes.json()])
-    setConversations(convData.conversations || [])
+    const freshConvs = convData.conversations || []
+    setConversations(freshConvs)
     setBookings(bookData.bookings || [])
     setTickets(tickData.tickets || [])
+    // Keep selected conversation messages in sync
+    setSelectedConv(prev => {
+      if (!prev) return prev
+      const updated = freshConvs.find(c => c.id === prev.id)
+      return updated || prev
+    })
   }
 
   async function handleReply() {
@@ -126,10 +133,12 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
       })
       setReplyText('')
       await loadData()
-      const res  = await fetch(`/api/conversations?hotelId=${hotelId}`)
-      const data = await res.json()
-      const updated = (data.conversations||[]).find(c => c.id === selectedConv.id)
-      if (updated) setSelectedConv(updated)
+      // Refresh selected conversation specifically
+      try {
+        const res  = await fetch(`/api/conversations?hotelId=${hotelId}&convId=${selectedConv.id}`)
+        const data = await res.json()
+        if (data.conversation) setSelectedConv(data.conversation)
+      } catch {}
     } finally { setSending(false) }
   }
 
