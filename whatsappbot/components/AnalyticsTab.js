@@ -3,6 +3,20 @@
 import { useState, useEffect } from 'react'
 import BotQA from './BotQA'
 
+
+const MONTH_OPTIONS = (() => {
+  const opts = []
+  const now = new Date()
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+    const val = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`
+    const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
+    const label = `${MONTHS[d.getMonth()]} ${d.getFullYear()}`
+    opts.push({ val, label })
+  }
+  return opts
+})()
+
 export default function AnalyticsTab({ hotelId }) {
   const [stats, setStats]         = useState(null)
   const [loading, setLoading]     = useState(true)
@@ -168,9 +182,10 @@ export default function AnalyticsTab({ hotelId }) {
               <div style={{ fontSize:'13px', color:'#9CA3AF', marginTop:'2px' }}>Monthly PDF — all bookings and revenue</div>
             </div>
             <div style={{ fontSize:'13px', color:'#6B7280', fontWeight:'500' }}>Period:</div>
-            <input type="month" value={exportMonth} onChange={e=>setExportMonth(e.target.value)}
-              style={{ padding:'8px 12px', border:'1px solid #D1D5DB', borderRadius:'8px', fontSize:'13px', fontFamily:"'DM Sans',sans-serif", outline:'none', color:'#111827' }}
-            />
+            <select value={exportMonth} onChange={e=>setExportMonth(e.target.value)}
+              style={{ padding:'8px 12px', border:'1px solid #E5E7EB', borderRadius:'8px', fontSize:'13px', color:'#374151', background:'white', fontFamily:"'DM Sans',sans-serif", cursor:'pointer' }}>
+              {MONTH_OPTIONS.map(o => <option key={o.val} value={o.val}>{o.label}</option>)}
+            </select>
             <button onClick={handleExport} disabled={exporting}
               style={{ padding:'9px 20px', background:GREEN, border:'none', borderRadius:'8px', fontSize:'13px', fontWeight:'700', color:'white', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
               {exporting ? 'Opening...' : 'Export Activity Report'}

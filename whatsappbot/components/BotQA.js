@@ -17,6 +17,21 @@ const FILTERS = [
   { key:'booked',    label:'Had booking' },
 ]
 
+
+// English month options for period selector
+const MONTH_OPTIONS = (() => {
+  const opts = []
+  const now = new Date()
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+    const val = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`
+    const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
+    const label = `${MONTHS[d.getMonth()]} ${d.getFullYear()}`
+    opts.push({ val, label })
+  }
+  return opts
+})()
+
 export default function BotQA({ hotelId }) {
   const [conversations, setConversations] = useState([])
   const [stats, setStats]                 = useState(null)
@@ -135,17 +150,33 @@ export default function BotQA({ hotelId }) {
         </select>
 
         <select value={language} onChange={e=>setLanguage(e.target.value)}
-          style={{ padding:'8px 14px', borderRadius:'8px', fontSize:'13px', fontWeight:'500', border:'1px solid #D1D5DB', background:'white', color:'#374151', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", outline:'none' }}>
+          style={{ padding:'8px 12px', border:'1px solid #E5E7EB', borderRadius:'8px', fontSize:'13px', color:'#374151', background:'white', fontFamily:"'DM Sans',sans-serif", cursor:'pointer' }}>
           <option value="all">All languages</option>
           <option value="en">English</option>
           <option value="ru">Russian</option>
           <option value="he">Hebrew</option>
+          <option value="de">German</option>
+          <option value="fr">French</option>
+          <option value="zh">Chinese</option>
+          <option value="pl">Polish</option>
+          <option value="sv">Swedish</option>
+          <option value="fi">Finnish</option>
+          <option value="uk">Ukrainian</option>
+          <option value="ar">Arabic</option>
+          <option value="nl">Dutch</option>
+          <option value="el">Greek</option>
+          <option value="es">Spanish</option>
+          <option value="ca">Catalan</option>
+          <option value="it">Italian</option>
+          <option value="pt">Portuguese</option>
+          <option value="other">Others</option>
         </select>
 
         {/* Month */}
-        <input type="month" value={month} onChange={e=>setMonth(e.target.value)}
-          style={{ padding:'8px 12px', border:'1px solid #D1D5DB', borderRadius:'8px', fontSize:'13px', fontFamily:"'DM Sans',sans-serif", outline:'none', color:'#374151', fontWeight:'500' }}
-        />
+        <select value={month} onChange={e=>setMonth(e.target.value)}
+          style={{ padding:'8px 12px', border:'1px solid #E5E7EB', borderRadius:'8px', fontSize:'13px', color:'#374151', background:'white', fontFamily:"'DM Sans',sans-serif", cursor:'pointer' }}>
+          {MONTH_OPTIONS.map(o => <option key={o.val} value={o.val}>{o.label}</option>)}
+        </select>
 
         {/* Search */}
         <div style={{ display:'flex', gap:'6px', marginLeft:'auto' }}>

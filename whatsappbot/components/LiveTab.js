@@ -12,9 +12,31 @@ import { useState, useEffect, useRef } from 'react'
 import DepartmentQueue from './DepartmentQueue'
 
 const LANG_COLORS = {
-  en: { bg:'#DCF5E7', color:'#14532D' },
-  ru: { bg:'#DBEAFE', color:'#1E3A5F' },
-  he: { bg:'#FEF3C7', color:'#78350F' },
+  en: { bg:'#DCFCE7', color:'#14532D',  name:'English'    },
+  ru: { bg:'#DBEAFE', color:'#1E3A5F',  name:'Russian'    },
+  he: { bg:'#FEF3C7', color:'#78350F',  name:'Hebrew'     },
+  de: { bg:'#F3F4F6', color:'#1F2937',  name:'German'     },
+  fr: { bg:'#EDE9FE', color:'#4C1D95',  name:'French'     },
+  zh: { bg:'#FEF2F2', color:'#7F1D1D',  name:'Chinese'    },
+  pl: { bg:'#FFF1F2', color:'#881337',  name:'Polish'     },
+  sv: { bg:'#EFF6FF', color:'#1E3A8A',  name:'Swedish'    },
+  fi: { bg:'#F0F9FF', color:'#0C4A6E',  name:'Finnish'    },
+  uk: { bg:'#FEFCE8', color:'#713F12',  name:'Ukrainian'  },
+  ar: { bg:'#F0FDF4', color:'#14532D',  name:'Arabic'     },
+  nl: { bg:'#FFF7ED', color:'#7C2D12',  name:'Dutch'      },
+  el: { bg:'#EFF6FF', color:'#1E3A8A',  name:'Greek'      },
+  es: { bg:'#FFF7ED', color:'#9A3412',  name:'Spanish'    },
+  ca: { bg:'#FEF9C3', color:'#713F12',  name:'Catalan'    },
+  it: { bg:'#F0FDF4', color:'#14532D',  name:'Italian'    },
+  pt: { bg:'#ECFDF5', color:'#064E3B',  name:'Portuguese' },
+}
+
+// Guest type border colours for conversations
+const TYPE_BORDERS = {
+  stay:        null,            // default gold when active
+  day_visitor: '#C9A84C',       // gold
+  event:       '#7C3AED',       // purple
+  prospect:    '#64748B',       // gray
 }
 
 const canReply   = (role) => ['receptionist','manager','admin'].includes(role)
@@ -160,11 +182,11 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
             const minsAgo    = Math.floor((Date.now() - new Date(conv.last_message_at)) / 60000)
             const timeLabel  = minsAgo === 0 ? 'now' : minsAgo < 60 ? `${minsAgo}m` : `${Math.floor(minsAgo/60)}h`
             // Room number — check multiple fields
-            const roomNum    = guest.room || guest.guest_room || guest.guest_room_number || '—'
+            const roomNum    = guest.room || guest.guest_room || guest.guest_room_number || '?'
 
             return (
               <div key={conv.id} onClick={() => { setSelectedConv(conv); setCentreMode('chat') }}
-                style={{ padding:'11px 14px', borderBottom:'0.5px solid var(--border)', borderLeft:isActive?'3px solid var(--gold)':isEsc?'3px solid #DC2626':'3px solid transparent', background:isActive?'rgba(201,168,76,0.06)':isEsc?'rgba(220,38,38,0.03)':'white', cursor:'pointer' }}
+                style={{ padding:'11px 14px', borderBottom:'0.5px solid var(--border)', borderLeft:isActive?'3px solid #C9A84C':isEsc?'3px solid #DC2626':conv.guests?.guest_type && TYPE_BORDERS[conv.guests?.guest_type]?`3px solid ${TYPE_BORDERS[conv.guests?.guest_type]}`:'3px solid transparent', background:isActive?'rgba(201,168,76,0.06)':isEsc?'rgba(220,38,38,0.03)':'white', cursor:'pointer' }}
                 onMouseEnter={e=>{ if(!isActive) e.currentTarget.style.background='#F9FAFB' }}
                 onMouseLeave={e=>{ if(!isActive) e.currentTarget.style.background=isEsc?'rgba(220,38,38,0.03)':'white' }}
               >
@@ -178,7 +200,7 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
                   </div>
                 </div>
                 <div style={{ fontSize:'12px', fontWeight:'500', color:'#6B7280', marginBottom:'5px' }}>
-                  {roomNum !== '—' ? `Room ${roomNum}` : 'No room assigned'}
+                  Room {roomNum}
                 </div>
                 <div style={{ fontSize:'11px', color:'#9CA3AF', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:'200px' }}>
                   {isEsc
@@ -187,8 +209,8 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
                   }
                 </div>
                 <div style={{ marginTop:'5px', display:'flex', gap:'4px' }}>
-                  <span style={{ fontSize:'10px', fontWeight:'700', padding:'2px 7px', borderRadius:'5px', background:lc.bg, color:lc.color }}>
-                    {lang.toUpperCase()}
+                  <span style={{ fontSize:'10px', fontWeight:'600', padding:'2px 7px', borderRadius:'5px', background:lc.bg, color:lc.color }}>
+                    {lc.name || lang.toUpperCase()}
                   </span>
                   {isEsc && <span style={{ fontSize:'10px', fontWeight:'700', padding:'2px 7px', borderRadius:'5px', background:'#FEE2E2', color:'#DC2626' }}>escalated</span>}
                 </div>
@@ -282,7 +304,7 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
                   </div>
                   <div>
                     <div style={{ fontSize:'13px', fontWeight:'600', color:'#111827' }}>{selectedConv.guests?.name} {selectedConv.guests?.surname}</div>
-                    <div style={{ fontSize:'12px', color:'#6B7280' }}>Room {selectedConv.guests?.room || selectedConv.guests?.guest_room || '?'} · {(selectedConv.guests?.language||'EN').toUpperCase()}</div>
+                    <div style={{ fontSize:'12px', color:'#6B7280' }}>Room {selectedConv.guests?.room || selectedConv.guests?.guest_room || '?'} · {LANG_COLORS[selectedConv.guests?.language||'en']?.name || (selectedConv.guests?.language||'EN').toUpperCase()}</div>
                   </div>
                   <button onClick={()=>setSelectedConv(null)} style={{ marginLeft:'auto', background:'none', border:'none', color:'#D1D5DB', cursor:'pointer', fontSize:'18px', lineHeight:1 }}>×</button>
                 </div>
