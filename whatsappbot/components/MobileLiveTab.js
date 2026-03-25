@@ -559,13 +559,14 @@ function EmptyRow({ text }) {
 }
 
 // ════════════════════════════════════════════════════════════
-//  DEPT QUEUE (mobile)
+//  DEPT QUEUE (mobile) — current shift + last 48h + planned
 // ════════════════════════════════════════════════════════════
 function DeptQueue({ hotelId, session }) {
   const [tickets,  setTickets]  = useState([])
   const [loading,  setLoading]  = useState(true)
   const [updating, setUpdating] = useState(null)
   const [subtab,   setSubtab]   = useState('pending')
+  const [alreadyAccepted, setAlreadyAccepted] = useState(null) // name of person who got there first
 
   const dept = session?.department || session?.role
   const DEPT_LABELS = {
@@ -581,7 +582,7 @@ function DeptQueue({ hotelId, session }) {
 
   useEffect(() => {
     if (!hotelId) return
-    load(); const iv = setInterval(load, 30000); return () => clearInterval(iv)
+    load(); const iv = setInterval(load, 15000); return () => clearInterval(iv) // 15s for race-condition freshness
   }, [hotelId])
 
   async function load() {
@@ -594,74 +595,153 @@ function DeptQueue({ hotelId, session }) {
 
   async function updateStatus(id, status) {
     setUpdating(id)
+    setAlreadyAccepted(null)
     try {
-      await fetch('/api/tickets', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ticketId:id,status}) })
+      const res  = await fetch('/api/tickets', {
+        method:'PATCH', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ ticketId:id, status, assignedTo: session?.name || 'Staff' })
+      })
+      const data = await res.json()
+
+      // 409 = someone else accepted first
+      if (res.status === 409) {
+        setAlreadyAccepted(data.assignedTo || 'Someone')
+        setTimeout(() => setAlreadyAccepted(null), 4000)
+      }
       load()
     } finally { setUpdating(null) }
   }
 
+  // ── Ticket filters ──────────────────────────────────────
+  const now      = Date.now()
+  const h48      = 48 * 60 * 60 * 1000
+  const todayStr = new Date().toISOString().split('T')[0]
+  const tomorrow = new Date(now + 86400000).toISOString().split('T')[0]
+
+  // Active queue: pending + in_progress (any age — need to be dealt with)
   const pending    = tickets.filter(t => t.status === 'pending')
+  // In progress — show all in-progress so team can see who's doing what
   const inProgress = tickets.filter(t => ['in_progress','escalated'].includes(t.status))
-  const resolved   = tickets.filter(t => ['resolved','cancelled'].includes(t.status))
+  // Planned: not resolved, planned priority
+  const planned    = tickets.filter(t => t.priority === 'planned' && !['resolved','cancelled'].includes(t.status))
+  // Done: resolved in last 48h
+  const resolved   = tickets.filter(t => ['resolved','cancelled'].includes(t.status) && (now - new Date(t.resolved_at || t.created_at).getTime()) < h48)
+
   const TABS = [
-    {key:'pending',     label:'Pending',     badge:pending.length,    badgeBg:'#FEF3C7',badgeColor:'#D97706'},
-    {key:'in_progress', label:'In progress', badge:inProgress.length, badgeBg:'#EFF6FF',badgeColor:'#2563EB'},
-    {key:'resolved',    label:'Done',        badge:resolved.length,   badgeBg:'#DCFCE7',badgeColor:'#16A34A'},
+    {key:'pending',     label:'Pending',     badge:pending.length,    badgeBg:'#FEF3C7', badgeColor:'#D97706'},
+    {key:'in_progress', label:'In progress', badge:inProgress.length, badgeBg:'#EFF6FF', badgeColor:'#2563EB'},
+    {key:'planned',     label:'Planned',     badge:planned.length,    badgeBg:'#F3F4F6', badgeColor:'#374151'},
+    {key:'resolved',    label:'Done (48h)',  badge:resolved.length,   badgeBg:'#DCFCE7', badgeColor:'#16A34A'},
   ]
-  const shown = {pending, in_progress:inProgress, resolved}[subtab] || []
+
+  const shown = {pending, in_progress:inProgress, planned, resolved}[subtab] || []
 
   if (loading) return <div style={{display:'flex',alignItems:'center',justifyContent:'center',flex:1,color:'#9CA3AF',fontSize:'13px'}}>Loading tickets…</div>
 
   return (
     <div style={{display:'flex',flexDirection:'column',flex:1,overflow:'hidden'}}>
+
+      {/* Dept badge + shift status */}
       <div style={{padding:'8px 16px',background:'white',borderBottom:'1px solid #E5E7EB',display:'flex',alignItems:'center',gap:'8px',flexShrink:0}}>
         <span style={{fontSize:'11px',fontWeight:'700',padding:'3px 10px',borderRadius:'6px',background:dc.bg,color:dc.color}}>{dc.label}</span>
-        <span style={{fontSize:'12px',color:'#9CA3AF'}}>{tickets.filter(t=>t.status!=='resolved').length} open · auto-refresh 30s</span>
+        <span style={{fontSize:'12px',color:'#9CA3AF'}}>{tickets.filter(t=>!['resolved','cancelled'].includes(t.status)).length} open</span>
+        <span style={{fontSize:'10px',fontWeight:'600',padding:'2px 8px',borderRadius:'10px',background:'#DCFCE7',color:'#14532D',marginLeft:'auto'}}>● On shift</span>
       </div>
-      <div style={{display:'flex',background:'white',borderBottom:'1px solid #E5E7EB',flexShrink:0}}>
+
+      {/* Race-condition toast */}
+      {alreadyAccepted && (
+        <div style={{padding:'10px 16px',background:'#FEF3C7',borderBottom:'1px solid #FCD34D',fontSize:'12px',fontWeight:'600',color:'#78350F',display:'flex',alignItems:'center',gap:'6px',flexShrink:0}}>
+          ⚡ {alreadyAccepted} accepted this ticket first
+        </div>
+      )}
+
+      {/* Subtabs */}
+      <div style={{display:'flex',background:'white',borderBottom:'1px solid #E5E7EB',flexShrink:0,overflowX:'auto'}}>
         {TABS.map(t => (
           <button key={t.key} onClick={()=>setSubtab(t.key)}
-            style={{flex:1,padding:'11px 8px',fontSize:'12px',fontWeight:subtab===t.key?'700':'500',color:subtab===t.key?'#1C3D2E':'#9CA3AF',background:'none',border:'none',borderBottom:subtab===t.key?'2px solid #C9A84C':'2px solid transparent',cursor:'pointer',fontFamily:"'DM Sans', sans-serif",display:'flex',flexDirection:'column',alignItems:'center',gap:'3px'}}>
+            style={{flexShrink:0,padding:'10px 12px',fontSize:'11px',fontWeight:subtab===t.key?'700':'500',color:subtab===t.key?'#1C3D2E':'#9CA3AF',background:'none',border:'none',borderBottom:subtab===t.key?'2px solid #C9A84C':'2px solid transparent',cursor:'pointer',fontFamily:"'DM Sans', sans-serif",display:'flex',flexDirection:'column',alignItems:'center',gap:'3px',minWidth:'72px'}}>
             {t.label}
             {t.badge > 0 && <span style={{fontSize:'9px',fontWeight:'700',padding:'1px 5px',borderRadius:'8px',background:t.badgeBg,color:t.badgeColor}}>{t.badge}</span>}
           </button>
         ))}
       </div>
+
+      {/* Ticket cards */}
       <div style={{flex:1,overflowY:'auto',background:'#F9FAFB',padding:'12px',display:'flex',flexDirection:'column',gap:'10px'}}>
-        {shown.length === 0 && <div style={{padding:'40px',textAlign:'center',color:'#9CA3AF',fontSize:'13px'}}>No tickets here</div>}
+        {shown.length === 0 && (
+          <div style={{padding:'40px',textAlign:'center',color:'#9CA3AF',fontSize:'13px'}}>
+            {subtab === 'resolved' ? 'No completed tickets in the last 48h' : 'No tickets here'}
+          </div>
+        )}
         {shown.map(t => {
-          const mins    = Math.round(t.minutes_open||0)
+          const mins    = Math.round(t.minutes_open || 0)
           const timeStr = mins < 60 ? `${mins}m` : `${Math.floor(mins/60)}h ${mins%60}m`
           const urgent  = t.priority === 'urgent'
-          const overdue = mins > 30 && subtab !== 'resolved'
+          const overdue = mins > 30 && !['resolved','cancelled'].includes(t.status)
+          const isDone  = ['resolved','cancelled'].includes(t.status)
+
           return (
-            <div key={t.id} style={{background:'white',border:`1px solid ${urgent?'#FCA5A5':overdue?'#FDE68A':'#E5E7EB'}`,borderRadius:'14px',padding:'14px',position:'relative'}}>
-              {urgent && <span style={{position:'absolute',top:'12px',right:'12px',fontSize:'9px',fontWeight:'700',padding:'2px 7px',borderRadius:'5px',background:'#FEE2E2',color:'#DC2626'}}>URGENT</span>}
+            <div key={t.id} style={{background:'white',border:`1px solid ${urgent?'#FCA5A5':overdue&&!isDone?'#FDE68A':'#E5E7EB'}`,borderRadius:'14px',padding:'14px',position:'relative',opacity:isDone?0.75:1}}>
+
+              {/* Priority badge */}
+              {urgent && !isDone && (
+                <span style={{position:'absolute',top:'12px',right:'12px',fontSize:'9px',fontWeight:'700',padding:'2px 7px',borderRadius:'5px',background:'#FEE2E2',color:'#DC2626'}}>URGENT</span>
+              )}
+
+              {/* Ticket meta */}
               <div style={{display:'flex',alignItems:'center',gap:'6px',marginBottom:'6px'}}>
                 <span style={{fontSize:'10px',fontWeight:'600',color:'#9CA3AF'}}>#{t.ticket_number}</span>
-                <span style={{fontSize:'10px',color:overdue?'#D97706':'#9CA3AF',fontWeight:overdue?'600':'400'}}>
-                  {subtab==='resolved'?`Resolved in ${timeStr}`:`Open ${timeStr}`}
+                <span style={{fontSize:'10px',color:overdue&&!isDone?'#D97706':'#9CA3AF',fontWeight:overdue&&!isDone?'600':'400'}}>
+                  {isDone ? `Done in ${timeStr}` : `Open ${timeStr}`}
                 </span>
+                {t.priority === 'planned' && (
+                  <span style={{fontSize:'9px',fontWeight:'700',padding:'1px 6px',borderRadius:'4px',background:'#F3F4F6',color:'#374151'}}>PLANNED</span>
+                )}
               </div>
-              <div style={{fontSize:'11px',fontWeight:'600',color:dc.color,marginBottom:'4px',textTransform:'capitalize'}}>{t.category?.replace(/_/g,' ')}</div>
+
+              {/* Category */}
+              <div style={{fontSize:'11px',fontWeight:'600',color:dc.color,marginBottom:'4px',textTransform:'capitalize'}}>
+                {t.category?.replace(/_/g,' ')}
+              </div>
+
+              {/* Description */}
               <div style={{fontSize:'13px',color:'#1F2937',lineHeight:'1.45',marginBottom:'10px'}}>{t.description}</div>
-              {t.room && <span style={{display:'inline-block',fontSize:'11px',fontWeight:'500',padding:'3px 9px',borderRadius:'5px',background:'#F3F4F6',color:'#6B7280',marginBottom:'10px'}}>Room {t.room}</span>}
+
+              {/* Room + guest */}
+              <div style={{display:'flex',gap:'6px',marginBottom:t.assigned_to_name||!isDone?'10px':'0',flexWrap:'wrap'}}>
+                {t.room && <span style={{fontSize:'11px',fontWeight:'500',padding:'3px 9px',borderRadius:'5px',background:'#F3F4F6',color:'#6B7280'}}>Room {t.room}</span>}
+                {t.guest_name && <span style={{fontSize:'11px',color:'#9CA3AF'}}>{t.guest_name} {t.guest_surname||''}</span>}
+              </div>
+
+              {/* Assigned to — who is handling / handled this */}
+              {t.assigned_to_name && (
+                <div style={{fontSize:'11px',fontWeight:'600',color: isDone?'#16A34A':'#2563EB',marginBottom:'10px',display:'flex',alignItems:'center',gap:'4px'}}>
+                  {isDone ? '✅' : '👤'} {isDone ? `Completed by ${t.assigned_to_name}` : `In progress · ${t.assigned_to_name}`}
+                </div>
+              )}
+
+              {/* Action buttons */}
               {subtab === 'pending' && (
                 <button onClick={()=>updateStatus(t.id,'in_progress')} disabled={updating===t.id}
-                  style={{width:'100%',padding:'10px',background:'#1C3D2E',border:'none',borderRadius:'10px',fontSize:'13px',fontWeight:'600',color:'white',cursor:'pointer',fontFamily:"'DM Sans', sans-serif"}}>
+                  style={{width:'100%',padding:'11px',background: urgent?'#DC2626':'#1C3D2E',border:'none',borderRadius:'10px',fontSize:'13px',fontWeight:'600',color:'white',cursor:'pointer',fontFamily:"'DM Sans', sans-serif"}}>
                   {updating===t.id?'Updating…':'👍 Accept ticket'}
                 </button>
               )}
-              {subtab === 'in_progress' && (
+              {subtab === 'in_progress' && t.assigned_to_name === (session?.name || 'Staff') && (
                 <div style={{display:'flex',gap:'8px'}}>
                   <button onClick={()=>updateStatus(t.id,'resolved')} disabled={updating===t.id}
-                    style={{flex:1,padding:'10px',background:'#1C3D2E',border:'none',borderRadius:'10px',fontSize:'13px',fontWeight:'600',color:'white',cursor:'pointer',fontFamily:"'DM Sans', sans-serif"}}>
-                    {updating===t.id?'…':'✅ Resolved'}
+                    style={{flex:1,padding:'11px',background:'#1C3D2E',border:'none',borderRadius:'10px',fontSize:'13px',fontWeight:'600',color:'white',cursor:'pointer',fontFamily:"'DM Sans', sans-serif"}}>
+                    {updating===t.id?'…':'✅ Mark resolved'}
                   </button>
                   <button onClick={()=>updateStatus(t.id,'escalated')} disabled={updating===t.id}
-                    style={{padding:'10px 14px',background:'white',border:'1px solid #E5E7EB',borderRadius:'10px',fontSize:'13px',color:'#6B7280',cursor:'pointer',fontFamily:"'DM Sans', sans-serif"}}>
+                    style={{padding:'11px 14px',background:'white',border:'1px solid #E5E7EB',borderRadius:'10px',fontSize:'13px',color:'#6B7280',cursor:'pointer',fontFamily:"'DM Sans', sans-serif"}}>
                     ❌
                   </button>
+                </div>
+              )}
+              {subtab === 'in_progress' && t.assigned_to_name && t.assigned_to_name !== (session?.name || 'Staff') && (
+                <div style={{fontSize:'12px',color:'#9CA3AF',textAlign:'center',padding:'4px'}}>
+                  Being handled by {t.assigned_to_name}
                 </div>
               )}
             </div>

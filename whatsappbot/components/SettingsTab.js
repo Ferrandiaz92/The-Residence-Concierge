@@ -3,8 +3,10 @@
 // - Contact name field for partners
 // - Custom partner types management
 // - Custom departments management
+// - Shifts management section
 'use client'
 import { useState, useEffect } from 'react'
+import ShiftsManager from './ShiftsManager'
 
 export default function SettingsTab({ hotelId }) {
   const [section, setSection]           = useState('partners')
@@ -158,6 +160,7 @@ export default function SettingsTab({ hotelId }) {
         {secBtn('Knowledge base', section==='knowledge', ()=>setSection('knowledge'))}
         {secBtn('Partner types', section==='types', ()=>setSection('types'))}
         {secBtn('Departments', section==='departments', ()=>setSection('departments'))}
+        {secBtn('Shifts', section==='shifts', ()=>setSection('shifts'))}
       </div>
 
       <div className="scrollable" style={{ padding:'20px', background:'#F9FAFB' }}>
@@ -433,6 +436,13 @@ export default function SettingsTab({ hotelId }) {
                 + Add new department
               </button>
             )}
+          </div>
+        )}
+
+        {/* ── SHIFTS ── */}
+        {section === 'shifts' && (
+          <div style={{ maxWidth:'900px' }}>
+            <ShiftsManager hotelId={hotelId} />
           </div>
         )}
 
