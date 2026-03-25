@@ -35,11 +35,14 @@ export async function GET(request) {
     const { data: tickets, error } = await query
     if (error) return Response.json({ error: error.message }, { status: 500 })
 
+    const now = Date.now()
     const enriched = (tickets || []).map(t => ({
       ...t,
       guest_name:    t.guests?.name    || null,
       guest_surname: t.guests?.surname || null,
       room:          t.room || t.guests?.room || t.guests?.guest_room || null,
+      // Calculate minutes_open in JS since we can't use now() in generated columns
+      minutes_open:  Math.round((now - new Date(t.created_at).getTime()) / 60000),
     }))
     return Response.json({ tickets: enriched })
   } catch (err) { return Response.json({ error: err.message }, { status: 500 }) }
