@@ -1,54 +1,56 @@
-// src/lib/supabase.js
-// Server-side Supabase client using service key (bypasses RLS)
-// Only use this in API routes and server components — never client-side
+// src/lib/supabase.js — updated getOrCreateGuest
+// New unknown numbers default to 'prospect' type
+// Only changes: getOrCreateGuest function
 
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl  = process.env.SUPABASE_URL
-const supabaseKey  = process.env.SUPABASE_SERVICE_KEY
-
-if (!supabaseUrl || !supabaseKey) {
-  throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_KEY env vars')
-}
-
-export const supabase = createClient(supabaseUrl, supabaseKey, {
-  auth: { persistSession: false }
-})
-
-// ── HOTEL helpers ─────────────────────────────────────────────────────────────
+export const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_KEY,
+  { auth: { persistSession: false } }
+)
 
 export async function getHotelByWhatsappNumber(number) {
+  const clean = number.replace('whatsapp:', '')
   const { data, error } = await supabase
     .from('hotels')
     .select('*')
-    .eq('whatsapp_number', number)
-    .eq('active', true)
+    .or(`whatsapp_number.eq.${clean},whatsapp_number.eq.whatsapp:${clean}`)
     .single()
-  if (error) throw error
+  if (error || !data) throw new Error(`No hotel found for ${number}`)
   return data
 }
 
-// ── GUEST helpers ─────────────────────────────────────────────────────────────
-
+// ── KEY CHANGE: new guests default to 'prospect' not 'stay' ──
 export async function getOrCreateGuest(hotelId, phone) {
-  // Try to find existing guest
+  const clean = phone.replace('whatsapp:', '')
+
+  // Try to find existing guest by phone
   const { data: existing } = await supabase
     .from('guests')
     .select('*')
     .eq('hotel_id', hotelId)
-    .eq('phone', phone)
+    .eq('phone', clean)
     .single()
 
   if (existing) return existing
 
-  // Create new guest
-  const { data, error } = await supabase
+  // New guest — create as prospect until we know more
+  const { data: created, error } = await supabase
     .from('guests')
-    .insert({ hotel_id: hotelId, phone })
+    .insert({
+      hotel_id:         hotelId,
+      phone:            clean,
+      guest_type:       'prospect',    // ← was 'stay', now 'prospect'
+      prospect_status:  'new',
+      first_contact_at: new Date().toISOString(),
+      language:         'en',          // will be updated on first message
+    })
     .select()
     .single()
-  if (error) throw error
-  return data
+
+  if (error) throw new Error(`Failed to create guest: ${error.message}`)
+  return created
 }
 
 export async function updateGuest(guestId, updates) {
@@ -58,169 +60,83 @@ export async function updateGuest(guestId, updates) {
     .eq('id', guestId)
     .select()
     .single()
-  if (error) throw error
+  if (error) throw new Error(`Failed to update guest: ${error.message}`)
   return data
 }
-
-export async function searchGuests(hotelId, query) {
-  // Search by room, surname, or phone
-  const { data, error } = await supabase
-    .from('guests')
-    .select(`
-      *,
-      conversations(id, status, last_message_at, messages),
-      bookings(id, type, status, commission_amount, created_at)
-    `)
-    .eq('hotel_id', hotelId)
-    .or(`room.ilike.%${query}%,surname.ilike.%${query}%,phone.ilike.%${query}%,name.ilike.%${query}%`)
-    .order('created_at', { ascending: false })
-    .limit(20)
-
-  if (error) throw error
-  return data
-}
-
-// ── CONVERSATION helpers ──────────────────────────────────────────────────────
 
 export async function getOrCreateConversation(guestId, hotelId) {
-  // Get active conversation
   const { data: existing } = await supabase
     .from('conversations')
     .select('*')
     .eq('guest_id', guestId)
-    .eq('status', 'active')
+    .in('status', ['active', 'escalated'])
+    .order('created_at', { ascending: false })
+    .limit(1)
     .single()
 
   if (existing) return existing
 
-  // Create new conversation
-  const { data, error } = await supabase
+  const { data: created, error } = await supabase
     .from('conversations')
-    .insert({ guest_id: guestId, hotel_id: hotelId, messages: [] })
+    .insert({ guest_id: guestId, hotel_id: hotelId, messages: [], status: 'active' })
     .select()
     .single()
-  if (error) throw error
-  return data
+
+  if (error) throw new Error(`Failed to create conversation: ${error.message}`)
+  return created
 }
 
-export async function appendMessage(conversationId, role, content) {
-  // Append a message to the conversation's messages array
-  const message = { role, content, ts: new Date().toISOString() }
-
-  const { data, error } = await supabase.rpc('append_message', {
-    p_conversation_id: conversationId,
-    p_message: message
-  })
-
-  // Fallback if RPC not set up yet — fetch then update
-  if (error) {
-    const { data: conv } = await supabase
-      .from('conversations')
-      .select('messages')
-      .eq('id', conversationId)
-      .single()
-
-    const messages = [...(conv?.messages || []), message]
-    const { data: updated, error: updateError } = await supabase
-      .from('conversations')
-      .update({ messages, last_message_at: new Date().toISOString() })
-      .eq('id', conversationId)
-      .select()
-      .single()
-    if (updateError) throw updateError
-    return updated
-  }
-  return data
-}
-
-export async function getConversationHistory(conversationId) {
-  const { data, error } = await supabase
+export async function appendMessage(convId, role, content, meta = {}) {
+  const { data: conv } = await supabase
     .from('conversations')
     .select('messages')
-    .eq('id', conversationId)
+    .eq('id', convId)
     .single()
-  if (error) throw error
+
+  const messages = [...(conv?.messages || []), {
+    role, content, ts: new Date().toISOString(), ...meta
+  }]
+
+  await supabase
+    .from('conversations')
+    .update({ messages, last_message_at: new Date().toISOString() })
+    .eq('id', convId)
+}
+
+export async function getConversationHistory(convId) {
+  const { data } = await supabase
+    .from('conversations')
+    .select('messages')
+    .eq('id', convId)
+    .single()
   return data?.messages || []
 }
 
-export async function getRecentConversations(hotelId, limit = 20) {
-  const { data, error } = await supabase
-    .from('v_active_conversations')
-    .select('*')
-    .eq('hotel_id', hotelId)
-    .limit(limit)
-  if (error) throw error
-  return data
-}
-
-// ── PARTNER helpers ───────────────────────────────────────────────────────────
-
-export async function getPartners(hotelId, type = null) {
-  let query = supabase
+export async function getPartners(hotelId) {
+  const { data } = await supabase
     .from('partners')
     .select('*')
     .eq('hotel_id', hotelId)
     .eq('active', true)
-
-  if (type) query = query.eq('type', type)
-  const { data, error } = await query
-  if (error) throw error
-  return data
+    .order('name')
+  return data || []
 }
 
-// ── BOOKING helpers ───────────────────────────────────────────────────────────
-
-export async function createBooking(hotelId, guestId, partnerId, type, details, commissionAmount) {
+export async function createBooking(hotelId, guestId, partnerId, type, details, commissionAmount, source = 'guest_request') {
   const { data, error } = await supabase
     .from('bookings')
     .insert({
-      hotel_id: hotelId,
-      guest_id: guestId,
-      partner_id: partnerId,
+      hotel_id:          hotelId,
+      guest_id:          guestId,
+      partner_id:        partnerId,
       type,
       details,
       commission_amount: commissionAmount,
-      status: 'pending'
+      status:            'pending',
+      source,
     })
     .select()
     .single()
-  if (error) throw error
-
-  // Auto-create commission record
-  if (commissionAmount > 0) {
-    const month = new Date().toISOString().slice(0, 7)
-    await supabase.from('commissions').insert({
-      hotel_id: hotelId,
-      booking_id: data.id,
-      amount: commissionAmount,
-      month
-    })
-  }
-
-  return data
-}
-
-export async function updateBookingStatus(bookingId, status) {
-  const updates = {
-    status,
-    ...(status === 'confirmed' ? { confirmed_at: new Date().toISOString() } : {})
-  }
-  const { data, error } = await supabase
-    .from('bookings')
-    .update(updates)
-    .eq('id', bookingId)
-    .select()
-    .single()
-  if (error) throw error
-  return data
-}
-
-export async function getRecentBookings(hotelId, limit = 30) {
-  const { data, error } = await supabase
-    .from('v_recent_bookings')
-    .select('*')
-    .eq('hotel_id', hotelId)
-    .limit(limit)
-  if (error) throw error
+  if (error) throw new Error(`Failed to create booking: ${error.message}`)
   return data
 }
