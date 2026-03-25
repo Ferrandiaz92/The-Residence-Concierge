@@ -1,6 +1,9 @@
-// components/MobileLiveTab.js — v3
-// Fixes: conv selection → thread/portal, request creation flow
-// Dept: 3 status subtabs (Pending / In progress / Completed)
+// components/MobileLiveTab.js — v4
+// Fixes:
+//   - Removed onSelectGuest() calls that were hijacking to Guests tab
+//   - Portal is now a 3rd subtab (Chats | Portal | Issues), not full-screen
+//   - ChatThread: fixed scroll-to-bottom, fixed textarea input
+//   - Conv selection stays within Live tab entirely
 
 'use client'
 import { useState, useEffect, useRef } from 'react'
@@ -31,41 +34,40 @@ const PRIORITIES = [
   { key:'planned', label:'Planned', sub:'future task', color:'#2563EB', bg:'#EFF6FF', border:'#93C5FD' },
 ]
 
-const canReply    = (role) => ['receptionist','manager','admin'].includes(role)
-const DEPT_ROLES  = ['maintenance','housekeeping','concierge','fnb','security','valet','frontdesk']
+const canReply   = (role) => ['receptionist','manager','admin'].includes(role)
+const DEPT_ROLES = ['maintenance','housekeeping','concierge','fnb','security','valet','frontdesk']
 
-// ── Shared back button ───────────────────────────────────────
+// ── Back button ──────────────────────────────────────────────
 function BackBtn({ onBack, label }) {
   return (
     <button onClick={onBack}
-      style={{ display:'flex', alignItems:'center', gap:'5px', background:'none', border:'none', cursor:'pointer', color:'#6B7280', padding:'6px 4px', fontFamily:"'DM Sans', sans-serif", fontSize:'13px', fontWeight:'500' }}>
+      style={{ display:'flex', alignItems:'center', gap:'4px', background:'none', border:'none', cursor:'pointer', color:'#6B7280', padding:'6px 4px', fontFamily:"'DM Sans', sans-serif", fontSize:'13px', fontWeight:'500', flexShrink:0 }}>
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
         <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
       </svg>
-      {label || 'Back'}
+      {label}
     </button>
   )
 }
 
-// ── Guest chip (used in thread and portal header) ─────────────
-function GuestChip({ conv, compact }) {
+// ── Guest chip ───────────────────────────────────────────────
+function GuestChip({ conv }) {
   if (!conv) return null
   const g    = conv.guests || {}
   const room = g.room || g.guest_room || '?'
-  const lc   = LANG_COLORS[g.language || 'en'] || LANG_COLORS.en
   return (
-    <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
-      <div style={{ width: compact?28:34, height: compact?28:34, borderRadius:'50%', background:'#1C3D2E', display:'flex', alignItems:'center', justifyContent:'center', fontSize: compact?'11px':'13px', color:'#C9A84C', fontWeight:'700', flexShrink:0 }}>
+    <div style={{ display:'flex', alignItems:'center', gap:'8px', flex:1, minWidth:0 }}>
+      <div style={{ width:'30px', height:'30px', borderRadius:'50%', background:'#1C3D2E', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'11px', color:'#C9A84C', fontWeight:'700', flexShrink:0 }}>
         {(g.name?.[0]||'?')}{(g.surname?.[0]||'')}
       </div>
       <div style={{ minWidth:0 }}>
-        <div style={{ fontSize: compact?'12px':'13px', fontWeight:'600', color:'#111827', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+        <div style={{ fontSize:'13px', fontWeight:'600', color:'#111827', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
           {g.name||'Guest'} {g.surname||''}
         </div>
         <div style={{ fontSize:'11px', color:'#9CA3AF' }}>Room {room}</div>
       </div>
       {conv.status === 'escalated' && (
-        <span style={{ fontSize:'9px', fontWeight:'700', padding:'2px 6px', borderRadius:'4px', background:'#FEE2E2', color:'#DC2626', flexShrink:0 }}>Needs reply</span>
+        <span style={{ fontSize:'9px', fontWeight:'700', padding:'2px 6px', borderRadius:'4px', background:'#FEE2E2', color:'#DC2626', flexShrink:0, marginLeft:'4px' }}>Needs reply</span>
       )}
     </div>
   )
@@ -74,14 +76,14 @@ function GuestChip({ conv, compact }) {
 // ════════════════════════════════════════════════════════════
 //  CONVERSATIONS LIST
 // ════════════════════════════════════════════════════════════
-function ConversationsList({ conversations, selectedConvId, onSelect, onOpenPortal }) {
+function ConversationsList({ conversations, selectedConvId, onOpenThread }) {
   const escalated = conversations.filter(c => c.status === 'escalated')
 
   return (
     <div style={{ flex:1, overflowY:'auto', background:'#F9FAFB' }}>
       {escalated.length > 0 && (
         <div style={{ padding:'9px 16px', background:'#FEF2F2', borderBottom:'1px solid #FCA5A5', fontSize:'12px', fontWeight:'600', color:'#DC2626', display:'flex', alignItems:'center', gap:'6px' }}>
-          ⚠️ {escalated.length} conversation{escalated.length>1?'s':''} need{escalated.length===1?'s':''} reply
+          ⚠️ {escalated.length} conversation{escalated.length > 1 ? 's' : ''} need{escalated.length === 1 ? 's' : ''} reply
         </div>
       )}
       {conversations.length === 0 && (
@@ -102,39 +104,30 @@ function ConversationsList({ conversations, selectedConvId, onSelect, onOpenPort
 
         return (
           <div key={conv.id}
-            style={{ padding:'14px 16px', background: isActive ? 'rgba(28,61,46,0.04)' : 'white', borderBottom:'1px solid #F3F4F6', borderLeft: isEsc ? '3px solid #DC2626' : isActive ? '3px solid #C9A84C' : '3px solid transparent', cursor:'pointer' }}
-          >
-            {/* Main row — tap to open thread */}
-            <div onClick={() => onSelect(conv)} style={{ display:'flex', gap:'12px', alignItems:'flex-start' }}>
-              <div style={{ width:'40px', height:'40px', borderRadius:'50%', background:'#1C3D2E', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'14px', color:'#C9A84C', fontWeight:'700', flexShrink:0 }}>
-                {(g.name?.[0]||'?')}{(g.surname?.[0]||'')}
-              </div>
-              <div style={{ flex:1, minWidth:0 }}>
-                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'2px' }}>
-                  <span style={{ fontSize:'14px', fontWeight:'600', color:'#111827' }}>{g.name||'Guest'} {g.surname||''}</span>
-                  <span style={{ fontSize:'11px', color:'#9CA3AF', flexShrink:0, marginLeft:'8px' }}>{time}</span>
-                </div>
-                <div style={{ fontSize:'12px', color:'#6B7280', marginBottom:'4px' }}>Room {room}</div>
-                <div style={{ fontSize:'12px', color: isEsc?'#DC2626':'#9CA3AF', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', fontWeight: isEsc?'600':'400' }}>
-                  {isEsc ? '↩ Reply needed' : (last?.content || 'No messages')}
-                </div>
-                <div style={{ marginTop:'5px', display:'flex', gap:'5px', alignItems:'center' }}>
-                  <span style={{ fontSize:'10px', fontWeight:'600', padding:'2px 7px', borderRadius:'5px', background:lc.bg, color:lc.color }}>{lc.name}</span>
-                  {isEsc && <span style={{ fontSize:'10px', fontWeight:'700', padding:'2px 7px', borderRadius:'5px', background:'#FEE2E2', color:'#DC2626' }}>escalated</span>}
-                </div>
-              </div>
+            onClick={() => onOpenThread(conv)}
+            style={{
+              padding:'14px 16px', background: isActive ? 'rgba(28,61,46,0.04)' : 'white',
+              borderBottom:'1px solid #F3F4F6',
+              borderLeft: isEsc ? '3px solid #DC2626' : isActive ? '3px solid #C9A84C' : '3px solid transparent',
+              cursor:'pointer', display:'flex', gap:'12px', alignItems:'flex-start',
+            }}>
+            <div style={{ width:'40px', height:'40px', borderRadius:'50%', background:'#1C3D2E', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'14px', color:'#C9A84C', fontWeight:'700', flexShrink:0 }}>
+              {(g.name?.[0]||'?')}{(g.surname?.[0]||'')}
             </div>
-
-            {/* Quick action row */}
-            <div style={{ display:'flex', gap:'6px', marginTop:'10px', paddingLeft:'52px' }}>
-              <button onClick={() => onSelect(conv)}
-                style={{ flex:1, padding:'6px 10px', background:'#1C3D2E', border:'none', borderRadius:'8px', fontSize:'11px', fontWeight:'600', color:'white', cursor:'pointer', fontFamily:"'DM Sans', sans-serif" }}>
-                💬 Chat
-              </button>
-              <button onClick={() => onOpenPortal(conv)}
-                style={{ flex:1, padding:'6px 10px', background:'white', border:'1px solid #E5E7EB', borderRadius:'8px', fontSize:'11px', fontWeight:'600', color:'#374151', cursor:'pointer', fontFamily:"'DM Sans', sans-serif" }}>
-                ✏️ Request
-              </button>
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'2px' }}>
+                <span style={{ fontSize:'14px', fontWeight:'600', color:'#111827' }}>{g.name||'Guest'} {g.surname||''}</span>
+                <span style={{ fontSize:'11px', color:'#9CA3AF', flexShrink:0, marginLeft:'8px' }}>{time}</span>
+              </div>
+              <div style={{ fontSize:'12px', color:'#6B7280', marginBottom:'4px' }}>Room {room}</div>
+              <div style={{ fontSize:'12px', color: isEsc ? '#DC2626' : '#9CA3AF', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', fontWeight: isEsc ? '600' : '400' }}>
+                {isEsc ? '↩ Reply needed' : (last?.content || 'No messages')}
+              </div>
+              <div style={{ marginTop:'5px', display:'flex', gap:'5px', alignItems:'center' }}>
+                <span style={{ fontSize:'10px', fontWeight:'600', padding:'2px 7px', borderRadius:'5px', background:lc.bg, color:lc.color }}>{lc.name}</span>
+                {isEsc && <span style={{ fontSize:'10px', fontWeight:'700', padding:'2px 7px', borderRadius:'5px', background:'#FEE2E2', color:'#DC2626' }}>escalated</span>}
+                {isActive && <span style={{ fontSize:'10px', fontWeight:'600', padding:'2px 7px', borderRadius:'5px', background:'rgba(28,61,46,0.08)', color:'#1C3D2E' }}>selected</span>}
+              </div>
             </div>
           </div>
         )
@@ -144,77 +137,134 @@ function ConversationsList({ conversations, selectedConvId, onSelect, onOpenPort
 }
 
 // ════════════════════════════════════════════════════════════
-//  CHAT THREAD
+//  CHAT THREAD — full-screen slide-in
 // ════════════════════════════════════════════════════════════
 function ChatThread({ conv, session, onBack, onReload }) {
   const [replyText, setReplyText] = useState('')
   const [sending,   setSending]   = useState(false)
-  const endRef = useRef(null)
+  const scrollRef = useRef(null)
 
+  // Scroll to bottom whenever conv changes or messages update
   useEffect(() => {
-    if (endRef.current) endRef.current.scrollIntoView({ behavior:'smooth' })
-  }, [conv?.messages?.length])
+    if (!scrollRef.current) return
+    // Use requestAnimationFrame to ensure DOM has painted
+    requestAnimationFrame(() => {
+      if (scrollRef.current) {
+        scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+      }
+    })
+  }, [conv?.id, conv?.messages?.length])
 
   async function send() {
-    if (!replyText.trim() || !conv) return
+    if (!replyText.trim() || !conv || sending) return
     setSending(true)
     try {
       await fetch('/api/messages', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ conversationId: conv.id, guestPhone: conv.guests?.phone, message: replyText.trim() }),
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversationId: conv.id,
+          guestPhone:     conv.guests?.phone,
+          message:        replyText.trim(),
+        }),
       })
       setReplyText('')
       onReload?.()
-    } finally { setSending(false) }
+    } finally {
+      setSending(false)
+    }
   }
 
+  function handleKeyDown(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      send()
+    }
+  }
+
+  const messages = conv?.messages || []
+  const g        = conv?.guests   || {}
+  const room     = g.room || g.guest_room || '?'
+
   return (
-    <div style={{ display:'flex', flexDirection:'column', flex:1, overflow:'hidden', background:'#F9FAFB' }}>
+    <div style={{ display:'flex', flexDirection:'column', height:'100%', overflow:'hidden', background:'#F9FAFB' }}>
 
       {/* Header */}
-      <div style={{ padding:'10px 16px', background:'white', borderBottom:'1px solid #E5E7EB', display:'flex', alignItems:'center', gap:'10px', flexShrink:0 }}>
-        <BackBtn onBack={onBack} label="Chats" />
-        <div style={{ flex:1 }}><GuestChip conv={conv} compact /></div>
+      <div style={{ padding:'10px 16px', background:'white', borderBottom:'1px solid #E5E7EB', display:'flex', alignItems:'center', gap:'8px', flexShrink:0 }}>
+        <BackBtn onBack={onBack} label="Back" />
+        <GuestChip conv={conv} />
       </div>
 
-      {/* Messages */}
-      <div style={{ flex:1, overflowY:'auto', padding:'14px 16px', display:'flex', flexDirection:'column', gap:'10px' }}>
-        {(conv?.messages || []).length === 0 && (
-          <div style={{ textAlign:'center', color:'#9CA3AF', fontSize:'13px', marginTop:'40px' }}>No messages yet</div>
+      {/* Messages scroll area */}
+      <div
+        ref={scrollRef}
+        style={{ flex:1, overflowY:'auto', overflowX:'hidden', padding:'14px 16px', display:'flex', flexDirection:'column', gap:'10px', WebkitOverflowScrolling:'touch' }}>
+        {messages.length === 0 && (
+          <div style={{ textAlign:'center', color:'#9CA3AF', fontSize:'13px', marginTop:'40px' }}>
+            No messages yet
+          </div>
         )}
-        {(conv?.messages || []).map((msg, i) => {
+        {messages.map((msg, i) => {
           const isOut = msg.role === 'user'
           return (
-            <div key={i} style={{ display:'flex', flexDirection: isOut?'row-reverse':'row', gap:'8px', alignItems:'flex-end' }}>
-              <div style={{ maxWidth:'80%', padding:'10px 14px', borderRadius: isOut?'14px 4px 14px 14px':'4px 14px 14px 14px', background: isOut?'#1C3D2E':'white', color: isOut?'white':'#111827', fontSize:'13px', lineHeight:'1.55', border: isOut?'none':'1px solid #E5E7EB' }}>
+            <div key={i} style={{ display:'flex', flexDirection: isOut ? 'row-reverse' : 'row', gap:'8px', alignItems:'flex-end' }}>
+              <div style={{
+                maxWidth:'78%', padding:'10px 14px',
+                borderRadius: isOut ? '14px 4px 14px 14px' : '4px 14px 14px 14px',
+                background: isOut ? '#1C3D2E' : 'white',
+                color: isOut ? 'white' : '#111827',
+                fontSize:'13px', lineHeight:'1.55',
+                border: isOut ? 'none' : '1px solid #E5E7EB',
+                wordBreak: 'break-word',
+              }}>
                 {msg.content}
                 {msg.sent_by && <div style={{ fontSize:'10px', opacity:0.5, marginTop:'4px' }}>— {msg.sent_by}</div>}
               </div>
               <div style={{ fontSize:'10px', color:'#9CA3AF', paddingBottom:'3px', flexShrink:0 }}>
-                {new Date(msg.ts).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}
+                {new Date(msg.ts).toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' })}
               </div>
             </div>
           )
         })}
-        <div ref={endRef} />
       </div>
 
-      {/* Reply bar */}
+      {/* Reply input — only for reception/manager/admin */}
       {canReply(session?.role) ? (
-        <div style={{ padding:'12px 16px', background:'white', borderTop:'1px solid #E5E7EB', display:'flex', gap:'10px', alignItems:'flex-end', flexShrink:0 }}>
-          <textarea value={replyText} onChange={e => setReplyText(e.target.value)}
-            onKeyDown={e => { if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()} }}
-            placeholder="Reply to guest…" rows={2}
-            style={{ flex:1, padding:'10px 13px', border:'1px solid #D1D5DB', borderRadius:'12px', fontSize:'14px', fontFamily:"'DM Sans', sans-serif", resize:'none', outline:'none', color:'#111827', lineHeight:'1.4' }}
+        <div style={{ padding:'10px 16px 10px', background:'white', borderTop:'1px solid #E5E7EB', display:'flex', gap:'8px', alignItems:'flex-end', flexShrink:0, paddingBottom:'max(10px, env(safe-area-inset-bottom))' }}>
+          <textarea
+            value={replyText}
+            onChange={e => setReplyText(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Reply to guest…"
+            rows={2}
+            style={{
+              flex:1, padding:'10px 13px',
+              border:'1px solid #D1D5DB', borderRadius:'12px',
+              fontSize:'16px', // 16px prevents iOS zoom on focus
+              fontFamily:"'DM Sans', sans-serif",
+              resize:'none', outline:'none', color:'#111827', lineHeight:'1.4',
+              WebkitAppearance:'none',
+            }}
           />
-          <button onClick={send} disabled={sending||!replyText.trim()}
-            style={{ padding:'12px 18px', background: replyText.trim()?'#1C3D2E':'#E5E7EB', border:'none', borderRadius:'12px', fontSize:'14px', fontWeight:'600', color: replyText.trim()?'white':'#9CA3AF', cursor: replyText.trim()?'pointer':'not-allowed', fontFamily:"'DM Sans', sans-serif", flexShrink:0 }}>
+          <button
+            onClick={send}
+            disabled={sending || !replyText.trim()}
+            style={{
+              padding:'10px 16px',
+              background: replyText.trim() ? '#1C3D2E' : '#E5E7EB',
+              border:'none', borderRadius:'12px',
+              fontSize:'14px', fontWeight:'600',
+              color: replyText.trim() ? 'white' : '#9CA3AF',
+              cursor: replyText.trim() ? 'pointer' : 'not-allowed',
+              fontFamily:"'DM Sans', sans-serif",
+              flexShrink:0, alignSelf:'flex-end', height:'44px',
+            }}>
             {sending ? '…' : 'Send'}
           </button>
         </div>
       ) : (
         <div style={{ padding:'12px 16px', background:'#F9FAFB', borderTop:'1px solid #E5E7EB', fontSize:'12px', color:'#9CA3AF', textAlign:'center' }}>
-          Only reception can reply to guests
+          Only reception staff can reply
         </div>
       )}
     </div>
@@ -222,9 +272,9 @@ function ChatThread({ conv, session, onBack, onReload }) {
 }
 
 // ════════════════════════════════════════════════════════════
-//  STAFF PORTAL (create request / booking)
+//  STAFF PORTAL — subtab, shows conv list on left + form
 // ════════════════════════════════════════════════════════════
-function StaffPortal({ conv, session, hotelId, onBack }) {
+function StaffPortal({ conversations, selectedConv, onSelectConv, session, hotelId }) {
   const [reqType,      setReqType]      = useState('external')
   const [category,     setCategory]     = useState('')
   const [department,   setDepartment]   = useState('')
@@ -235,6 +285,7 @@ function StaffPortal({ conv, session, hotelId, onBack }) {
   const [sent,         setSent]         = useState(false)
   const [partnerTypes, setPartnerTypes] = useState([])
   const [departments,  setDepartments]  = useState([])
+  const [showConvPicker, setShowConvPicker] = useState(false)
 
   useEffect(() => {
     if (!hotelId) return
@@ -249,129 +300,170 @@ function StaffPortal({ conv, session, hotelId, onBack }) {
   }, [hotelId])
 
   async function handleSend() {
-    if (!details.trim() || !conv) return
+    if (!details.trim() || !selectedConv || sending) return
     setSending(true)
     try {
       const endpoint = reqType === 'external' ? '/api/bookings' : '/api/tickets'
       const body = reqType === 'external'
-        ? { hotelId, guestId: conv.guests?.id, type: category, details: { description: details }, createdBy: `staff:${session?.name||''}` }
-        : { hotelId, guestId: conv.guests?.id, department, category: deptCategory||department, description: details, room: conv.guests?.room||conv.guests?.guest_room, priority, createdBy: `staff:${session?.name||''}` }
+        ? { hotelId, guestId: selectedConv.guests?.id, type: category, details: { description: details }, createdBy: `staff:${session?.name||''}` }
+        : { hotelId, guestId: selectedConv.guests?.id, department, category: deptCategory||department, description: details, room: selectedConv.guests?.room||selectedConv.guests?.guest_room, priority, createdBy: `staff:${session?.name||''}` }
       await fetch(endpoint, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) })
       setSent(true); setDetails('')
       setTimeout(() => setSent(false), 3000)
     } finally { setSending(false) }
   }
 
-  const g = conv?.guests || {}
+  const g = selectedConv?.guests || {}
 
   return (
-    <div style={{ display:'flex', flexDirection:'column', flex:1, overflow:'hidden' }}>
+    <div style={{ flex:1, overflowY:'auto', background:'#F9FAFB' }}>
+      <div style={{ padding:'14px 16px', display:'flex', flexDirection:'column', gap:'14px' }}>
 
-      {/* Sticky header */}
-      <div style={{ padding:'10px 16px', background:'white', borderBottom:'1px solid #E5E7EB', display:'flex', alignItems:'center', gap:'10px', flexShrink:0 }}>
-        <BackBtn onBack={onBack} label="Chats" />
-        <span style={{ fontSize:'13px', fontWeight:'600', color:'#374151' }}>Create request</span>
-        {conv && (
-          <div style={{ marginLeft:'auto' }}>
-            <GuestChip conv={conv} compact />
-          </div>
-        )}
-      </div>
+        {/* ── Guest selector ── */}
+        <div>
+          <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151', marginBottom:'8px' }}>Guest</div>
 
-      <div style={{ flex:1, overflowY:'auto', background:'#F9FAFB' }}>
-        <div style={{ padding:'16px', display:'flex', flexDirection:'column', gap:'16px' }}>
-
-          {/* Guest chip — big */}
-          {!conv && (
-            <div style={{ padding:'16px', background:'white', borderRadius:'12px', border:'1px dashed #D1D5DB', textAlign:'center', fontSize:'13px', color:'#9CA3AF' }}>
-              Go to Chats, tap a conversation, then tap ✏️ Request
+          {/* Selected guest chip */}
+          {selectedConv ? (
+            <div style={{ display:'flex', alignItems:'center', gap:'10px', padding:'12px 14px', background:'white', borderRadius:'12px', border:'1px solid #E5E7EB' }}>
+              <div style={{ width:'34px', height:'34px', borderRadius:'50%', background:'#1C3D2E', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'13px', color:'#C9A84C', fontWeight:'700', flexShrink:0 }}>
+                {(g.name?.[0]||'?')}{(g.surname?.[0]||'')}
+              </div>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:'13px', fontWeight:'600', color:'#111827' }}>{g.name} {g.surname}</div>
+                <div style={{ fontSize:'12px', color:'#6B7280' }}>Room {g.room||g.guest_room||'?'}</div>
+              </div>
+              <button onClick={() => setShowConvPicker(s => !s)}
+                style={{ fontSize:'12px', fontWeight:'600', padding:'5px 10px', borderRadius:'8px', border:'1px solid #D1D5DB', background:'white', color:'#374151', cursor:'pointer', fontFamily:"'DM Sans', sans-serif", flexShrink:0 }}>
+                Change
+              </button>
             </div>
+          ) : (
+            <button onClick={() => setShowConvPicker(s => !s)}
+              style={{ width:'100%', padding:'14px', background:'white', border:'1px dashed #D1D5DB', borderRadius:'12px', textAlign:'center', fontSize:'13px', color:'#9CA3AF', cursor:'pointer', fontFamily:"'DM Sans', sans-serif" }}>
+              Tap to select a guest conversation →
+            </button>
           )}
 
-          {/* Request type */}
+          {/* Conv picker dropdown */}
+          {showConvPicker && (
+            <div style={{ marginTop:'8px', background:'white', borderRadius:'12px', border:'1px solid #E5E7EB', overflow:'hidden', maxHeight:'200px', overflowY:'auto' }}>
+              {conversations.length === 0 && (
+                <div style={{ padding:'16px', textAlign:'center', color:'#9CA3AF', fontSize:'13px' }}>No active conversations</div>
+              )}
+              {conversations.map(conv => {
+                const cg   = conv.guests || {}
+                const room = cg.room || cg.guest_room || '?'
+                return (
+                  <div key={conv.id}
+                    onClick={() => { onSelectConv(conv); setShowConvPicker(false) }}
+                    style={{ padding:'12px 14px', borderBottom:'1px solid #F3F4F6', display:'flex', alignItems:'center', gap:'10px', cursor:'pointer', background: selectedConv?.id===conv.id ? 'rgba(28,61,46,0.06)' : 'white' }}>
+                    <div style={{ width:'32px', height:'32px', borderRadius:'50%', background:'#1C3D2E', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'12px', color:'#C9A84C', fontWeight:'700', flexShrink:0 }}>
+                      {(cg.name?.[0]||'?')}{(cg.surname?.[0]||'')}
+                    </div>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontSize:'13px', fontWeight:'600', color:'#111827' }}>{cg.name||'Guest'} {cg.surname||''}</div>
+                      <div style={{ fontSize:'12px', color:'#6B7280' }}>Room {room}</div>
+                    </div>
+                    {selectedConv?.id === conv.id && <span style={{ fontSize:'12px', color:'#C9A84C' }}>✓</span>}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* ── Request type ── */}
+        <div>
+          <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151', marginBottom:'8px' }}>Request type</div>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'8px' }}>
+            {[
+              { key:'external', label:'External booking', sub:'Taxi, restaurant…' },
+              { key:'internal', label:'Internal request',  sub:'Housekeeping, maint…' },
+            ].map(t => (
+              <button key={t.key} onClick={() => setReqType(t.key)}
+                style={{ padding:'12px 10px', borderRadius:'12px', border:'1px solid', textAlign:'center', cursor:'pointer', fontFamily:"'DM Sans', sans-serif", borderColor: reqType===t.key?'#1C3D2E':'#E5E7EB', background: reqType===t.key?'#1C3D2E':'white' }}>
+                <div style={{ fontSize:'13px', fontWeight:'700', color: reqType===t.key?'white':'#111827', marginBottom:'3px' }}>{t.label}</div>
+                <div style={{ fontSize:'11px', color: reqType===t.key?'rgba(255,255,255,0.6)':'#9CA3AF' }}>{t.sub}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* ── External categories ── */}
+        {reqType === 'external' && partnerTypes.length > 0 && (
           <div>
-            <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151', marginBottom:'8px' }}>Request type</div>
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'8px' }}>
-              {[
-                { key:'external', label:'External booking', sub:'Taxi, restaurant…' },
-                { key:'internal', label:'Internal request',  sub:'Housekeeping, maint…' },
-              ].map(t => (
-                <button key={t.key} onClick={() => setReqType(t.key)}
-                  style={{ padding:'12px 10px', borderRadius:'12px', border:'1px solid', textAlign:'center', cursor:'pointer', fontFamily:"'DM Sans', sans-serif", borderColor: reqType===t.key?'#1C3D2E':'#E5E7EB', background: reqType===t.key?'#1C3D2E':'white' }}>
-                  <div style={{ fontSize:'13px', fontWeight:'700', color: reqType===t.key?'white':'#111827', marginBottom:'3px' }}>{t.label}</div>
-                  <div style={{ fontSize:'11px', color: reqType===t.key?'rgba(255,255,255,0.6)':'#9CA3AF' }}>{t.sub}</div>
-                </button>
-              ))}
+            <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151', marginBottom:'8px' }}>Category</div>
+            <div style={{ display:'flex', gap:'7px', flexWrap:'wrap' }}>
+              {partnerTypes.map(pt => {
+                const k   = pt.name.toLowerCase()
+                const sel = category === k
+                return (
+                  <button key={pt.id} onClick={() => setCategory(k)}
+                    style={{ padding:'7px 14px', borderRadius:'20px', fontSize:'13px', fontWeight:'500', border:'1px solid', borderColor: sel?'#C9A84C':'#E5E7EB', background: sel?'rgba(201,168,76,0.1)':'white', color: sel?'#78350F':'#374151', cursor:'pointer', fontFamily:"'DM Sans', sans-serif" }}>
+                    {pt.name}
+                  </button>
+                )
+              })}
             </div>
           </div>
+        )}
 
-          {/* External categories */}
-          {reqType === 'external' && partnerTypes.length > 0 && (
+        {/* ── Internal dept + priority ── */}
+        {reqType === 'internal' && departments.length > 0 && (
+          <>
             <div>
-              <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151', marginBottom:'8px' }}>Category</div>
+              <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151', marginBottom:'8px' }}>Department</div>
               <div style={{ display:'flex', gap:'7px', flexWrap:'wrap' }}>
-                {partnerTypes.map(pt => {
-                  const k   = pt.name.toLowerCase()
-                  const sel = category === k
+                {departments.map(d => {
+                  const sel = department === d.key
                   return (
-                    <button key={pt.id} onClick={() => setCategory(k)}
-                      style={{ padding:'7px 14px', borderRadius:'20px', fontSize:'13px', fontWeight:'500', border:'1px solid', borderColor: sel?'#C9A84C':'#E5E7EB', background: sel?'rgba(201,168,76,0.1)':'white', color: sel?'#78350F':'#374151', cursor:'pointer', fontFamily:"'DM Sans', sans-serif" }}>
-                      {pt.name}
+                    <button key={d.id} onClick={() => { setDepartment(d.key); setDeptCategory('') }}
+                      style={{ padding:'7px 14px', borderRadius:'20px', fontSize:'13px', fontWeight:'500', border:'1px solid', borderColor: sel?'#1C3D2E':'#E5E7EB', background: sel?'#1C3D2E':'white', color: sel?'white':'#374151', cursor:'pointer', fontFamily:"'DM Sans', sans-serif" }}>
+                      {d.name}
                     </button>
                   )
                 })}
               </div>
             </div>
-          )}
-
-          {/* Internal dept + priority */}
-          {reqType === 'internal' && departments.length > 0 && (
-            <>
-              <div>
-                <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151', marginBottom:'8px' }}>Department</div>
-                <div style={{ display:'flex', gap:'7px', flexWrap:'wrap' }}>
-                  {departments.map(d => {
-                    const sel = department === d.key
-                    return (
-                      <button key={d.id} onClick={() => { setDepartment(d.key); setDeptCategory('') }}
-                        style={{ padding:'7px 14px', borderRadius:'20px', fontSize:'13px', fontWeight:'500', border:'1px solid', borderColor: sel?'#1C3D2E':'#E5E7EB', background: sel?'#1C3D2E':'white', color: sel?'white':'#374151', cursor:'pointer', fontFamily:"'DM Sans', sans-serif" }}>
-                        {d.name}
-                      </button>
-                    )
-                  })}
-                </div>
+            <div>
+              <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151', marginBottom:'8px' }}>Priority</div>
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:'7px' }}>
+                {PRIORITIES.map(p => (
+                  <button key={p.key} onClick={() => setPriority(p.key)}
+                    style={{ padding:'10px 6px', borderRadius:'10px', border:`1px solid ${priority===p.key?p.border:'#E5E7EB'}`, background: priority===p.key?p.bg:'white', cursor:'pointer', fontFamily:"'DM Sans', sans-serif", textAlign:'center' }}>
+                    <div style={{ fontSize:'12px', fontWeight:'700', color: priority===p.key?p.color:'#374151' }}>{p.label}</div>
+                    <div style={{ fontSize:'10px', color: priority===p.key?p.color:'#9CA3AF', marginTop:'2px' }}>{p.sub}</div>
+                  </button>
+                ))}
               </div>
-              <div>
-                <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151', marginBottom:'8px' }}>Priority</div>
-                <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:'7px' }}>
-                  {PRIORITIES.map(p => (
-                    <button key={p.key} onClick={() => setPriority(p.key)}
-                      style={{ padding:'10px 6px', borderRadius:'10px', border:`1px solid ${priority===p.key?p.border:'#E5E7EB'}`, background: priority===p.key?p.bg:'white', cursor:'pointer', fontFamily:"'DM Sans', sans-serif", textAlign:'center' }}>
-                      <div style={{ fontSize:'12px', fontWeight:'700', color: priority===p.key?p.color:'#374151' }}>{p.label}</div>
-                      <div style={{ fontSize:'10px', color: priority===p.key?p.color:'#9CA3AF', marginTop:'2px' }}>{p.sub}</div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </>
-          )}
+            </div>
+          </>
+        )}
 
-          {/* Details */}
-          <div>
-            <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151', marginBottom:'8px' }}>Details</div>
-            <textarea value={details} onChange={e => setDetails(e.target.value)} rows={3}
-              placeholder={reqType==='external'?'e.g. Taxi to airport at 6pm, 2 passengers':'e.g. AC not working in room'}
-              style={{ width:'100%', padding:'12px 14px', background:'white', border:'1px solid #E5E7EB', borderRadius:'12px', fontSize:'14px', color:'#111827', resize:'none', fontFamily:"'DM Sans', sans-serif", outline:'none', lineHeight:'1.5' }}
-            />
-          </div>
-
-          {/* CTA */}
-          <button onClick={handleSend} disabled={sending || !details.trim() || !conv}
-            style={{ width:'100%', padding:'14px', background: sent?'#16A34A': (!details.trim()||!conv)?'#E5E7EB':'#1C3D2E', border:'none', borderRadius:'12px', fontSize:'15px', fontWeight:'700', color: (!details.trim()||!conv)?'#9CA3AF':'white', cursor: (!details.trim()||!conv)?'not-allowed':'pointer', fontFamily:"'DM Sans', sans-serif" }}>
-            {sent ? '✓ Sent!' : sending ? 'Sending…' : reqType==='external' ? 'Send booking request' : 'Create internal ticket'}
-          </button>
-          <div style={{ height:'20px' }} />
+        {/* ── Details ── */}
+        <div>
+          <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151', marginBottom:'8px' }}>Details</div>
+          <textarea value={details} onChange={e => setDetails(e.target.value)} rows={3}
+            placeholder={reqType==='external' ? 'e.g. Taxi to airport at 6pm, 2 passengers' : 'e.g. AC not working in room'}
+            style={{ width:'100%', padding:'12px 14px', background:'white', border:'1px solid #E5E7EB', borderRadius:'12px', fontSize:'16px', color:'#111827', resize:'none', fontFamily:"'DM Sans', sans-serif", outline:'none', lineHeight:'1.5', WebkitAppearance:'none' }}
+          />
         </div>
+
+        {/* ── Send button ── */}
+        <button onClick={handleSend} disabled={sending || !details.trim() || !selectedConv}
+          style={{
+            width:'100%', padding:'14px',
+            background: sent ? '#16A34A' : (!details.trim()||!selectedConv) ? '#E5E7EB' : '#1C3D2E',
+            border:'none', borderRadius:'12px', fontSize:'15px', fontWeight:'700',
+            color: (!details.trim()||!selectedConv) ? '#9CA3AF' : 'white',
+            cursor: (!details.trim()||!selectedConv) ? 'not-allowed' : 'pointer',
+            fontFamily:"'DM Sans', sans-serif",
+          }}>
+          {sent ? '✓ Sent!' : sending ? 'Sending…' : reqType==='external' ? 'Send booking request' : 'Create internal ticket'}
+        </button>
+
+        <div style={{ height:'20px' }}/>
       </div>
     </div>
   )
@@ -389,81 +481,80 @@ function IssuesPanel({ tickets, bookings }) {
   return (
     <div style={{ flex:1, overflowY:'auto', background:'#F9FAFB' }}>
 
-      <Section title="Issues & Alerts" badge={issues.length} badgeBg="#FEE2E2" badgeColor="#DC2626">
-        {issues.length === 0
-          ? <Empty text="All clear ✓" />
-          : issues.map(t => (
-            <div key={t.id} style={{ padding:'14px 16px', background:'white', borderBottom:'1px solid #F3F4F6', display:'flex', gap:'10px', alignItems:'flex-start' }}>
-              <div style={{ width:'28px', height:'28px', borderRadius:'8px', background: t.priority==='urgent'?'#FEE2E2':'#FFFBEB', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'14px', flexShrink:0 }}>
-                {t.priority==='urgent'?'🚨':'⚠️'}
+      {/* Issues */}
+      <SectionHeader title="Issues & Alerts" badge={issues.length} badgeBg="#FEE2E2" badgeColor="#DC2626" />
+      {issues.length === 0
+        ? <EmptyRow text="All clear ✓" />
+        : issues.map(t => (
+          <div key={t.id} style={{ padding:'14px 16px', background:'white', borderBottom:'1px solid #F3F4F6', display:'flex', gap:'10px', alignItems:'flex-start' }}>
+            <div style={{ width:'28px', height:'28px', borderRadius:'8px', background: t.priority==='urgent'?'#FEE2E2':'#FFFBEB', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'14px', flexShrink:0 }}>
+              {t.priority==='urgent'?'🚨':'⚠️'}
+            </div>
+            <div style={{ flex:1 }}>
+              <div style={{ fontSize:'13px', fontWeight:'600', color:'#111827', marginBottom:'2px' }}>{t.description?.slice(0,70)}{t.description?.length>70?'…':''}</div>
+              <div style={{ fontSize:'12px', color:'#6B7280' }}>
+                Room {t.room} · {t.department} · <span style={{ color: t.status==='escalated'?'#DC2626':'#D97706', textTransform:'capitalize' }}>{t.status}</span>
               </div>
+              {t.priority==='urgent' && <span style={{ display:'inline-block', marginTop:'4px', fontSize:'10px', fontWeight:'700', padding:'2px 7px', borderRadius:'4px', background:'#FEE2E2', color:'#DC2626' }}>URGENT</span>}
+            </div>
+          </div>
+        ))
+      }
+
+      {/* Upcoming */}
+      <SectionHeader title="Upcoming bookings" divider />
+      {upcoming.length === 0
+        ? <EmptyRow text="No upcoming bookings" />
+        : upcoming.slice(0,10).map(b => {
+          const g  = b.guests || {}
+          const tc = typeColors[b.type] || {bg:'#F1F5F9',color:'#334155',l:'?'}
+          return (
+            <div key={b.id} style={{ padding:'12px 16px', background:'white', borderBottom:'1px solid #F3F4F6', display:'flex', alignItems:'center', gap:'10px' }}>
+              <div style={{ width:'28px', height:'28px', borderRadius:'7px', background:tc.bg, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'11px', fontWeight:'700', color:tc.color, flexShrink:0 }}>{tc.l}</div>
               <div style={{ flex:1 }}>
-                <div style={{ fontSize:'13px', fontWeight:'600', color:'#111827', marginBottom:'2px' }}>{t.description?.slice(0,70)}{t.description?.length>70?'…':''}</div>
-                <div style={{ fontSize:'12px', color:'#6B7280' }}>Room {t.room} · {t.department} · <span style={{ color: t.status==='escalated'?'#DC2626':'#D97706', textTransform:'capitalize' }}>{t.status}</span></div>
-                {t.priority==='urgent' && <span style={{ display:'inline-block', marginTop:'4px', fontSize:'10px', fontWeight:'700', padding:'2px 7px', borderRadius:'4px', background:'#FEE2E2', color:'#DC2626' }}>URGENT</span>}
+                <div style={{ fontSize:'13px', fontWeight:'600', color:'#111827' }}>{g.name} · Room {g.room||'?'}</div>
+                <div style={{ fontSize:'12px', color:'#6B7280' }}>{b.partners?.name||b.type}</div>
+              </div>
+              <div style={{ fontSize:'13px', fontWeight:'600', color:'#374151' }}>
+                {b.details?.time || new Date(b.created_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}
               </div>
             </div>
-          ))
-        }
-      </Section>
+          )
+        })
+      }
 
-      <Section title="Upcoming bookings" divider>
-        {upcoming.length === 0
-          ? <Empty text="No upcoming bookings" />
-          : upcoming.slice(0,10).map(b => {
-            const g  = b.guests || {}
-            const tc = typeColors[b.type] || {bg:'#F1F5F9',color:'#334155',l:'?'}
-            return (
-              <div key={b.id} style={{ padding:'12px 16px', background:'white', borderBottom:'1px solid #F3F4F6', display:'flex', alignItems:'center', gap:'10px' }}>
-                <div style={{ width:'28px', height:'28px', borderRadius:'7px', background:tc.bg, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'11px', fontWeight:'700', color:tc.color, flexShrink:0 }}>{tc.l}</div>
-                <div style={{ flex:1 }}>
-                  <div style={{ fontSize:'13px', fontWeight:'600', color:'#111827' }}>{g.name} · Room {g.room||'?'}</div>
-                  <div style={{ fontSize:'12px', color:'#6B7280' }}>{b.partners?.name||b.type}</div>
-                </div>
-                <div style={{ fontSize:'13px', fontWeight:'600', color:'#374151' }}>
-                  {b.details?.time || new Date(b.created_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}
-                </div>
+      {/* Completed */}
+      {done.length > 0 && <>
+        <SectionHeader title="Completed today" divider />
+        {done.slice(0,6).map(b => {
+          const g = b.guests || {}
+          return (
+            <div key={b.id} style={{ padding:'12px 16px', background:'white', borderBottom:'1px solid #F3F4F6', display:'flex', alignItems:'center', gap:'10px' }}>
+              <div style={{ width:'8px', height:'8px', borderRadius:'50%', background:'#D1D5DB', flexShrink:0 }}/>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:'12px', color:'#6B7280' }}>{g.name} · Room {g.room||'?'}</div>
+                <div style={{ fontSize:'11px', color:'#9CA3AF' }}>{b.partners?.name||b.type}</div>
               </div>
-            )
-          })
-        }
-      </Section>
-
-      {done.length > 0 && (
-        <Section title="Completed today" divider>
-          {done.slice(0,6).map(b => {
-            const g = b.guests || {}
-            return (
-              <div key={b.id} style={{ padding:'12px 16px', background:'white', borderBottom:'1px solid #F3F4F6', display:'flex', alignItems:'center', gap:'10px' }}>
-                <div style={{ width:'8px', height:'8px', borderRadius:'50%', background:'#D1D5DB', flexShrink:0 }}/>
-                <div style={{ flex:1 }}>
-                  <div style={{ fontSize:'12px', color:'#6B7280' }}>{g.name} · Room {g.room||'?'}</div>
-                  <div style={{ fontSize:'11px', color:'#9CA3AF' }}>{b.partners?.name||b.type}</div>
-                </div>
-                <div style={{ fontSize:'11px', color:'#9CA3AF' }}>
-                  {new Date(b.confirmed_at||b.created_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}
-                </div>
+              <div style={{ fontSize:'11px', color:'#9CA3AF' }}>
+                {new Date(b.confirmed_at||b.created_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}
               </div>
-            )
-          })}
-        </Section>
-      )}
+            </div>
+          )
+        })}
+      </>}
     </div>
   )
 }
 
-function Section({ title, badge, badgeBg, badgeColor, divider, children }) {
+function SectionHeader({ title, badge, badgeBg, badgeColor, divider }) {
   return (
-    <div style={{ marginTop: divider?8:0 }}>
-      <div style={{ padding:'10px 16px 8px', fontSize:'12px', fontWeight:'700', color:'#374151', background:'white', borderBottom:'1px solid #E5E7EB', display:'flex', alignItems:'center', gap:'7px' }}>
-        {title}
-        {badge > 0 && <span style={{ fontSize:'10px', fontWeight:'700', padding:'1px 7px', borderRadius:'10px', background:badgeBg||'#F3F4F6', color:badgeColor||'#374151' }}>{badge}</span>}
-      </div>
-      {children}
+    <div style={{ padding:'10px 16px 8px', fontSize:'12px', fontWeight:'700', color:'#374151', background:'white', borderBottom:'1px solid #E5E7EB', borderTop: divider?'8px solid #F3F4F6':'none', display:'flex', alignItems:'center', gap:'7px' }}>
+      {title}
+      {badge > 0 && <span style={{ fontSize:'10px', fontWeight:'700', padding:'1px 7px', borderRadius:'10px', background:badgeBg||'#F3F4F6', color:badgeColor||'#374151' }}>{badge}</span>}
     </div>
   )
 }
-function Empty({ text }) {
+function EmptyRow({ text }) {
   return <div style={{ padding:'20px 16px', textAlign:'center', color:'#9CA3AF', fontSize:'13px', background:'white', borderBottom:'1px solid #F3F4F6' }}>{text}</div>
 }
 
@@ -512,7 +603,6 @@ function DeptQueue({ hotelId, session }) {
   const pending    = tickets.filter(t => t.status === 'pending')
   const inProgress = tickets.filter(t => ['in_progress','escalated'].includes(t.status))
   const resolved   = tickets.filter(t => ['resolved','cancelled'].includes(t.status))
-
   const TABS = [
     {key:'pending',     label:'Pending',     badge:pending.length,    badgeBg:'#FEF3C7',badgeColor:'#D97706'},
     {key:'in_progress', label:'In progress', badge:inProgress.length, badgeBg:'#EFF6FF',badgeColor:'#2563EB'},
@@ -524,13 +614,10 @@ function DeptQueue({ hotelId, session }) {
 
   return (
     <div style={{display:'flex',flexDirection:'column',flex:1,overflow:'hidden'}}>
-      {/* Dept badge */}
       <div style={{padding:'8px 16px',background:'white',borderBottom:'1px solid #E5E7EB',display:'flex',alignItems:'center',gap:'8px',flexShrink:0}}>
         <span style={{fontSize:'11px',fontWeight:'700',padding:'3px 10px',borderRadius:'6px',background:dc.bg,color:dc.color}}>{dc.label}</span>
         <span style={{fontSize:'12px',color:'#9CA3AF'}}>{tickets.filter(t=>t.status!=='resolved').length} open · auto-refresh 30s</span>
       </div>
-
-      {/* Subtabs */}
       <div style={{display:'flex',background:'white',borderBottom:'1px solid #E5E7EB',flexShrink:0}}>
         {TABS.map(t => (
           <button key={t.key} onClick={()=>setSubtab(t.key)}
@@ -540,8 +627,6 @@ function DeptQueue({ hotelId, session }) {
           </button>
         ))}
       </div>
-
-      {/* Ticket cards */}
       <div style={{flex:1,overflowY:'auto',background:'#F9FAFB',padding:'12px',display:'flex',flexDirection:'column',gap:'10px'}}>
         {shown.length === 0 && <div style={{padding:'40px',textAlign:'center',color:'#9CA3AF',fontSize:'13px'}}>No tickets here</div>}
         {shown.map(t => {
@@ -589,14 +674,17 @@ function DeptQueue({ hotelId, session }) {
 }
 
 // ════════════════════════════════════════════════════════════
-//  RECEPTION / MANAGER VIEW  — 4 subtabs
+//  RECEPTION / MANAGER VIEW
+//  Subtabs: Chats | Portal | Issues
+//  Thread opens as full-screen slide (no tab bar shown)
 // ════════════════════════════════════════════════════════════
-function ReceptionView({ hotelId, session, onSelectGuest }) {
+function ReceptionView({ hotelId, session }) {
   const [conversations, setConversations] = useState([])
   const [bookings,      setBookings]      = useState([])
   const [tickets,       setTickets]       = useState([])
   const [selectedConv,  setSelectedConv]  = useState(null)
-  const [view,          setView]          = useState('chats') // 'chats'|'issues'|'thread'|'portal'
+  const [subtab,        setSubtab]        = useState('chats')   // 'chats' | 'portal' | 'issues'
+  const [threadOpen,    setThreadOpen]    = useState(false)     // slides over everything
 
   useEffect(() => {
     if (!hotelId) return
@@ -615,72 +703,78 @@ function ReceptionView({ hotelId, session, onSelectGuest }) {
       setConversations(fresh)
       setBookings(bd.bookings || [])
       setTickets(td.tickets  || [])
-      // keep selected conv in sync
       setSelectedConv(prev => prev ? (fresh.find(c => c.id === prev.id) || prev) : prev)
     } catch {}
   }
 
-  // Open thread for a conversation
+  // Open the chat thread — full-screen, does NOT switch main tabs
   function openThread(conv) {
     setSelectedConv(conv)
-    setView('thread')
-    onSelectGuest?.(conv.guests)
+    setThreadOpen(true)
+    // ⚠️  NO onSelectGuest() call — that was causing the tab switch
   }
 
-  // Open portal for a conversation
-  function openPortal(conv) {
+  // Select conv for portal use only (no thread open)
+  function selectConvForPortal(conv) {
     setSelectedConv(conv)
-    setView('portal')
-    onSelectGuest?.(conv.guests)
   }
 
   const escalated  = conversations.filter(c => c.status === 'escalated').length
   const issueCount = tickets.filter(t => !['resolved','cancelled'].includes(t.status)).length
 
-  // Thread and Portal render full-screen (no subtab bar shown)
-  if (view === 'thread') {
-    return (
-      <ChatThread
-        conv={selectedConv}
-        session={session}
-        onBack={() => setView('chats')}
-        onReload={load}
-      />
-    )
-  }
-  if (view === 'portal') {
-    return (
-      <StaffPortal
-        conv={selectedConv}
-        session={session}
-        hotelId={hotelId}
-        onBack={() => setView('chats')}
-      />
-    )
-  }
-
-  // Chats / Issues — show subtab bar
   const TABS = [
-    { key:'chats',  label:'Chats',  icon:'💬', badge:escalated,  badgeBg:'#FEE2E2', badgeColor:'#DC2626' },
-    { key:'issues', label:'Issues', icon:'⚠️', badge:issueCount, badgeBg:'#FEF3C7', badgeColor:'#D97706' },
+    { key:'chats',  label:'Chats',        icon:'💬', badge:escalated,  badgeBg:'#FEE2E2', badgeColor:'#DC2626' },
+    { key:'portal', label:'Staff Portal', icon:'✏️', badge:0 },
+    { key:'issues', label:'Issues',       icon:'⚠️', badge:issueCount, badgeBg:'#FEF3C7', badgeColor:'#D97706' },
   ]
 
   return (
-    <div style={{display:'flex',flexDirection:'column',height:'100%',overflow:'hidden'}}>
-      {/* Subtab bar */}
-      <div style={{display:'flex',background:'white',borderBottom:'1px solid #E5E7EB',flexShrink:0}}>
-        {TABS.map(t => (
-          <button key={t.key} onClick={()=>setView(t.key)}
-            style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:'2px',padding:'10px 12px',fontSize:'12px',fontWeight:view===t.key?'700':'500',color:view===t.key?'#1C3D2E':'#9CA3AF',background:'none',border:'none',borderBottom:view===t.key?'2px solid #C9A84C':'2px solid transparent',cursor:'pointer',fontFamily:"'DM Sans', sans-serif"}}>
-            <span style={{fontSize:'16px'}}>{t.icon}</span>
-            {t.label}
-            {t.badge > 0 && <span style={{fontSize:'9px',fontWeight:'700',padding:'1px 6px',borderRadius:'10px',background:t.badgeBg,color:t.badgeColor}}>{t.badge}</span>}
-          </button>
-        ))}
-      </div>
+    <div style={{ display:'flex', flexDirection:'column', height:'100%', overflow:'hidden', position:'relative' }}>
 
-      {view === 'chats'  && <ConversationsList conversations={conversations} selectedConvId={selectedConv?.id} onSelect={openThread} onOpenPortal={openPortal} />}
-      {view === 'issues' && <IssuesPanel tickets={tickets} bookings={bookings} />}
+      {/* Subtab bar — always visible unless thread is open */}
+      {!threadOpen && (
+        <div style={{ display:'flex', background:'white', borderBottom:'1px solid #E5E7EB', flexShrink:0 }}>
+          {TABS.map(t => (
+            <button key={t.key} onClick={() => setSubtab(t.key)}
+              style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:'2px', padding:'10px 8px', fontSize:'12px', fontWeight: subtab===t.key?'700':'500', color: subtab===t.key?'#1C3D2E':'#9CA3AF', background:'none', border:'none', borderBottom: subtab===t.key?'2px solid #C9A84C':'2px solid transparent', cursor:'pointer', fontFamily:"'DM Sans', sans-serif" }}>
+              <span style={{ fontSize:'15px' }}>{t.icon}</span>
+              {t.label}
+              {t.badge > 0 && <span style={{ fontSize:'9px', fontWeight:'700', padding:'1px 6px', borderRadius:'10px', background:t.badgeBg, color:t.badgeColor }}>{t.badge}</span>}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Tab content */}
+      {!threadOpen && subtab === 'chats'  && (
+        <ConversationsList
+          conversations={conversations}
+          selectedConvId={selectedConv?.id}
+          onOpenThread={openThread}
+        />
+      )}
+      {!threadOpen && subtab === 'portal' && (
+        <StaffPortal
+          conversations={conversations}
+          selectedConv={selectedConv}
+          onSelectConv={selectConvForPortal}
+          session={session}
+          hotelId={hotelId}
+        />
+      )}
+      {!threadOpen && subtab === 'issues' && (
+        <IssuesPanel tickets={tickets} bookings={bookings} />
+      )}
+
+      {/* Thread — slides over as full-screen overlay within this panel */}
+      {threadOpen && (
+        <ChatThread
+          conv={selectedConv}
+          session={session}
+          onBack={() => setThreadOpen(false)}
+          onReload={load}
+        />
+      )}
     </div>
   )
 }
@@ -688,9 +782,9 @@ function ReceptionView({ hotelId, session, onSelectGuest }) {
 // ════════════════════════════════════════════════════════════
 //  EXPORT
 // ════════════════════════════════════════════════════════════
-export default function MobileLiveTab({ hotelId, session, onSelectGuest }) {
+export default function MobileLiveTab({ hotelId, session }) {
   if (DEPT_ROLES.includes(session?.role)) {
     return <DeptQueue hotelId={hotelId} session={session} />
   }
-  return <ReceptionView hotelId={hotelId} session={session} onSelectGuest={onSelectGuest} />
+  return <ReceptionView hotelId={hotelId} session={session} />
 }
