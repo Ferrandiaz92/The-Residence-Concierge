@@ -49,6 +49,7 @@ function getMobileTabs(role) {
   ]
   if (isCommunications(role)) return [
     { key:'scheduled', label:'Messaging', icon:IconSettings },
+    { key:'settings',  label:'Setup',     icon:IconSettings },
   ]
   if (isManager(role)) return [
     { key:'live',     label:'Live',   icon:IconLive     },
@@ -423,10 +424,12 @@ export default function DashboardPage() {
   const hotelId     = session.hotelId
 
   // Ensure activeTab is valid for this role
+  const mobileTabs   = getMobileTabs(session.role)
   const allValidKeys = isMobile
-    ? (getMobileTabs(session.role).map(t => t.key).concat(['live']))
+    ? mobileTabs.map(t => t.key)   // no 'live' appended — each role only gets their tabs
     : desktopTabs.map(t => t.key)
-  const validTab = allValidKeys.includes(activeTab) ? activeTab : (allValidKeys[0] || 'live')
+  const defaultTab   = allValidKeys[0] || 'live'
+  const validTab     = allValidKeys.includes(activeTab) ? activeTab : defaultTab
 
   const sharedProps = { session, activeTab: validTab, setActiveTab, selectedGuest, onSelectGuest: selectGuest, handleLogout, hotelId }
 
