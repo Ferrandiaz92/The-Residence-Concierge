@@ -9,8 +9,23 @@ import { useState, useEffect } from 'react'
 import ShiftsManager   from './ShiftsManager'
 import ProductsManager from './ProductsManager'
 
-export default function SettingsTab({ hotelId }) {
-  const [section, setSection]           = useState('partners')
+export default function SettingsTab({ hotelId, session }) {
+  const role = session?.role || 'manager'
+
+  // Section visibility per role
+  const canSee = {
+    knowledge:   ['manager','admin','communications','supervisor'].includes(role),
+    experiences: ['manager','admin','communications'].includes(role),
+    partners:    ['manager','admin','communications'].includes(role),
+    types:       ['manager','admin'].includes(role),
+    departments: ['manager','admin'].includes(role),
+    shifts:      ['manager','admin','supervisor'].includes(role),
+  }
+  const firstSection = ['manager','admin'].includes(role) ? 'partners'
+    : role === 'communications' ? 'knowledge'
+    : role === 'supervisor'    ? 'shifts'
+    : 'partners'
+  const [section, setSection]           = useState(firstSection)
   const [partners, setPartners]         = useState([])
   const [kbEntries, setKbEntries]       = useState([])
   const [partnerTypes, setPartnerTypes] = useState([])
@@ -157,12 +172,12 @@ export default function SettingsTab({ hotelId }) {
 
       {/* Section tabs — wraps to 2 lines on mobile */}
       <div style={{ display:'flex', flexWrap:'wrap', background:'white', borderBottom:'0.5px solid var(--border)', flexShrink:0 }}>
-        {secBtn('Knowledge base', section==='knowledge', ()=>setSection('knowledge'))}
-        {secBtn('Experiences', section==='experiences', ()=>setSection('experiences'))}
-        {secBtn('Partners', section==='partners', ()=>setSection('partners'))}
-        {secBtn('Partner types', section==='types', ()=>setSection('types'))}
-        {secBtn('Departments', section==='departments', ()=>setSection('departments'))}
-        {secBtn('Shifts', section==='shifts', ()=>setSection('shifts'))}
+        {canSee.knowledge   && secBtn('Knowledge base', section==='knowledge',   ()=>setSection('knowledge'))}
+        {canSee.experiences && secBtn('Experiences',    section==='experiences', ()=>setSection('experiences'))}
+        {canSee.partners    && secBtn('Partners',        section==='partners',    ()=>setSection('partners'))}
+        {canSee.types       && secBtn('Partner types',   section==='types',       ()=>setSection('types'))}
+        {canSee.departments && secBtn('Departments',     section==='departments', ()=>setSection('departments'))}
+        {canSee.shifts      && secBtn('Shifts',          section==='shifts',      ()=>setSection('shifts'))}
       </div>
 
       <div className="scrollable" style={{ padding:'20px', background:'#F9FAFB' }}>
