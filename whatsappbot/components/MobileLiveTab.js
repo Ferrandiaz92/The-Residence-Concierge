@@ -54,7 +54,7 @@ function BackBtn({ onBack, label }) {
 function GuestChip({ conv }) {
   if (!conv) return null
   const g    = conv.guests || {}
-  const room = g.room || g.guest_room || '?'
+  const room = g.room || g.guest_room || ''
   return (
     <div style={{ display:'flex', alignItems:'center', gap:'8px', flex:1, minWidth:0 }}>
       <div style={{ width:'30px', height:'30px', borderRadius:'50%', background:'#1C3D2E', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'11px', color:'#C9A84C', fontWeight:'700', flexShrink:0 }}>
@@ -100,7 +100,7 @@ function ConversationsList({ conversations, selectedConvId, onOpenThread }) {
         const isActive= selectedConvId === conv.id
         const mins    = Math.floor((Date.now() - new Date(conv.last_message_at)) / 60000)
         const time    = mins === 0 ? 'now' : mins < 60 ? `${mins}m` : `${Math.floor(mins/60)}h`
-        const room    = g.room || g.guest_room || '?'
+        const room    = g.room || g.guest_room || ''
 
         return (
           <div key={conv.id}
@@ -184,7 +184,7 @@ function ChatThread({ conv, session, onBack, onReload }) {
 
   const messages = conv?.messages || []
   const g        = conv?.guests   || {}
-  const room     = g.room || g.guest_room || '?'
+  const room     = g.room || g.guest_room || ''
 
   return (
     <div style={{ display:'flex', flexDirection:'column', height:'100%', overflow:'hidden', background:'#F9FAFB' }}>
@@ -331,7 +331,7 @@ function StaffPortal({ conversations, selectedConv, onSelectConv, session, hotel
               </div>
               <div style={{ flex:1 }}>
                 <div style={{ fontSize:'13px', fontWeight:'600', color:'#111827' }}>{g.name} {g.surname}</div>
-                <div style={{ fontSize:'12px', color:'#6B7280' }}>Room {g.room||g.guest_room||'?'}</div>
+                <div style={{ fontSize:'12px', color:'#6B7280' }}>Room {g.room||g.guest_room||''}</div>
               </div>
               <button onClick={() => setShowConvPicker(s => !s)}
                 style={{ fontSize:'12px', fontWeight:'600', padding:'5px 10px', borderRadius:'8px', border:'1px solid #D1D5DB', background:'white', color:'#374151', cursor:'pointer', fontFamily:"'DM Sans', sans-serif", flexShrink:0 }}>
@@ -493,7 +493,7 @@ function IssuesPanel({ tickets, bookings }) {
             <div style={{ flex:1 }}>
               <div style={{ fontSize:'13px', fontWeight:'600', color:'#111827', marginBottom:'2px' }}>{t.description?.slice(0,70)}{t.description?.length>70?'…':''}</div>
               <div style={{ fontSize:'12px', color:'#6B7280' }}>
-                Room {t.room} · {t.department} · <span style={{ color: t.status==='escalated'?'#DC2626':'#D97706', textTransform:'capitalize' }}>{t.status}</span>
+                {t.room ? `Room ${t.room}` : ''} · {t.department} · <span style={{ color: t.status==='escalated'?'#DC2626':'#D97706', textTransform:'capitalize' }}>{t.status}</span>
               </div>
               {t.priority==='urgent' && <span style={{ display:'inline-block', marginTop:'4px', fontSize:'10px', fontWeight:'700', padding:'2px 7px', borderRadius:'4px', background:'#FEE2E2', color:'#DC2626' }}>URGENT</span>}
             </div>
@@ -512,7 +512,7 @@ function IssuesPanel({ tickets, bookings }) {
             <div key={b.id} style={{ padding:'12px 16px', background:'white', borderBottom:'1px solid #F3F4F6', display:'flex', alignItems:'center', gap:'10px' }}>
               <div style={{ width:'28px', height:'28px', borderRadius:'7px', background:tc.bg, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'11px', fontWeight:'700', color:tc.color, flexShrink:0 }}>{tc.l}</div>
               <div style={{ flex:1 }}>
-                <div style={{ fontSize:'13px', fontWeight:'600', color:'#111827' }}>{g.name} · Room {g.room||'?'}</div>
+                <div style={{ fontSize:'13px', fontWeight:'600', color:'#111827' }}>{g.name} · Room {g.room||''}</div>
                 <div style={{ fontSize:'12px', color:'#6B7280' }}>{b.partners?.name||b.type}</div>
               </div>
               <div style={{ fontSize:'13px', fontWeight:'600', color:'#374151' }}>
@@ -532,7 +532,7 @@ function IssuesPanel({ tickets, bookings }) {
             <div key={b.id} style={{ padding:'12px 16px', background:'white', borderBottom:'1px solid #F3F4F6', display:'flex', alignItems:'center', gap:'10px' }}>
               <div style={{ width:'8px', height:'8px', borderRadius:'50%', background:'#D1D5DB', flexShrink:0 }}/>
               <div style={{ flex:1 }}>
-                <div style={{ fontSize:'12px', color:'#6B7280' }}>{g.name} · Room {g.room||'?'}</div>
+                <div style={{ fontSize:'12px', color:'#6B7280' }}>{g.name} · Room {g.room||''}</div>
                 <div style={{ fontSize:'11px', color:'#9CA3AF' }}>{b.partners?.name||b.type}</div>
               </div>
               <div style={{ fontSize:'11px', color:'#9CA3AF' }}>
@@ -709,7 +709,7 @@ function DeptQueue({ hotelId, session }) {
 
               {/* Room + guest */}
               <div style={{display:'flex',gap:'6px',marginBottom:t.assigned_to_name||!isDone?'10px':'0',flexWrap:'wrap'}}>
-                {t.room && <span style={{fontSize:'11px',fontWeight:'500',padding:'3px 9px',borderRadius:'5px',background:'#F3F4F6',color:'#6B7280'}}>Room {t.room}</span>}
+                {t.room && <span style={{fontSize:'11px',fontWeight:'500',padding:'3px 9px',borderRadius:'5px',background:'#F3F4F6',color:'#6B7280'}}>{t.room ? `Room ${t.room}` : ''}</span>}
                 {t.guest_name && <span style={{fontSize:'11px',color:'#9CA3AF'}}>{t.guest_name} {t.guest_surname||''}</span>}
               </div>
 

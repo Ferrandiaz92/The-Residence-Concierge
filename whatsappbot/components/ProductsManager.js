@@ -38,7 +38,7 @@ function TierEditor({ tiers, onChange }) {
         Pricing tiers <span style={{ color:'#9CA3AF', fontWeight:'400' }}>(up to 3 — e.g. VIP / Premium / General)</span>
       </div>
       {tiers.map((tier, i) => (
-        <div key={i} style={{ display:'grid', gridTemplateColumns:'1fr 100px 90px 32px', gap:'8px', marginBottom:'8px', alignItems:'center' }}>
+        <div key={i} style={{ display:'grid', gridTemplateColumns:'1fr 80px 70px 28px', gap:'8px', marginBottom:'8px', alignItems:'center' }}>
           <input value={tier.name||''} onChange={e => updateTier(i,'name',e.target.value)} placeholder="Tier name (e.g. VIP Table)"
             style={{ padding:'8px 11px', border:'1px solid #E5E7EB', borderRadius:'8px', fontSize:'13px', fontFamily:"'DM Sans',sans-serif", outline:'none', color:'#111827' }} />
           <div style={{ position:'relative' }}>
@@ -136,7 +136,7 @@ function ProductForm({ product, partners, hotelId, onSave, onCancel }) {
         <label style={labelStyle}>Description <span style={{ color:'#9CA3AF', fontWeight:'400' }}>(shown to guest in chat)</span></label>
         <textarea value={form.description||''} onChange={e => set('description', e.target.value)}
           placeholder="e.g. An unforgettable night at the Palau Sant Jordi arena, 10 minutes from the hotel."
-          rows={2}
+          rows={4}
           style={{ width:'100%', padding:'8px 11px', border:'1px solid #E5E7EB', borderRadius:'8px', fontSize:'13px', fontFamily:"'DM Sans',sans-serif", outline:'none', color:'#111827', resize:'none', lineHeight:'1.5' }} />
       </div>
 
@@ -157,13 +157,15 @@ function ProductForm({ product, partners, hotelId, onSave, onCancel }) {
       <TierEditor tiers={form.tiers} onChange={v => set('tiers', v)} />
 
       {/* Commission */}
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'12px' }}>
-        <div>
-          <label style={labelStyle}>Commission rate (%)</label>
-          <input type="number" value={form.commissionRate} onChange={e => set('commissionRate', parseFloat(e.target.value)||0)}
-            min="0" max="100" step="0.5"
-            style={{ width:'100%', padding:'8px 11px', border:'1px solid #E5E7EB', borderRadius:'8px', fontSize:'13px', fontFamily:"'DM Sans',sans-serif", outline:'none', color:'#111827' }} />
-        </div>
+      {/* Commission rate - own row */}
+      <div>
+        <label style={labelStyle}>Commission rate (%)</label>
+        <input type="number" value={form.commissionRate} onChange={e => set('commissionRate', parseFloat(e.target.value)||0)}
+          min="0" max="100" step="0.5"
+          style={{ width:'100%', padding:'8px 11px', border:'1px solid #E5E7EB', borderRadius:'8px', fontSize:'13px', fontFamily:"'DM Sans',sans-serif", outline:'none', color:'#111827' }} />
+      </div>
+      {/* Dates - inline */}
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px' }}>
         <div>
           <label style={labelStyle}>Available from</label>
           <input type="date" value={form.availableFrom||''} onChange={e => set('availableFrom', e.target.value)}
