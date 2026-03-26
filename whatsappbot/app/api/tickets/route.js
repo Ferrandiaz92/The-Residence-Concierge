@@ -17,11 +17,11 @@ import {
   canAccessPII,
   logAudit,
   ROLES,
-}                              from '../../../lib/gdpr.js'
+}                              from '../../../lib/gdpr'
 import {
   notifyDeptStaff,
   notifyReceptionResolved,
-}                              from '../../../src/lib/push.js'
+}                              from '../../../src/lib/push'
 
 function getSupabase() {
   return createClient(
