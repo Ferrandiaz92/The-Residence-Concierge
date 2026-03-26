@@ -1,9 +1,23 @@
 // app/api/qa/route.js
-// Returns conversations for QA review with filters
-// Manager only
+// ============================================================
+// Bot Q&A management
+//
+// GET    → manager + communications (read)
+// POST   → manager + communications (create)
+// PATCH  → manager + communications (update)
+// DELETE → manager only
+//
+// All edits are audit-logged (GDPR Article 5(2) accountability)
+// ============================================================
 
 import { createClient } from '@supabase/supabase-js'
-import { cookies } from 'next/headers'
+import { cookies }      from 'next/headers'
+import {
+  requireRole,
+  logAudit,
+  canEditBot,
+  ROLES,
+}                       from '../../../lib/gdpr.js'
 
 function getSupabase() {
   return createClient(
@@ -13,107 +27,156 @@ function getSupabase() {
   )
 }
 
-export async function GET(request) {
+function getSession() {
   try {
-    const { searchParams } = new URL(request.url)
-    const hotelId   = searchParams.get('hotelId')
-    const filter    = searchParams.get('filter') || 'all'
-    const language  = searchParams.get('language') || 'all'
-    const guestType = searchParams.get('guestType') || 'all'
-    const search    = searchParams.get('search') || ''
-    const month     = searchParams.get('month') || ''
-    const page      = parseInt(searchParams.get('page') || '1')
-    const limit     = 20
+    const c = cookies().get('session')
+    return c ? JSON.parse(c.value) : null
+  } catch { return null }
+}
 
-    if (!hotelId) return Response.json({ error: 'hotelId required' }, { status: 400 })
+// ── GET — read Q&A entries ────────────────────────────────────
+export async function GET(request) {
+  const session = getSession()
+  const guard   = requireRole(session, ROLES.MANAGER, ROLES.COMMUNICATIONS)
+  if (guard) return guard
+
+  const { searchParams } = new URL(request.url)
+  const hotelId = searchParams.get('hotelId') || session.hotelId
+
+  const supabase = getSupabase()
+  const { data, error } = await supabase
+    .from('qa_entries')
+    .select('*')
+    .eq('hotel_id', hotelId)
+    .order('created_at', { ascending: false })
+
+  if (error) return Response.json({ error: error.message }, { status: 500 })
+  return Response.json({ qa: data || [] })
+}
+
+// ── POST — create Q&A entry ───────────────────────────────────
+export async function POST(request) {
+  const session = getSession()
+  const guard   = requireRole(session, ROLES.MANAGER, ROLES.COMMUNICATIONS)
+  if (guard) return guard
+
+  try {
+    const { hotelId, question, answer, category, tags, active = true } = await request.json()
+
+    if (!question || !answer) {
+      return Response.json({ error: 'question and answer are required' }, { status: 400 })
+    }
 
     const supabase = getSupabase()
+    const { data, error } = await supabase
+      .from('qa_entries')
+      .insert({
+        hotel_id:   hotelId || session.hotelId,
+        question,
+        answer,
+        category:   category || 'general',
+        tags:       tags     || [],
+        active,
+        created_by: `${session.role}:${session.name}`,
+      })
+      .select()
+      .single()
 
-    // Base query
-    let query = supabase
-      .from('conversations')
-      .select(`
-        id, status, created_at, last_message_at, messages,
-        guests(id, room, language, check_in, check_out, guest_type, name, surname),
-        qa_flags(id, flag_type, resolved, created_at)
-      `)
-      .eq('hotel_id', hotelId)
-      .order('last_message_at', { ascending: false })
-      .range((page - 1) * limit, page * limit - 1)
+    if (error) return Response.json({ error: error.message }, { status: 500 })
 
-    // Filters
-    if (filter === 'escalated')  query = query.eq('status', 'escalated')
-    if (filter === 'flagged')    query = query.not('qa_flags', 'is', null)
-    if (language === 'other') {
-      // 'other' means any language not in the 17 supported ones
-      const known = ['en','ru','he','de','fr','zh','pl','sv','fi','uk','ar','nl','el','es','ca','it','pt']
-      query = query.not('guests.language', 'in', `(${known.join(',')})`)
-    } else if (language !== 'all') {
-      query = query.eq('guests.language', language)
-    }
-    if (guestType !== 'all')     query = query.eq('guests.guest_type', guestType)
-
-    // Month filter
-    if (month) {
-      const start = `${month}-01T00:00:00`
-      const end   = new Date(new Date(start).getFullYear(), new Date(start).getMonth() + 1, 0)
-        .toISOString().split('T')[0] + 'T23:59:59'
-      query = query.gte('created_at', start).lte('created_at', end)
-    }
-
-    const { data: conversations, error } = await query
-    if (error) throw error
-
-    // Filter by search keyword in messages
-    let filtered = conversations || []
-    if (search) {
-      const searchLower = search.toLowerCase()
-      filtered = filtered.filter(conv =>
-        (conv.messages || []).some(m =>
-          m.content?.toLowerCase().includes(searchLower)
-        )
-      )
-    }
-
-    // Get QA summary stats
-    const { data: stats } = await supabase
-      .from('conversations')
-      .select('id, status, messages')
-      .eq('hotel_id', hotelId)
-
-    const totalConvs    = stats?.length || 0
-    const escalatedConvs = stats?.filter(c => c.status === 'escalated').length || 0
-    const totalMessages  = stats?.reduce((s, c) => s + (c.messages?.length || 0), 0) || 0
-    const botMessages    = stats?.reduce((s, c) =>
-      s + (c.messages || []).filter(m => m.role === 'assistant').length, 0) || 0
-
-    const { data: flagData } = await supabase
-      .from('qa_flags')
-      .select('id, flag_type, resolved')
-      .eq('hotel_id', hotelId)
-
-    const totalFlags    = flagData?.length || 0
-    const unresolvedFlags = flagData?.filter(f => !f.resolved).length || 0
-
-    const flagsByType = {}
-    flagData?.forEach(f => {
-      flagsByType[f.flag_type] = (flagsByType[f.flag_type] || 0) + 1
+    await logAudit({
+      hotelId:      session.hotelId,
+      session,
+      action:       'qa_edit',
+      resourceType: 'qa',
+      resourceId:   data.id,
+      detail:       { operation: 'create', question: question.slice(0, 100) },
     })
 
-    return Response.json({
-      conversations: filtered,
-      stats: {
-        totalConvs,
-        escalatedConvs,
-        escalationRate: totalConvs > 0 ? Math.round((escalatedConvs / totalConvs) * 100) : 0,
-        totalMessages,
-        botMessages,
-        avgMessagesPerConv: totalConvs > 0 ? Math.round(totalMessages / totalConvs) : 0,
-        totalFlags,
-        unresolvedFlags,
-        flagsByType,
-      }
+    return Response.json({ status: 'created', qa: data })
+
+  } catch (err) {
+    return Response.json({ error: err.message }, { status: 500 })
+  }
+}
+
+// ── PATCH — update Q&A entry ──────────────────────────────────
+export async function PATCH(request) {
+  const session = getSession()
+  const guard   = requireRole(session, ROLES.MANAGER, ROLES.COMMUNICATIONS)
+  if (guard) return guard
+
+  try {
+    const { id, question, answer, category, tags, active } = await request.json()
+    if (!id) return Response.json({ error: 'id is required' }, { status: 400 })
+
+    const updates = {}
+    if (question !== undefined) updates.question = question
+    if (answer   !== undefined) updates.answer   = answer
+    if (category !== undefined) updates.category = category
+    if (tags     !== undefined) updates.tags     = tags
+    if (active   !== undefined) updates.active   = active
+    updates.updated_by = `${session.role}:${session.name}`
+    updates.updated_at = new Date().toISOString()
+
+    const supabase = getSupabase()
+    const { data, error } = await supabase
+      .from('qa_entries')
+      .update(updates)
+      .eq('id', id)
+      .eq('hotel_id', session.hotelId)   // hotel isolation
+      .select()
+      .single()
+
+    if (error) return Response.json({ error: error.message }, { status: 500 })
+
+    await logAudit({
+      hotelId:      session.hotelId,
+      session,
+      action:       'qa_edit',
+      resourceType: 'qa',
+      resourceId:   id,
+      detail:       { operation: 'update', fields: Object.keys(updates) },
     })
+
+    return Response.json({ status: 'updated', qa: data })
+
+  } catch (err) {
+    return Response.json({ error: err.message }, { status: 500 })
+  }
+}
+
+// ── DELETE — manager only ─────────────────────────────────────
+export async function DELETE(request) {
+  const session = getSession()
+  const guard   = requireRole(session, ROLES.MANAGER)
+  if (guard) return guard
+
+  try {
+    const { searchParams } = new URL(request.url)
+    const id = searchParams.get('id')
+    if (!id) return Response.json({ error: 'id is required' }, { status: 400 })
+
+    const supabase = getSupabase()
+    const { error } = await supabase
+      .from('qa_entries')
+      .delete()
+      .eq('id', id)
+      .eq('hotel_id', session.hotelId)
+
+    if (error) return Response.json({ error: error.message }, { status: 500 })
+
+    await logAudit({
+      hotelId:      session.hotelId,
+      session,
+      action:       'qa_edit',
+      resourceType: 'qa',
+      resourceId:   id,
+      detail:       { operation: 'delete' },
+    })
+
+    return Response.json({ status: 'deleted' })
+
   } catch (err) {
     return Response.json({ error: err.message }, { status: 500 })
   }
