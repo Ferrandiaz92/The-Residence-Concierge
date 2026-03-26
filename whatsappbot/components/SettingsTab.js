@@ -146,7 +146,7 @@ export default function SettingsTab({ hotelId }) {
 
   const secBtn = (label, isActive, onClick) => (
     <button onClick={onClick}
-      style={{ padding:'9px 20px', fontSize:'13px', fontWeight:'600', color:isActive?'var(--green-800)':'#9CA3AF', background:'none', border:'none', borderBottom:isActive?'2px solid var(--green-800)':'2px solid transparent', cursor:'pointer', fontFamily:'var(--font)' }}>
+      style={{ padding:'9px 16px', fontSize:'13px', fontWeight:'600', color:isActive?'var(--green-800)':'#9CA3AF', background:'none', border:'none', borderBottom:isActive?'2px solid var(--green-800)':'2px solid transparent', cursor:'pointer', fontFamily:'var(--font)', whiteSpace:'nowrap', flexShrink:0 }}>
       {label}
     </button>
   )
@@ -154,10 +154,10 @@ export default function SettingsTab({ hotelId }) {
   return (
     <div style={{ height:'100%', overflow:'hidden', display:'flex', flexDirection:'column', fontFamily:'var(--font)' }}>
 
-      {/* Section tabs */}
-      <div style={{ display:'flex', background:'white', borderBottom:'0.5px solid var(--border)', flexShrink:0 }}>
-        {secBtn('Partners', section==='partners', ()=>setSection('partners'))}
+      {/* Section tabs — wraps to 2 lines on mobile */}
+      <div style={{ display:'flex', flexWrap:'wrap', background:'white', borderBottom:'0.5px solid var(--border)', flexShrink:0 }}>
         {secBtn('Knowledge base', section==='knowledge', ()=>setSection('knowledge'))}
+        {secBtn('Partners', section==='partners', ()=>setSection('partners'))}
         {secBtn('Partner types', section==='types', ()=>setSection('types'))}
         {secBtn('Departments', section==='departments', ()=>setSection('departments'))}
         {secBtn('Shifts', section==='shifts', ()=>setSection('shifts'))}
