@@ -15,8 +15,8 @@ import PushPermission  from '../../components/PushPermission'
 import '../../dashboard.css'
 
 // ── Role helpers ─────────────────────────────────────────────
-const DEPT_ROLES = ['maintenance','housekeeping','concierge','fnb','security','valet','frontdesk']
-const isManager  = r => ['manager','admin'].includes(r)
+const DEPT_ROLES = ['maintenance','housekeeping','concierge','fnb','security','valet','frontdesk','employee']
+const isManager  = r => ['manager','admin','supervisor','communications'].includes(r)
 const isReception= r => r === 'receptionist'
 const isDept     = r => DEPT_ROLES.includes(r)
 
