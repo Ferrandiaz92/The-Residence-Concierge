@@ -17,7 +17,7 @@ import {
   canAccessPII,
   logAudit,
   ROLES,
-}                              from '../../../src/lib/gdpr'
+}                              from '../../../lib/gdpr.js'
 import {
   notifyDeptStaff,
   notifyReceptionResolved,

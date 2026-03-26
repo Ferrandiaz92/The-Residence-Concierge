@@ -17,7 +17,7 @@ import {
   logAudit,
   canAccessPII,
   ROLES,
-}                               from '../../../src/lib/gdpr'
+}                               from '../../../lib/gdpr.js'
 
 function getSupabase() {
   return createClient(
