@@ -16,9 +16,11 @@ import '../../dashboard.css'
 
 // ── Role helpers ─────────────────────────────────────────────
 const DEPT_ROLES = ['maintenance','housekeeping','concierge','fnb','security','valet','frontdesk','employee']
-const isManager  = r => ['manager','admin','supervisor','communications'].includes(r)
+const isManager  = r => ['manager','admin'].includes(r)
 const isReception= r => r === 'receptionist'
-const isDept     = r => DEPT_ROLES.includes(r)
+const isDept          = r => DEPT_ROLES.includes(r)
+const isSupervisor    = r => r === 'supervisor'
+const isCommunications= r => r === 'communications'
 
 // Desktop tabs (unchanged)
 function getDesktopTabs(role) {
@@ -29,6 +31,12 @@ function getDesktopTabs(role) {
     { key:'analytics', label:'Analytics',       roles:['manager','admin'] },
     { key:'scheduled', label:'Messaging',       roles:['manager','admin'] },
     { key:'settings',  label:'Concierge Setup', roles:['manager','admin'] },
+    { key:'live',      label:'Conversations',   roles:['supervisor'] },
+    { key:'analytics', label:'Analytics',       roles:['supervisor'] },
+    { key:'settings',  label:'Shifts',          roles:['supervisor'] },
+    { key:'settings',  label:'Concierge Setup', roles:['communications'] },
+    { key:'scheduled', label:'Messaging',       roles:['communications'] },
+    { key:'analytics', label:'Analytics',       roles:['communications'] },
   ].filter(t => t.roles.includes(role))
 }
 
@@ -37,6 +45,15 @@ function getDesktopTabs(role) {
 // Reception:     Live, Guests (no Visitors)
 // Dept:          Live only (full screen queue, no bottom nav)
 function getMobileTabs(role) {
+  if (isSupervisor(role)) return [
+    { key:'live',     label:'Live',      icon:IconLive     },
+    { key:'settings', label:'Shifts',    icon:IconSettings },
+  ]
+  if (isCommunications(role)) return [
+    { key:'live',     label:'Comms',     icon:IconLive     },
+    { key:'scheduled',label:'Messaging', icon:IconSettings },
+    { key:'analytics',label:'Analytics', icon:IconSettings },
+  ]
   if (isManager(role)) return [
     { key:'live',     label:'Live',   icon:IconLive     },
     { key:'guests',   label:'Guests', icon:IconGuests   },
