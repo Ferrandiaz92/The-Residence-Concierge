@@ -13,6 +13,7 @@ import { getFacilities, formatFacilitiesForPrompt, parseFacilityRequest } from '
 import { handleFeedbackReply } from '../lib/scheduled.js'
 import { loadGuestMemory, formatMemoryForPrompt, updateGuestPreferences } from '../lib/memory.js'
 import { notifyReceptionEscalation, notifyReceptionMessage } from '../lib/push.js'
+import { getAvailableProducts, formatProductsForPrompt, parseProductOrder, createGuestOrder } from '../lib/stripe.js'
 
 export async function handleInboundWhatsApp(rawBody) {
   const { from, to, message, profileName } = parseIncomingMessage(rawBody)
@@ -83,6 +84,11 @@ export async function handleInboundWhatsApp(rawBody) {
   // Add guest memory if returning guest
   const memoryText = formatMemoryForPrompt(memory, guest.language || 'en')
   if (memoryText) systemPrompt += memoryText
+
+  // Add today's available products (experiences, events, etc.)
+  const products    = await getAvailableProducts(hotel.id)
+  const productText = formatProductsForPrompt(products, guest.language || 'en')
+  if (productText) systemPrompt += productText
 
   // 9. Detect upsell context
   const lastBotMsg = [...(conv.messages||[])].reverse().find(m => m.role === 'assistant')
@@ -184,6 +190,12 @@ export async function handleInboundWhatsApp(rawBody) {
       await updateGuestPreferences(guest.id, booking.type, partner?.name)
     }
   }
+
+  // 15. Product order check — send payment link if bot triggered an order
+  const { hasOrder, order: productOrder } = parseProductOrder(aiResponse)
+  if (hasOrder && productOrder) {
+    await processProductOrder(productOrder, hotel, guest, conv.id, products, from)
+  }
 }
 
 async function createNotification(hotelId, { type, title, body, link_type, link_id }) {
@@ -227,4 +239,55 @@ async function processBooking(booking, hotel, guest, partners, source = 'guest_r
     const msg = await sendWhatsApp(partner.phone, formatPartnerAlert(booking, guest, hotel))
     await supabase.from('bookings').update({ partner_alert_sid: msg.sid }).eq('id', saved.id)
   } catch(e) { console.error('Partner alert failed:', e.message) }
+}
+
+async function processProductOrder(orderData, hotel, guest, convId, products, guestPhone) {
+  try {
+    // Find the product
+    const product = products.find(p => p.id === orderData.product_id)
+    if (!product) { console.error('Product not found:', orderData.product_id); return }
+
+    // Find the tier
+    const tier = (product.tiers || []).find(t => t.name === orderData.tier_name)
+    if (!tier) { console.error('Tier not found:', orderData.tier_name); return }
+
+    const quantity = orderData.quantity || 1
+
+    // Create order + Stripe payment link
+    const { order, paymentUrl } = await createGuestOrder({
+      hotelId:   hotel.id,
+      guestId:   guest.id,
+      convId,
+      product,
+      tier,
+      quantity,
+      hotel,
+      guest,
+    })
+
+    // Send payment link to guest via WhatsApp
+    const guestName  = guest.name || 'there'
+    const total      = (tier.price * quantity).toFixed(0)
+    const tierLabel  = quantity > 1 ? `${quantity}× ${tier.name}` : tier.name
+
+    const paymentMsg = [
+      `💳 *${product.name} — ${tierLabel}*`,
+      `Total: €${total}`,
+      ``,
+      `Your secure payment link:`,
+      paymentUrl,
+      ``,
+      `⏱ Valid for 24 hours. Once paid I'll confirm your booking immediately.`,
+    ].join('\n')
+
+    await sendWhatsApp(guestPhone, paymentMsg)
+
+    // Log in conversation
+    await appendMessage(convId, 'assistant', paymentMsg, { sent_by: 'payment_bot' })
+
+    console.log(`Payment link sent for order ${order.id}: €${total}`)
+  } catch(e) {
+    console.error('processProductOrder error:', e.message)
+    // Don't crash the main flow — payment link failure is non-fatal
+  }
 }
