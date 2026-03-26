@@ -8,7 +8,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { cookies }      from 'next/headers'
 import bcrypt           from 'bcryptjs'
-import { logAudit }     from '../../../lib/gdpr'
+import { logAudit }     from '../../../src/lib/gdpr'
 
 function getSupabase() {
   return createClient(

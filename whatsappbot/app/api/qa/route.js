@@ -17,7 +17,7 @@ import {
   logAudit,
   canEditBot,
   ROLES,
-}                       from '../../../lib/gdpr'
+}                       from '../../../src/lib/gdpr'
 
 function getSupabase() {
   return createClient(
