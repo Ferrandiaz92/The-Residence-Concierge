@@ -32,8 +32,7 @@ function getDesktopTabs(role) {
     { key:'scheduled', label:'Messaging',       roles:['manager','admin'] },
     { key:'settings',  label:'Concierge Setup', roles:['manager','admin'] },
     { key:'live',      label:'Conversations',   roles:['supervisor'] },
-    { key:'analytics', label:'Analytics',       roles:['supervisor'] },
-    { key:'settings',  label:'Shifts',          roles:['supervisor'] },
+    { key:'settings',  label:'Concierge Setup', roles:['supervisor'] },
     { key:'settings',  label:'Concierge Setup', roles:['communications'] },
     { key:'scheduled', label:'Messaging',       roles:['communications'] },
     { key:'analytics', label:'Analytics',       roles:['communications'] },
@@ -46,13 +45,12 @@ function getDesktopTabs(role) {
 // Dept:          Live only (full screen queue, no bottom nav)
 function getMobileTabs(role) {
   if (isSupervisor(role)) return [
-    { key:'live',     label:'Live',   icon:IconLive     },
-    { key:'settings', label:'Shifts', icon:IconSettings },
+    { key:'live',     label:'Live',  icon:IconLive     },
+    { key:'settings', label:'Setup', icon:IconSettings },
   ]
   if (isCommunications(role)) return [
     { key:'live',     label:'Comms',     icon:IconLive     },
     { key:'scheduled',label:'Messaging', icon:IconSettings },
-    { key:'analytics',label:'Analytics', icon:IconSettings },
   ]
   if (isManager(role)) return [
     { key:'live',     label:'Live',   icon:IconLive     },
