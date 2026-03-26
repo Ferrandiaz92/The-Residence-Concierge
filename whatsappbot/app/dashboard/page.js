@@ -389,7 +389,19 @@ export default function DashboardPage() {
   useEffect(() => {
     fetch('/api/auth/session')
       .then(r => r.json())
-      .then(d => { if (d.session) setSession(d.session); else window.location.href = '/login' })
+      .then(d => {
+        if (d.session) {
+          setSession(d.session)
+          // Set correct default tab based on role
+          const role = d.session.role
+          if (role === 'communications') setActiveTab('scheduled')
+          else if (role === 'supervisor') setActiveTab('live')
+          else if (role === 'employee')   setActiveTab('live')
+          // manager, receptionist stay on 'live' (already default)
+        } else {
+          window.location.href = '/login'
+        }
+      })
       .catch(() => { window.location.href = '/login' })
   }, [])
 
