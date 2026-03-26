@@ -118,7 +118,6 @@ function ProductForm({ product, partners, hotelId, onSave, onCancel }) {
     availableFrom:  product?.available_from  || '',
     availableTo:    product?.available_to    || '',
     availableTimes: product?.available_times || '',
-    maxPerGuest:    product?.max_per_guest   || 10,
   })
   const [saving, setSaving] = useState(false)
   const [error,  setError]  = useState('')
@@ -136,7 +135,7 @@ function ProductForm({ product, partners, hotelId, onSave, onCancel }) {
       const method = isEdit ? 'PATCH' : 'POST'
       const body   = isEdit
         ? { id: product.id, ...form, tiers: validTiers }
-        : { hotelId, ...form, tiers: validTiers }
+        : { hotelId, ...form, tiers: validTiers, maxPerGuest: undefined }
       const res    = await fetch('/api/products', { method, headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) })
       const data   = await res.json()
       if (data.error) { setError(data.error); return }
@@ -203,25 +202,14 @@ function ProductForm({ product, partners, hotelId, onSave, onCancel }) {
       {/* ── PRICING ── */}
       <TierEditor tiers={form.tiers} onChange={v => set('tiers', v)} />
 
-      <div style={{ display:'flex', gap:'10px', alignItems:'flex-end' }}>
-        <div style={{ ...S.section, flex:1 }}>
-          <label style={S.label}>Our commission (%)</label>
-          <input
-            type="number" value={form.commissionRate}
-            onChange={e => set('commissionRate', parseFloat(e.target.value)||0)}
-            min="0" max="100" step="0.5"
-            style={S.input}
-          />
-        </div>
-        <div style={{ ...S.section, flex:1 }}>
-          <label style={S.label}>Max per guest</label>
-          <input
-            type="number" value={form.maxPerGuest}
-            onChange={e => set('maxPerGuest', parseInt(e.target.value)||10)}
-            min="1" max="100"
-            style={S.input}
-          />
-        </div>
+      <div style={S.section}>
+        <label style={S.label}>Our commission (%)</label>
+        <input
+          type="number" value={form.commissionRate}
+          onChange={e => set('commissionRate', parseFloat(e.target.value)||0)}
+          min="0" max="100" step="0.5"
+          style={{ ...S.input, maxWidth:'160px' }}
+        />
       </div>
 
       <div style={S.divider}/>
