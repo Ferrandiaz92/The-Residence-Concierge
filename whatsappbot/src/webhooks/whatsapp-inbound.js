@@ -243,26 +243,33 @@ async function processBooking(booking, hotel, guest, partners, source = 'guest_r
 }
 
 async function processProductOrder(orderData, hotel, guest, convId, products, guestPhone) {
+  console.log('processProductOrder called:', JSON.stringify(orderData))
+
+  // Find the product
+  const product = products.find(p => p.id === orderData.product_id)
+  if (!product) {
+    console.error('processProductOrder: product not found:', orderData.product_id)
+    console.error('Available product IDs:', products.map(p => p.id))
+    return
+  }
+
+  // Find the tier — case-insensitive
+  const tier = (product.tiers || []).find(t =>
+    t.name.toLowerCase() === orderData.tier_name.toLowerCase()
+  )
+  if (!tier) {
+    console.error('processProductOrder: tier not found:', orderData.tier_name)
+    console.error('Available tiers:', (product.tiers||[]).map(t => t.name))
+    return
+  }
+
+  const quantity = orderData.quantity || 1
+  console.log(`Creating order: ${product.name} / ${tier.name} x${quantity} @ €${tier.price}`)
+
   try {
-    // Find the product
-    const product = products.find(p => p.id === orderData.product_id)
-    if (!product) { console.error('Product not found:', orderData.product_id); return }
-
-    // Find the tier — case-insensitive match
-    const tier = (product.tiers || []).find(t =>
-      t.name.toLowerCase() === orderData.tier_name.toLowerCase()
-    )
-    if (!tier) {
-      console.error('Tier not found:', orderData.tier_name, 'available:', (product.tiers||[]).map(t=>t.name))
-      return
-    }
-
-    const quantity = orderData.quantity || 1
-
-    // Create order + Stripe payment link
     const { order, paymentUrl } = await createGuestOrder({
-      hotelId:   hotel.id,
-      guestId:   guest.id,
+      hotelId: hotel.id,
+      guestId: guest.id,
       convId,
       product,
       tier,
@@ -271,11 +278,10 @@ async function processProductOrder(orderData, hotel, guest, convId, products, gu
       guest,
     })
 
-    // Send payment link to guest via WhatsApp
-    const guestName  = guest.name || 'there'
+    console.log('Order created:', order.id, 'Payment URL:', paymentUrl)
+
     const total      = (tier.price * quantity).toFixed(0)
     const tierLabel  = quantity > 1 ? `${quantity}× ${tier.name}` : tier.name
-
     const paymentMsg = [
       `💳 *${product.name} — ${tierLabel}*`,
       `Total: €${total}`,
@@ -283,16 +289,24 @@ async function processProductOrder(orderData, hotel, guest, convId, products, gu
       `Your secure payment link:`,
       paymentUrl,
       ``,
-      `⏱ Valid for 24 hours. Once paid I'll confirm your booking immediately.`,
+      `⏱ Valid for 24 hours. Once paid I'll send your confirmation immediately.`,
     ].join('\n')
 
     await sendWhatsApp(guestPhone, paymentMsg)
-
-    // Log in conversation
     await appendMessage(convId, 'assistant', paymentMsg, { sent_by: 'payment_bot' })
+    console.log(`✅ Payment link sent for order ${order.id}: €${total}`)
 
-    console.log(`Payment link sent for order ${order.id}: €${total}`)
   } catch(e) {
+    console.error('processProductOrder FAILED:', e.message)
+    console.error(e.stack)
+    // Send a fallback message so guest isn't left hanging
+    try {
+      await sendWhatsApp(guestPhone,
+        `I'm arranging your payment link — please give me just a moment or ask reception to assist. 🙏`
+      )
+    } catch {}
+  }
+}
     console.error('processProductOrder error:', e.message)
     // Don't crash the main flow — payment link failure is non-fatal
   }
