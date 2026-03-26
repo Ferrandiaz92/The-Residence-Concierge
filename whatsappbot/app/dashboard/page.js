@@ -99,7 +99,7 @@ function TabContent({ tab, hotelId, session, selectedGuest, onSelectGuest, isMob
     case 'visitors':  return <VisitorsTab  hotelId={hotelId} />
     case 'analytics': return <AnalyticsTab hotelId={hotelId} />
     case 'scheduled': return <ScheduledTab hotelId={hotelId} />
-    case 'settings':  return <SettingsTab  hotelId={hotelId} />
+    case 'settings':  return <SettingsTab  hotelId={hotelId} session={session} />
     default:          return null
   }
 }
