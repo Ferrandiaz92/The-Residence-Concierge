@@ -97,12 +97,18 @@ export default function NotificationBell({ onNavigate }) {
       {/* Dropdown */}
       {open && (
         <div style={{
-          position: 'absolute', top: '36px', right: 0,
-          width: '320px', background: 'white',
+          position: 'fixed',
+          top: '90px',
+          right: '12px',
+          left: '12px',
+          width: 'auto',
+          maxWidth: '360px',
+          marginLeft: 'auto',
+          background: 'white',
           borderRadius: 'var(--radius-lg)',
           border: '0.5px solid var(--border-md)',
-          boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
-          zIndex: 200, overflow: 'hidden',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
+          zIndex: 9999, overflow: 'hidden',
           fontFamily: 'var(--font)',
         }}>
           {/* Header */}

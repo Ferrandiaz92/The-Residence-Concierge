@@ -28,7 +28,7 @@ const S = {
     width:'100%', padding:'10px 12px', border:'1px solid #E5E7EB',
     borderRadius:'9px', fontSize:'14px', fontFamily:"'DM Sans',sans-serif",
     outline:'none', color:'#111827', resize:'vertical', lineHeight:'1.6',
-    minHeight:'80px', boxSizing:'border-box',
+    minHeight:'120px', boxSizing:'border-box',
   },
   select: {
     width:'100%', padding:'10px 12px', border:'1px solid #E5E7EB',
@@ -69,8 +69,8 @@ function TierEditor({ tiers, onChange }) {
           <input
             value={tier.name||''}
             onChange={e => update(i, 'name', e.target.value)}
-            placeholder={tiers.length === 1 ? 'e.g. Per person, Per group…' : `Option ${i+1} name`}
-            style={{ ...S.input, flex:2, padding:'10px 12px' }}
+            placeholder={tiers.length === 1 ? 'Per person / group…' : `Option ${i+1}`}
+            style={{ ...S.input, flex:2, padding:'10px 10px', fontSize:'13px' }}
           />
           {/* Price */}
           <div style={{ position:'relative', flex:1 }}>
@@ -82,7 +82,7 @@ function TierEditor({ tiers, onChange }) {
               placeholder="0"
               min="0"
               step="0.50"
-              style={{ ...S.input, paddingLeft:'26px' }}
+              style={{ ...S.input, paddingLeft:'26px', fontSize:'13px' }}
             />
           </div>
           {/* Remove */}
