@@ -1,5 +1,5 @@
 {
-  "name": "residence-concierge", 
+  "name": "residence-concierge",
   "version": "0.1.5",
   "description": "The Residence Concierge — Intelligent Hotel Concierge Platform",
   "private": true,
@@ -18,7 +18,8 @@
     "react-dom": "^18.3.0",
     "stripe": "^15.12.0",
     "twilio": "^5.2.0",
-    "web-push": "^3.6.7"
+    "web-push": "^3.6.7",
+    "bcryptjs": "^3.0.3"
   },
   "devDependencies": {
     "eslint": "^8.57.0",
