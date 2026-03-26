@@ -33,9 +33,8 @@ function getDesktopTabs(role) {
     { key:'settings',  label:'Concierge Setup', roles:['manager','admin'] },
     { key:'live',      label:'Conversations',   roles:['supervisor'] },
     { key:'settings',  label:'Concierge Setup', roles:['supervisor'] },
-    { key:'settings',  label:'Concierge Setup', roles:['communications'] },
     { key:'scheduled', label:'Messaging',       roles:['communications'] },
-    { key:'analytics', label:'Analytics',       roles:['communications'] },
+    { key:'settings',  label:'Concierge Setup', roles:['communications'] },
   ].filter(t => t.roles.includes(role))
 }
 
@@ -49,8 +48,7 @@ function getMobileTabs(role) {
     { key:'settings', label:'Setup', icon:IconSettings },
   ]
   if (isCommunications(role)) return [
-    { key:'live',     label:'Comms',     icon:IconLive     },
-    { key:'scheduled',label:'Messaging', icon:IconSettings },
+    { key:'scheduled', label:'Messaging', icon:IconSettings },
   ]
   if (isManager(role)) return [
     { key:'live',     label:'Live',   icon:IconLive     },
