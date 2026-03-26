@@ -17,10 +17,10 @@ import '../../dashboard.css'
 // ── Role helpers ─────────────────────────────────────────────
 const DEPT_ROLES = ['maintenance','housekeeping','concierge','fnb','security','valet','frontdesk','employee']
 const isManager  = r => ['manager','admin'].includes(r)
-const isReception= r => r === 'receptionist'
-const isDept          = r => DEPT_ROLES.includes(r)
 const isSupervisor    = r => r === 'supervisor'
 const isCommunications= r => r === 'communications'
+const isReception= r => r === 'receptionist'
+const isDept     = r => DEPT_ROLES.includes(r)
 
 // Desktop tabs (unchanged)
 function getDesktopTabs(role) {
@@ -46,8 +46,8 @@ function getDesktopTabs(role) {
 // Dept:          Live only (full screen queue, no bottom nav)
 function getMobileTabs(role) {
   if (isSupervisor(role)) return [
-    { key:'live',     label:'Live',      icon:IconLive     },
-    { key:'settings', label:'Shifts',    icon:IconSettings },
+    { key:'live',     label:'Live',   icon:IconLive     },
+    { key:'settings', label:'Shifts', icon:IconSettings },
   ]
   if (isCommunications(role)) return [
     { key:'live',     label:'Comms',     icon:IconLive     },
@@ -275,13 +275,13 @@ function MobileTopbar({ session, badge, handleLogout, tabLabel, showSearch, onSe
       </div>
 
       {/* Role + name strip */}
-      <div style={{ height:'28px', display:'flex', alignItems:'center', padding:'0 16px', gap:'8px', background:'#163228', borderBottom:'1px solid #2A5040' }}>
-        <span style={{ fontSize:'10px', fontWeight:'700', padding:'2px 9px', borderRadius:'20px', background:badge.bg, color:badge.color, textTransform:'uppercase', letterSpacing:'0.05em' }}>
+      <div style={{ height:'28px', display:'flex', alignItems:'center', padding:'0 12px', gap:'6px', background:'#163228', borderBottom:'1px solid #2A5040', overflow:'hidden' }}>
+        <span style={{ fontSize:'10px', fontWeight:'700', padding:'2px 8px', borderRadius:'20px', background:badge.bg, color:badge.color, textTransform:'uppercase', letterSpacing:'0.04em', flexShrink:0 }}>
           {badge.label}
         </span>
-        <span style={{ fontSize:'11px', color:'rgba(255,255,255,0.35)' }}>{session?.name}</span>
-        <span style={{ fontSize:'11px', color:'rgba(255,255,255,0.2)' }}>·</span>
-        <span style={{ fontSize:'11px', color:'rgba(255,255,255,0.35)' }}>{session?.hotelName}</span>
+        <span style={{ fontSize:'11px', color:'rgba(255,255,255,0.35)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:'120px' }}>{session?.name}</span>
+        <span style={{ fontSize:'11px', color:'rgba(255,255,255,0.2)', flexShrink:0 }}>·</span>
+        <span style={{ fontSize:'11px', color:'rgba(255,255,255,0.35)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1 }}>{session?.hotelName}</span>
       </div>
 
       {/* Search results */}
