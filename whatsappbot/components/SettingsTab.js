@@ -6,7 +6,8 @@
 // - Shifts management section
 'use client'
 import { useState, useEffect } from 'react'
-import ShiftsManager from './ShiftsManager'
+import ShiftsManager   from './ShiftsManager'
+import ProductsManager from './ProductsManager'
 
 export default function SettingsTab({ hotelId }) {
   const [section, setSection]           = useState('partners')
@@ -157,6 +158,7 @@ export default function SettingsTab({ hotelId }) {
       {/* Section tabs — wraps to 2 lines on mobile */}
       <div style={{ display:'flex', flexWrap:'wrap', background:'white', borderBottom:'0.5px solid var(--border)', flexShrink:0 }}>
         {secBtn('Knowledge base', section==='knowledge', ()=>setSection('knowledge'))}
+        {secBtn('Experiences', section==='experiences', ()=>setSection('experiences'))}
         {secBtn('Partners', section==='partners', ()=>setSection('partners'))}
         {secBtn('Partner types', section==='types', ()=>setSection('types'))}
         {secBtn('Departments', section==='departments', ()=>setSection('departments'))}
@@ -436,6 +438,13 @@ export default function SettingsTab({ hotelId }) {
                 + Add new department
               </button>
             )}
+          </div>
+        )}
+
+        {/* ── EXPERIENCES ── */}
+        {section === 'experiences' && (
+          <div style={{ maxWidth:'800px' }}>
+            <ProductsManager hotelId={hotelId} />
           </div>
         )}
 
