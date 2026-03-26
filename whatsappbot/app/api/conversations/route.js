@@ -1,6 +1,23 @@
 // app/api/conversations/route.js
-import { createClient } from '@supabase/supabase-js'
-import { cookies } from 'next/headers'
+// ============================================================
+// Conversations — role-aware data filtering
+//
+// manager | receptionist  → full transcript + guest PII
+// communications          → anonymised (bot turns only, Guest #ID)
+// supervisor              → no access
+// employee                → no access
+// ============================================================
+
+import { createClient }         from '@supabase/supabase-js'
+import { cookies }              from 'next/headers'
+import {
+  requireRole,
+  anonymiseMessagesForQA,
+  anonymiseGuest,
+  logAudit,
+  canAccessPII,
+  ROLES,
+}                               from '../../../lib/gdpr.js'
 
 function getSupabase() {
   return createClient(
@@ -10,42 +27,75 @@ function getSupabase() {
   )
 }
 
-export async function GET(request) {
+function getSession() {
   try {
-    const { searchParams } = new URL(request.url)
-    const hotelId = searchParams.get('hotelId')
-    const convId  = searchParams.get('convId') // optional — fetch single conv
-    if (!hotelId) return Response.json({ error: 'hotelId required' }, { status: 400 })
+    const c = cookies().get('session')
+    return c ? JSON.parse(c.value) : null
+  } catch { return null }
+}
 
-    const supabase = getSupabase()
+export async function GET(request) {
+  const session = getSession()
 
-    // Single conversation refresh (used after sending a reply)
-    if (convId) {
-      const { data } = await supabase
-        .from('conversations')
-        .select(`
-          id, status, last_message_at, messages,
-          guests(id, name, surname, room, phone, language, guest_type, visit_count_day, preferred_services, check_in, check_out)
-        `)
-        .eq('id', convId)
-        .single()
-      return Response.json({ conversation: data })
+  // supervisor and employee have no conversation access
+  const guard = requireRole(
+    session,
+    ROLES.MANAGER,
+    ROLES.RECEPTIONIST,
+    ROLES.COMMUNICATIONS
+  )
+  if (guard) return guard
+
+  const { searchParams } = new URL(request.url)
+  const hotelId  = searchParams.get('hotelId') || session.hotelId
+  const limit    = Math.min(parseInt(searchParams.get('limit') || '50'), 100)
+
+  const supabase = getSupabase()
+
+  const { data, error } = await supabase
+    .from('conversations')
+    .select(`
+      id, status, last_message_at, created_at, messages,
+      guests(id, name, surname, room, phone, language, guest_type)
+    `)
+    .eq('hotel_id', hotelId)
+    .in('status', ['active', 'escalated'])
+    .order('last_message_at', { ascending: false })
+    .limit(limit)
+
+  if (error) return Response.json({ error: error.message }, { status: 500 })
+
+  const conversations = (data || []).map(conv => {
+    if (canAccessPII(session.role)) {
+      // Manager / receptionist — full data
+      return conv
     }
 
-    // All active + escalated conversations for hotel
-    const { data } = await supabase
-      .from('conversations')
-      .select(`
-        id, status, last_message_at, messages,
-        guests(id, name, surname, room, phone, language, guest_type, visit_count_day, preferred_services, check_in, check_out, visit_count, favourite_services)
-      `)
-      .eq('hotel_id', hotelId)
-      .in('status', ['active', 'escalated'])
-      .order('last_message_at', { ascending: false })
-      .limit(50)
+    // Communications role — anonymise everything
+    // Guest reference only, bot messages only
+    return {
+      id:               conv.id,
+      status:           conv.status,
+      last_message_at:  conv.last_message_at,
+      created_at:       conv.created_at,
+      guest_ref:        'Guest #' + conv.guests?.id?.toString().slice(0, 6).toUpperCase(),
+      language:         conv.guests?.language,
+      message_count:    conv.messages?.length || 0,
+      messages:         anonymiseMessagesForQA(conv.messages),
+      // No name, phone, room
+    }
+  })
 
-    return Response.json({ conversations: data || [] })
-  } catch (err) {
-    return Response.json({ error: err.message }, { status: 500 })
+  // Audit: communications accessing conversations
+  if (session.role === ROLES.COMMUNICATIONS) {
+    logAudit({
+      hotelId:      session.hotelId,
+      session,
+      action:       'conversation_view',
+      resourceType: 'conversation',
+      detail:       { count: conversations.length, view: 'anonymised_list' },
+    }).catch(() => {})
   }
+
+  return Response.json({ conversations })
 }
