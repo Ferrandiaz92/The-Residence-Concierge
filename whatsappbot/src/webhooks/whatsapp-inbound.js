@@ -307,7 +307,3 @@ async function processProductOrder(orderData, hotel, guest, convId, products, gu
     } catch {}
   }
 }
-    console.error('processProductOrder error:', e.message)
-    // Don't crash the main flow — payment link failure is non-fatal
-  }
-}
