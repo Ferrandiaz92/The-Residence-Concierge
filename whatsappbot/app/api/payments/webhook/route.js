@@ -4,6 +4,9 @@
 //   https://your-domain.vercel.app/api/payments/webhook
 // Events to listen for: checkout.session.completed, payment_intent.payment_failed
 
+// Required for Stripe webhook signature verification — must read raw body
+export const dynamic = 'force-dynamic'
+
 import Stripe         from 'stripe'
 import { createClient } from '@supabase/supabase-js'
 import twilio         from 'twilio'
@@ -118,6 +121,3 @@ export async function POST(request) {
 
   return new Response('ok', { status: 200 })
 }
-
-// Stripe requires raw body — disable Next.js body parsing
-export const config = { api: { bodyParser: false } }
