@@ -173,9 +173,12 @@ export async function handleInboundWhatsApp(rawBody) {
     return
   }
 
-  // 14. Booking check
-  const { hasBooking, booking, cleanResponse } = parseBookingRequest(aiResponse)
-  const replyText = cleanResponse || aiResponse
+  // 14. Parse BOTH booking and product order tags BEFORE sending to guest
+  const { hasBooking, booking, cleanResponse: afterBooking } = parseBookingRequest(aiResponse)
+  const { hasOrder, order: productOrder, cleanResponse: finalReply } = parseProductOrder(afterBooking || aiResponse)
+
+  // Send the clean response (all tags stripped)
+  const replyText = finalReply || afterBooking || aiResponse
   await sendWhatsApp(from, replyText)
   await appendMessage(conv.id, 'assistant', replyText)
 
@@ -183,7 +186,6 @@ export async function handleInboundWhatsApp(rawBody) {
     const source = isRespondingToUpsell ? 'upsell' : 'guest_request'
     await processBooking(booking, hotel, guest, partners, source)
 
-    // Update guest preferences — learn what they like
     const partner = partners.find(p =>
       p.name.toLowerCase().includes((booking.partner||'').toLowerCase()) || p.type === booking.type)
     if (partner || booking.type) {
@@ -191,8 +193,7 @@ export async function handleInboundWhatsApp(rawBody) {
     }
   }
 
-  // 15. Product order check — send payment link if bot triggered an order
-  const { hasOrder, order: productOrder } = parseProductOrder(aiResponse)
+  // 15. Product order — send payment link
   if (hasOrder && productOrder) {
     await processProductOrder(productOrder, hotel, guest, conv.id, products, from)
   }
@@ -247,9 +248,14 @@ async function processProductOrder(orderData, hotel, guest, convId, products, gu
     const product = products.find(p => p.id === orderData.product_id)
     if (!product) { console.error('Product not found:', orderData.product_id); return }
 
-    // Find the tier
-    const tier = (product.tiers || []).find(t => t.name === orderData.tier_name)
-    if (!tier) { console.error('Tier not found:', orderData.tier_name); return }
+    // Find the tier — case-insensitive match
+    const tier = (product.tiers || []).find(t =>
+      t.name.toLowerCase() === orderData.tier_name.toLowerCase()
+    )
+    if (!tier) {
+      console.error('Tier not found:', orderData.tier_name, 'available:', (product.tiers||[]).map(t=>t.name))
+      return
+    }
 
     const quantity = orderData.quantity || 1
 
