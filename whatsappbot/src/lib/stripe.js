@@ -28,36 +28,30 @@ export async function createOrderPaymentLink({ orderId, product, tier, quantity,
 
   // Create a Stripe Checkout Session (simpler than Payment Links for dynamic amounts)
   const session = await stripe.checkout.sessions.create({
-    mode:          'payment',
-    currency:      'eur',
+    mode:     'payment',
+    currency: 'eur',
     line_items: [{
       quantity,
       price_data: {
-        currency:     'eur',
-        unit_amount:  Math.round(tier.price * 100),
+        currency:    'eur',
+        unit_amount: Math.round(tier.price * 100),
         product_data: {
           name:        `${product.name} — ${tier.name}`,
           description: [
             product.description,
             product.available_times ? `Time: ${product.available_times}` : null,
-          ].filter(Boolean).join(' · '),
-          metadata: { hotel: hotel.name, product_id: product.id },
+          ].filter(Boolean).join(' · ') || undefined,
         },
       },
     }],
-    customer_email:     guest.phone ? undefined : undefined, // guest may not have email
-    // Success & cancel redirect back to a simple confirmation page
-    success_url: `${baseUrl}/api/payments/confirm?session_id={CHECKOUT_SESSION_ID}&order_id=${orderId}`,
-    cancel_url:  `${baseUrl}/api/payments/cancel?order_id=${orderId}`,
-    // Store order ID so webhook can find it
+    success_url: `${baseUrl}/payment-success?session_id={CHECKOUT_SESSION_ID}&order_id=${orderId}`,
+    cancel_url:  `${baseUrl}/payment-success?cancelled=true&order_id=${orderId}`,
     metadata: {
-      order_id:  orderId,
-      hotel_id:  hotel.id,
-      guest_id:  guest.id,
+      order_id:   orderId,
+      hotel_id:   hotel.id,
+      guest_id:   guest.id,
       guest_name: `${guest.name||''} ${guest.surname||''}`.trim(),
     },
-    // Link expires in 24 hours
-    expires_at: Math.floor(Date.now() / 1000) + 24 * 60 * 60,
     payment_intent_data: {
       metadata: { order_id: orderId, hotel_id: hotel.id },
     },
