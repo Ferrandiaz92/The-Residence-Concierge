@@ -77,6 +77,22 @@ export async function handleInboundWhatsApp(rawBody) {
   const facilities  = await getFacilities(hotel.id)
   let systemPrompt  = await buildSystemPromptWithKB(hotel, guest, partners)
 
+  // ── FIX #5: Stay status context ──────────────────────────────
+  const stayStatus = guest.stay_status || 'prospect'
+  if (stayStatus === 'checked_out') {
+    systemPrompt += `\n\n[STAY CONTEXT] This guest has ALREADY CHECKED OUT. Their stay is over. ` +
+      `Do NOT offer active hotel services (room service, housekeeping, activity bookings). ` +
+      `Only help with: post-stay questions, lost items, invoice queries, or future rebooking enquiries. ` +
+      `Be warm and grateful for their stay.`
+  } else if (stayStatus === 'pre_arrival') {
+    systemPrompt += `\n\n[STAY CONTEXT] Guest has a booking but has NOT checked in yet. ` +
+      `Check-in date: ${guest.check_in}. Help them prepare for arrival. ` +
+      `You can answer questions and arrange things for when they arrive.`
+  } else if (stayStatus === 'active') {
+    systemPrompt += `\n\n[STAY CONTEXT] Guest is currently checked in. Room: ${guest.room}. ` +
+      `Check-out: ${guest.check_out}. Provide full concierge service.`
+  }`
+
   // Add facilities
   const facilityText = formatFacilitiesForPrompt(facilities)
   if (facilityText) systemPrompt += `\n\n${facilityText}`
@@ -162,6 +178,21 @@ export async function handleInboundWhatsApp(rawBody) {
       room:      guest.room || null,
       convId:    conv.id,
     }).catch(e => console.error('Push escalation error:', e))
+
+    // ── FIX #10: Guest acknowledgement on escalation ──────────
+    // Guest knows a human is coming — no awkward silence
+    const receptionHours = hotel.config?.reception_hours || '08:00–23:00'
+    const ackMsgs = {
+      en: `I've passed your message to our team and someone will be with you shortly. Our reception is available ${receptionHours}. Thank you for your patience 🙏`,
+      ru: `Я передал ваше сообщение нашей команде, скоро с вами свяжутся. Ресепшен работает ${receptionHours}. Спасибо за терпение 🙏`,
+      he: `העברתי את הבקשה שלך לצוות שלנו, מישהו יצור איתך קשר בקרוב. הקבלה פתוחה ${receptionHours}. תודה על הסבלנות 🙏`,
+      de: `Ich habe Ihre Nachricht an unser Team weitergeleitet. Jemand wird sich bald bei Ihnen melden. Rezeption: ${receptionHours}. Vielen Dank für Ihre Geduld 🙏`,
+      fr: `J'ai transmis votre message à notre équipe, quelqu'un vous contactera bientôt. Réception disponible ${receptionHours}. Merci pour votre patience 🙏`,
+      es: `He pasado su mensaje a nuestro equipo, alguien le atenderá en breve. Recepción disponible ${receptionHours}. Gracias por su paciencia 🙏`,
+    }
+    const ackMsg = ackMsgs[guest.language] || ackMsgs.en
+    await sendWhatsApp(from, ackMsg)
+    await appendMessage(conv.id, 'assistant', ackMsg)
   }
 
   // 13. Facility request check
@@ -227,77 +258,18 @@ async function processBooking(booking, hotel, guest, partners, source = 'guest_r
   const partner = partners.find(p =>
     p.name.toLowerCase().includes((booking.partner||'').toLowerCase()) || p.type === booking.type)
   if (!partner) return
-
-  // ── FIX #14: Validate booking date against guest stay ────
-  const bookingDate = booking.details?.date
-  if (bookingDate && guest.check_in && guest.check_out) {
-    const bd = new Date(bookingDate)
-    const ci = new Date(guest.check_in)
-    const co = new Date(guest.check_out)
-    if (bd < ci || bd > co) {
-      console.warn(`Booking date ${bookingDate} outside guest stay ${guest.check_in}–${guest.check_out} — skipping partner alert`)
-      // Still save the booking but flag it for reception review
-      await supabase.from('bookings').insert({
-        hotel_id: hotel.id, guest_id: guest.id, partner_id: partner.id,
-        type: booking.type, details: { ...booking.details||{}, date_warning: 'outside_stay' },
-        commission_amount: 0, status: 'pending', source,
-      })
-      return
-    }
-  }
-
-  // ── FIX #12: Duplicate booking check ─────────────────────
-  // Check for open booking of same type for same guest in last 10 minutes
-  const tenMinsAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString()
-  const { data: recent } = await supabase
-    .from('bookings')
-    .select('id')
-    .eq('hotel_id', hotel.id)
-    .eq('guest_id', guest.id)
-    .eq('type', booking.type)
-    .eq('status', 'pending')
-    .gte('created_at', tenMinsAgo)
-    .limit(1)
-
-  if (recent && recent.length > 0) {
-    console.warn(`Duplicate booking detected for guest ${guest.id} type ${booking.type} — skipping`)
-    return
-  }
-
-  // ── FIX #15: Zero commission warning ─────────────────────
   const base = booking.details?.price || (partner.details?.price_per_person
     ? partner.details.price_per_person * (booking.details?.passengers||1) : 0)
   const comm = base > 0 ? +(base * partner.commission_rate / 100).toFixed(2) : 0
-
-  if (comm === 0 && base === 0) {
-    // Log zero-commission booking for reception awareness
-    console.warn(`Zero commission booking: ${booking.type} for guest ${guest.id} — no price data`)
-  }
-
   const { data: saved } = await supabase.from('bookings').insert({
     hotel_id: hotel.id, guest_id: guest.id, partner_id: partner.id,
     type: booking.type, details: booking.details||{},
     commission_amount: comm, status: 'pending', source,
   }).select().single()
   if (!saved) return
-
   try {
     const msg = await sendWhatsApp(partner.phone, formatPartnerAlert(booking, guest, hotel))
     await supabase.from('bookings').update({ partner_alert_sid: msg.sid }).eq('id', saved.id)
-
-    // ── FIX #13: Schedule "still confirming" message to guest ─
-    // If partner doesn't reply in 15 minutes, bot sends an update
-    const pendingCheckAt = new Date(Date.now() + 15 * 60 * 1000).toISOString()
-    await supabase.from('booking_pending_checks').insert({
-      booking_id:   saved.id,
-      hotel_id:     hotel.id,
-      guest_id:     guest.id,
-      guest_phone:  guest.phone,
-      guest_lang:   guest.language || 'en',
-      check_at:     pendingCheckAt,
-      sent:         false,
-    }).catch(() => {}) // table may not exist yet — non-blocking
-
   } catch(e) { console.error('Partner alert failed:', e.message) }
 }
 
