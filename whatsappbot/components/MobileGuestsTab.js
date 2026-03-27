@@ -127,8 +127,8 @@ export default function MobileGuestsTab({ hotelId, selectedGuest }) {
   const isCheckInDate = d => { try{ return guest?.check_in && new Date(guest.check_in).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) === d }catch{return false} }
 
   const TABS = [
-    { key:'history', label: isDayVisit ? 'Guest'            : 'Guest' },
-    { key:'summary', label: isDayVisit ? 'Guest Summary'    : 'Guest Summary'         },
+    { key:'history', label: isDayVisit ? 'Visit history'    : 'Conversation history' },
+    { key:'summary', label: isDayVisit ? 'Guest Summary'    : 'Guest Summary'          },
   ]
 
   return (

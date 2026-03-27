@@ -474,23 +474,27 @@ function StaffPortal({ conversations, selectedConv, onSelectConv, session, hotel
 // ════════════════════════════════════════════════════════════
 
 function ExpandableBooking({ booking: b, guest: g, tc }) {
-  const [open, setOpen] = React.useState(false)
+  const [open, setOpen] = useState(false)
   const typeEmoji = { taxi:'🚗', restaurant:'🍽️', activity:'⛵', late_checkout:'🕐' }
   const emoji = typeEmoji[b.type] || '📋'
   return (
     <div style={{ background:'white', borderBottom:'1px solid #F3F4F6' }}>
       <div onClick={() => setOpen(o => !o)}
-        style={{ padding:'12px 16px', display:'flex', alignItems:'center', gap:'10px', cursor:'pointer' }}>
-        <div style={{ width:'28px', height:'28px', borderRadius:'7px', background:tc.bg, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'13px', flexShrink:0 }}>{emoji}</div>
+        style={{ padding:'12px 16px', display:'flex', alignItems:'center', gap:'10px', cursor:'pointer', background: open ? '#F9FAFB' : 'white' }}>
+        <div style={{ width:'32px', height:'32px', borderRadius:'8px', background:tc.bg, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'14px', flexShrink:0 }}>{emoji}</div>
         <div style={{ flex:1 }}>
           <div style={{ fontSize:'13px', fontWeight:'600', color:'#111827' }}>{g.name}{g.room ? ` · Room ${g.room}` : ''}</div>
           <div style={{ fontSize:'12px', color:'#6B7280' }}>{b.partners?.name || b.type}</div>
         </div>
-        <div style={{ display:'flex', alignItems:'center', gap:'6px' }}>
-          <div style={{ fontSize:'13px', fontWeight:'600', color:'#374151' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
+          <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151' }}>
             {b.details?.time || new Date(b.created_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}
           </div>
-          <div style={{ fontSize:'14px', color:'#9CA3AF', transition:'transform .2s', transform: open ? 'rotate(180deg)' : 'rotate(0deg)' }}>›</div>
+          <div style={{ width:'24px', height:'24px', borderRadius:'6px', background: open ? '#1C3D2E' : '#F3F4F6', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, transition:'all .2s' }}>
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path d={open ? 'M2 8L6 4L10 8' : 'M2 4L6 8L10 4'} stroke={open ? 'white' : '#6B7280'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </div>
         </div>
       </div>
       {open && (
@@ -553,18 +557,7 @@ function IssuesPanel({ tickets, bookings }) {
         : upcoming.slice(0,10).map(b => {
           const g  = b.guests || {}
           const tc = typeColors[b.type] || {bg:'#F1F5F9',color:'#334155',l:'?'}
-          return (
-            <div key={b.id} style={{ padding:'12px 16px', background:'white', borderBottom:'1px solid #F3F4F6', display:'flex', alignItems:'center', gap:'10px' }}>
-              <div style={{ width:'28px', height:'28px', borderRadius:'7px', background:tc.bg, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'11px', fontWeight:'700', color:tc.color, flexShrink:0 }}>{tc.l}</div>
-              <div style={{ flex:1 }}>
-                <div style={{ fontSize:'13px', fontWeight:'600', color:'#111827' }}>{g.name} · Room {g.room||''}</div>
-                <div style={{ fontSize:'12px', color:'#6B7280' }}>{b.partners?.name||b.type}</div>
-              </div>
-              <div style={{ fontSize:'13px', fontWeight:'600', color:'#374151' }}>
-                {b.details?.time || new Date(b.created_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}
-              </div>
-            </div>
-          )
+          return <ExpandableBooking key={b.id} booking={b} guest={g} tc={tc} />
         })
       }
 
