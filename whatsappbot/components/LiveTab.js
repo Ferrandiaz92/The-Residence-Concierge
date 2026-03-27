@@ -521,9 +521,33 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
                     {t.priority==='urgent' && <span style={{ fontSize:'10px', fontWeight:'700', padding:'1px 6px', borderRadius:'4px', background:'#FEE2E2', color:'#DC2626', marginLeft:'5px' }}>urgent</span>}
                   </div>
                   <div style={{ fontSize:'11px', color:'#6B7280' }}>{t.room ? `Room ${t.room} · ` : ''}{t.department} · {t.status}</div>
-                  <button style={{ fontSize:'11px', fontWeight:'600', padding:'3px 9px', borderRadius:'5px', border:'0.5px solid #FCD34D', background:'#FFFBEB', color:'#D97706', cursor:'pointer', marginTop:'5px', fontFamily:'var(--font)' }}>
-                    {t.escalation_level===0?'Call supervisor':t.escalation_level===1?'Call team':'Contact manager'}
-                  </button>
+                  <div style={{ display:'flex', gap:'6px', marginTop:'6px', flexWrap:'wrap' }}>
+                    {/* Escalation button */}
+                    <button style={{ fontSize:'11px', fontWeight:'600', padding:'3px 9px', borderRadius:'5px', border:'0.5px solid #FCD34D', background:'#FFFBEB', color:'#D97706', cursor:'pointer', fontFamily:'var(--font)' }}>
+                      {t.escalation_level===0?'Call supervisor':t.escalation_level===1?'Call team':'Contact manager'}
+                    </button>
+                    {/* Fix #17: Reopen resolved tickets */}
+                    {t.status === 'resolved' && (
+                      <button onClick={async () => {
+                        await fetch('/api/tickets', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ticketId: t.id, status:'pending' }) })
+                        load()
+                      }} style={{ fontSize:'11px', fontWeight:'600', padding:'3px 9px', borderRadius:'5px', border:'0.5px solid #D1D5DB', background:'white', color:'#6B7280', cursor:'pointer', fontFamily:'var(--font)' }}>
+                        ↩ Reopen
+                      </button>
+                    )}
+                    {/* Fix #18: Reassign department */}
+                    <select onChange={async (e) => {
+                      if (!e.target.value) return
+                      await fetch('/api/tickets', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ticketId: t.id, status: t.status, department: e.target.value }) })
+                      e.target.value = ''
+                      load()
+                    }} style={{ fontSize:'11px', padding:'3px 7px', borderRadius:'5px', border:'0.5px solid #D1D5DB', background:'white', color:'#6B7280', cursor:'pointer', fontFamily:'var(--font)' }}>
+                      <option value="">Reassign…</option>
+                      {['maintenance','housekeeping','fnb','concierge','security'].map(d => (
+                        <option key={d} value={d} disabled={d === t.department}>{d.charAt(0).toUpperCase()+d.slice(1)}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
               </div>
             ))}
