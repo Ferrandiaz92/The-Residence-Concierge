@@ -505,7 +505,7 @@ function ExpandableBooking({ booking: b, guest: g, tc }) {
             {b.details?.date        && <div>📅 <strong>Date:</strong> {b.details.date}</div>}
             {b.details?.time        && <div>🕐 <strong>Time:</strong> {b.details.time}</div>}
             {b.details?.notes       && <div>📝 <strong>Notes:</strong> {b.details.notes}</div>}
-            {b.commission_amount    && <div>💰 <strong>Commission:</strong> €{b.commission_amount}</div>}
+            {b.commission_amount > 0 && <div>💰 <strong>Commission:</strong> €{b.commission_amount}</div>}
             <div style={{ marginTop:'4px' }}>
               <span style={{ fontSize:'10px', fontWeight:'700', padding:'2px 8px', borderRadius:'5px',
                 background: b.status==='confirmed'?'#DCFCE7':'#FEF3C7',
