@@ -20,10 +20,9 @@ export async function POST(request) {
 
     const supabase = getSupabase()
 
-    // Look up staff by email only first
     const { data: staff, error } = await supabase
       .from('staff')
-      .select('id, email, name, role, password, hotel_id, hotels(id, name)')
+      .select('id, email, name, role, department, hotel_id, hotels(id, name), password')
       .eq('email', email.toLowerCase().trim())
       .single()
 
@@ -31,7 +30,7 @@ export async function POST(request) {
       return Response.json({ error: 'Invalid email or password' }, { status: 401 })
     }
 
-    // Check password (plain text for now)
+    // Password check
     const passwordOk = (password === staff.password) ||
                        (password === process.env.STAFF_PASSWORD)
 
@@ -39,14 +38,15 @@ export async function POST(request) {
       return Response.json({ error: 'Invalid email or password' }, { status: 401 })
     }
 
-    // Build session
+    // Build session — include department so DepartmentQueue filters correctly
     const session = {
-      staffId:   staff.id,
-      hotelId:   staff.hotel_id,
-      hotelName: staff.hotels?.name,
-      name:      staff.name,
-      role:      staff.role,
-      email:     staff.email,
+      staffId:    staff.id,
+      hotelId:    staff.hotel_id,
+      hotelName:  staff.hotels?.name,
+      name:       staff.name,
+      role:       staff.role,
+      email:      staff.email,
+      department: staff.department || null,   // ← critical for employee role
     }
 
     const cookieStore = cookies()
