@@ -10,10 +10,9 @@
 // GET   → get rooms for a guest
 // ============================================================
 
-import { createClient }          from '@supabase/supabase-js'
-import { cookies }             from 'next/headers'
-import twilio                  from 'twilio'
-import { createGuestByStaff, normalisePhone } from '../../../src/lib/supabase.js'
+import { createClient } from '@supabase/supabase-js'
+import { cookies }      from 'next/headers'
+import twilio           from 'twilio'
 
 function getSupabase() {
   return createClient(
@@ -54,6 +53,9 @@ export async function POST(request) {
   try {
     const session = getSession()
     if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!['manager','admin','receptionist'].includes(session.role)) {
+      return Response.json({ error: 'Access denied' }, { status: 403 })
+    }
 
     const {
       guestId,
@@ -219,6 +221,9 @@ export async function PATCH(request) {
   try {
     const session = getSession()
     if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!['manager','admin','receptionist'].includes(session.role)) {
+      return Response.json({ error: 'Access denied' }, { status: 403 })
+    }
 
     const { guestId, hotelId } = await request.json()
     if (!guestId) return Response.json({ error: 'guestId required' }, { status: 400 })
