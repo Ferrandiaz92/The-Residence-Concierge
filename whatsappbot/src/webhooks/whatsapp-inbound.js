@@ -16,9 +16,11 @@ import { notifyReceptionEscalation, notifyReceptionMessage } from '../lib/push.j
 import { getAvailableProducts, formatProductsForPrompt, parseProductOrder, createGuestOrder } from '../lib/stripe.js'
 
 export async function handleInboundWhatsApp(rawBody) {
-  const { from, to, message, profileName } = parseIncomingMessage(rawBody)
-  console.log(`Inbound: ${from} → ${to}: "${message.slice(0, 80)}"`)
-  if (!message.trim()) return
+  const { from, to, message, profileName, mediaUrls } = parseIncomingMessage(rawBody)
+  console.log(`Inbound: ${from} → ${to}: "${message.slice(0, 80)}" media:${mediaUrls?.length || 0}`)
+
+  // Allow through if there's an image even with no text
+  if (!message.trim() && (!mediaUrls || mediaUrls.length === 0)) return
 
   // 1. Ticket reply check
   const isTicketReply = await handleTicketReply(from, message)
@@ -106,6 +108,24 @@ export async function handleInboundWhatsApp(rawBody) {
   const productText = formatProductsForPrompt(products, guest.language || 'en')
   if (productText) systemPrompt += productText
 
+  // ── IMAGE HANDLING INSTRUCTIONS ──────────────────────────────
+  // Tell Claude how to handle images and when to proactively ask for one
+  systemPrompt += `\n\nIMAGE HANDLING:
+You can see images sent by guests. When a guest sends a photo:
+- Describe what you see and use it to help them directly
+- For maintenance issues: identify the problem from the photo, create an urgent ticket, tell the guest what you see and what you're doing about it
+- For location/taxi problems: read visible street signs, shop names, landmarks and relay the exact location to the driver
+- For device confusion (remote controls, panels, buttons): describe exactly which button to press using position and any symbols you can see
+- For restaurant/place photos: identify the establishment if visible and offer to book or provide info
+
+PROACTIVELY ASK FOR A PHOTO when it would solve the problem faster:
+- Guest reports taxi can't find them → "Can you send me a quick photo of where you are? A shop front or street sign would help 📸"
+- Guest reports a maintenance problem → "Could you send a photo of the issue? It helps me send the right person 📸"  
+- Guest describes a lost item → "Do you have a photo of it? It'll help housekeeping find it much faster 📸"
+- Guest asks about a place they can see → "Feel free to send a photo — I can identify it for you 📸"
+
+Always phrase the photo request naturally and explain why it helps.`
+
   // 9. Detect upsell context
   const lastBotMsg = [...(conv.messages||[])].reverse().find(m => m.role === 'assistant')
   const isRespondingToUpsell = lastBotMsg?.sent_by === 'scheduled' &&
@@ -127,9 +147,9 @@ export async function handleInboundWhatsApp(rawBody) {
     link_id:   conv.id,
   })
 
-  // 11. Claude
+  // 11. Claude — pass images if present
   let aiResponse
-  try { aiResponse = await callClaude(systemPrompt, history, message) }
+  try { aiResponse = await callClaude(systemPrompt, history, message, mediaUrls || []) }
   catch {
     const fb = {
       en:'I\'m having a brief issue. Please try again.',
