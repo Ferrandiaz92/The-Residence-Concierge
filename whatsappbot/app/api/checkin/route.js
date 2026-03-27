@@ -10,9 +10,10 @@
 // GET   → get rooms for a guest
 // ============================================================
 
-import { createClient } from '@supabase/supabase-js'
-import { cookies }      from 'next/headers'
-import twilio           from 'twilio'
+import { createClient }          from '@supabase/supabase-js'
+import { cookies }             from 'next/headers'
+import twilio                  from 'twilio'
+import { createGuestByStaff, normalisePhone } from '../../../src/lib/supabase.js'
 
 function getSupabase() {
   return createClient(
