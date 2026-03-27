@@ -1,7 +1,8 @@
 // app/dashboard/page.js — mobile-responsive, role-based v2
 'use client'
 import { useState, useEffect } from 'react'
-import LiveTab          from '../../components/LiveTab'
+import LiveTab           from '../../components/LiveTab'
+import DepartmentQueue  from '../../components/DepartmentQueue'
 import MobileLiveTab    from '../../components/MobileLiveTab'
 import GuestsTab        from '../../components/GuestsTab'
 import MobileGuestsTab  from '../../components/MobileGuestsTab'
@@ -90,6 +91,10 @@ function IconLogout({ size=18, color='currentColor' }) {
 
 // ── Tab content ──────────────────────────────────────────────
 function TabContent({ tab, hotelId, session, selectedGuest, onSelectGuest, isMobile }) {
+  // Employee / dept role always gets DepartmentQueue regardless of tab
+  if (isDept(session?.role)) {
+    return <DepartmentQueue hotelId={hotelId} session={session} />
+  }
   switch (tab) {
     case 'live':      return isMobile
       ? <MobileLiveTab hotelId={hotelId} session={session} onSelectGuest={onSelectGuest} />
@@ -334,7 +339,7 @@ function MobileDashboard({ session, activeTab, setActiveTab, selectedGuest, onSe
   const badge   = roleBadge(role)
   const tabs    = getMobileTabs(role)
 
-  // Dept roles: full-screen queue, no bottom nav, no search
+  // Dept roles: full-screen DepartmentQueue, no bottom nav, no search
   if (isDept(role)) {
     return (
       <div style={{ display:'flex', flexDirection:'column', height:'100dvh', background:'#F9FAFB', fontFamily:"'DM Sans', sans-serif" }}>
@@ -346,7 +351,7 @@ function MobileDashboard({ session, activeTab, setActiveTab, selectedGuest, onSe
           showSearch={false}
         />
         <div style={{ flex:1, overflow:'hidden', minHeight:0 }}>
-          <TabContent tab="live" hotelId={hotelId} session={session} selectedGuest={selectedGuest} onSelectGuest={onSelectGuest} isMobile={true} />
+          <DepartmentQueue hotelId={hotelId} session={session} />
         </div>
       </div>
     )
