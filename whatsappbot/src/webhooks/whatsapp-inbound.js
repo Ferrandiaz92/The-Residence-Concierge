@@ -1,26 +1,73 @@
-// src/webhooks/whatsapp-inbound.js (updated — guest memory)
+// src/webhooks/whatsapp-inbound.js
+// ============================================================
+// Key additions vs previous version:
+//
+// 1. QR code room detection — if message matches "Room 312"
+//    pattern, resolve to active guest in that room
+//    Link companion guests automatically
+//
+// 2. Stay status awareness — bot behaves differently based
+//    on stay_status (pre_arrival, active, checked_out, prospect)
+//
+// 3. Grey zone handling — if room exists but no active guest
+//    (between checkout and next check-in), ask to confirm
+// ============================================================
+
 import {
-  getHotelByWhatsappNumber, getOrCreateGuest, updateGuest,
-  getOrCreateConversation, appendMessage, getConversationHistory,
-  getPartners, createBooking, supabase,
+  getHotelByWhatsappNumber,
+  getOrCreateGuest,
+  getGuestByRoom,
+  linkCompanionGuest,
+  updateGuest,
+  getOrCreateConversation,
+  appendMessage,
+  getConversationHistory,
+  getPartners,
+  createBooking,
+  supabase,
 } from '../lib/supabase.js'
-import { sendWhatsApp, parseIncomingMessage } from '../lib/twilio.js'
+import { sendWhatsApp, parseIncomingMessage }           from '../lib/twilio.js'
 import { detectLanguage, parseBookingRequest, formatPartnerAlert } from '../lib/language.js'
-import { callClaude } from '../lib/claude.js'
-import { handleTicketReply } from '../lib/ticketing.js'
-import { buildSystemPromptWithKB } from '../lib/knowledge.js'
+import { callClaude }                                   from '../lib/claude.js'
+import { handleTicketReply }                            from '../lib/ticketing.js'
+import { buildSystemPromptWithKB }                      from '../lib/knowledge.js'
 import { getFacilities, formatFacilitiesForPrompt, parseFacilityRequest } from '../lib/facilities.js'
-import { handleFeedbackReply } from '../lib/scheduled.js'
+import { handleFeedbackReply }                          from '../lib/scheduled.js'
 import { loadGuestMemory, formatMemoryForPrompt, updateGuestPreferences } from '../lib/memory.js'
 import { notifyReceptionEscalation, notifyReceptionMessage } from '../lib/push.js'
 import { getAvailableProducts, formatProductsForPrompt, parseProductOrder, createGuestOrder } from '../lib/stripe.js'
+
+// ── ROOM NUMBER PATTERN ───────────────────────────────────────
+// Matches: "Room 312", "room 312", "312", "room: 312", "#312"
+const ROOM_PATTERN = /^(?:room[:\s#]*)?(\d{1,4}[a-z]?)$/i
+
+function extractRoomNumber(message) {
+  const clean = message.trim()
+  const match = clean.match(ROOM_PATTERN)
+  return match ? match[1].toUpperCase() : null
+}
+
+// ── STAY STATUS CONTEXT FOR BOT ───────────────────────────────
+function getStayContext(guest) {
+  switch (guest.stay_status) {
+    case 'pre_arrival':
+      return `\n\n[STAY CONTEXT] This guest has a booking but has not checked in yet. Check-in date: ${guest.check_in}. Be welcoming and help them prepare for their arrival.`
+    case 'active':
+      return `\n\n[STAY CONTEXT] Guest is currently checked in. Room: ${guest.room}. Check-out: ${guest.check_out}. Provide full concierge service.`
+    case 'checked_out':
+      return `\n\n[STAY CONTEXT] This guest has already checked out. They may be giving feedback or have a post-stay question. Be warm and helpful, mention you hope their stay was wonderful.`
+    case 'prospect':
+    default:
+      return `\n\n[STAY CONTEXT] This person has not booked a stay yet. They may be enquiring about the hotel or services. Be welcoming and informative.`
+  }
+}
 
 export async function handleInboundWhatsApp(rawBody) {
   const { from, to, message, profileName } = parseIncomingMessage(rawBody)
   console.log(`Inbound: ${from} → ${to}: "${message.slice(0, 80)}"`)
   if (!message.trim()) return
 
-  // 1. Ticket reply check
+  // 1. Ticket reply check (staff WhatsApp replies)
   const isTicketReply = await handleTicketReply(from, message)
   if (isTicketReply) return
 
@@ -29,28 +76,78 @@ export async function handleInboundWhatsApp(rawBody) {
   try { hotel = await getHotelByWhatsappNumber(to) }
   catch { console.error(`No hotel for: ${to}`); return }
 
-  // 3. Guest — create or load
+  // 3. ── QR CODE ROOM DETECTION ────────────────────────────
+  // Check if this is a room number message (from QR code scan)
+  const roomNumber = extractRoomNumber(message)
+
+  if (roomNumber) {
+    const activeGuest = await getGuestByRoom(hotel.id, roomNumber)
+
+    if (activeGuest) {
+      // Someone scanned the room QR — check if it's the primary guest
+      // or a companion (family member, colleague)
+      const cleanFrom = from.replace('whatsapp:', '')
+
+      if (cleanFrom === activeGuest.phone) {
+        // Primary guest is messaging their own room number — normal flow
+        // Fall through to standard handling below
+      } else {
+        // Different phone — this is a companion guest
+        const companion = await linkCompanionGuest(hotel.id, from, activeGuest)
+        const lang      = detectLanguage(message)
+
+        // Welcome companion with room context
+        const companionWelcome = {
+          en: `Welcome! 🌴 I've linked you to ${roomNumber}.\n\nI'm the hotel concierge — available 24/7 for restaurant bookings, taxis, activities and anything you need. How can I help?`,
+          ru: `Добро пожаловать! 🌴 Я связал вас с номером ${roomNumber}.\n\nЯ консьерж отеля — доступен 24/7. Чем могу помочь?`,
+          he: `ברוך הבא! 🌴 קישרתי אותך לחדר ${roomNumber}.\n\nאני הקונסיירז' של המלון — זמין 24/7. איך אוכל לעזור?`,
+        }
+
+        await sendWhatsApp(from, companionWelcome[lang] || companionWelcome.en)
+        console.log(`Companion guest linked to room ${roomNumber}`)
+        return
+      }
+    } else {
+      // No active guest in this room — grey zone
+      // Could be: guest between checkout and next check-in,
+      // or someone who typed a room number in conversation
+      // Ask gently to confirm
+      const greyZoneMsg = {
+        en: `Thanks for your message! Are you a current hotel guest checking in today, or are you already checked in? Just reply "checking in" or "already here" and I'll get you set up. 🌴`,
+        ru: `Спасибо за сообщение! Вы заезжаете сегодня или уже в отеле? Ответьте "заезжаю" или "я уже здесь". 🌴`,
+        he: `תודה על הפנייה! האם אתה מגיע היום לצ'ק-אין, או שאתה כבר בבית המלון? ענה "מגיע היום" או "אני כבר כאן". 🌴`,
+      }
+      const lang = detectLanguage(message)
+      await sendWhatsApp(from, greyZoneMsg[lang] || greyZoneMsg.en)
+      return
+    }
+  }
+
+  // 4. Standard guest lookup by phone
   const guest = await getOrCreateGuest(hotel.id, from)
+
+  // Update name from WhatsApp profile if not set
   if (!guest.name && profileName) {
     const parts = profileName.trim().split(' ')
     await updateGuest(guest.id, { name: parts[0]||null, surname: parts.slice(1).join(' ')||null })
-    guest.name = parts[0]||null; guest.surname = parts.slice(1).join(' ')||null
+    guest.name    = parts[0]||null
+    guest.surname = parts.slice(1).join(' ')||null
   }
 
-  // 4. Language detection
+  // 5. Language detection
   const lang = detectLanguage(message)
   if (lang !== guest.language) { await updateGuest(guest.id, { language: lang }); guest.language = lang }
 
-  // 5. Feedback reply check
+  // 6. Feedback reply check
   const isFeedback = await handleFeedbackReply(from, message, hotel.id)
   if (isFeedback) return
 
-  // 6. Conversation — reuse existing
+  // 7. Conversation — reuse or create
   const { data: existingConv } = await supabase
     .from('conversations')
     .select('*')
     .eq('guest_id', guest.id)
-    .in('status', ['active','escalated'])
+    .in('status', ['active', 'escalated'])
     .order('created_at', { ascending: false })
     .limit(1)
     .single()
@@ -69,241 +166,127 @@ export async function handleInboundWhatsApp(rawBody) {
 
   const history = (conv.messages || []).slice(-20)
 
-  // 7. Load guest memory (previous stays + preferences)
-  const memory = await loadGuestMemory(guest.id)
+  // 8. Load guest memory
+  const memory   = await loadGuestMemory(guest.id)
+  const partners = await getPartners(hotel.id)
+  const facilities = await getFacilities(hotel.id)
 
-  // 8. Build system prompt with KB + facilities + memory
-  const partners    = await getPartners(hotel.id)
-  const facilities  = await getFacilities(hotel.id)
-  let systemPrompt  = await buildSystemPromptWithKB(hotel, guest, partners)
+  // 9. Build system prompt with KB + stay context
+  let systemPrompt = await buildSystemPromptWithKB(hotel, guest, partners)
+  systemPrompt    += getStayContext(guest)  // ← adds stay_status context
 
-  // Add facilities
-  const facilityText = formatFacilitiesForPrompt(facilities)
-  if (facilityText) systemPrompt += `\n\n${facilityText}`
-
-  // Add guest memory if returning guest
-  const memoryText = formatMemoryForPrompt(memory, guest.language || 'en')
-  if (memoryText) systemPrompt += memoryText
-
-  // Add today's available products (experiences, events, etc.)
-  const products    = await getAvailableProducts(hotel.id)
-  const productText = formatProductsForPrompt(products, guest.language || 'en')
-  if (productText) systemPrompt += productText
-
-  // 9. Detect upsell context
-  const lastBotMsg = [...(conv.messages||[])].reverse().find(m => m.role === 'assistant')
-  const isRespondingToUpsell = lastBotMsg?.sent_by === 'scheduled' &&
-    (lastBotMsg?.content?.includes('book') || lastBotMsg?.content?.includes('arrange') ||
-     lastBotMsg?.content?.includes('réserv') || lastBotMsg?.content?.includes('buchen') ||
-     lastBotMsg?.content?.includes('reserv') || lastBotMsg?.content?.includes('prenotare'))
-
-  if (isRespondingToUpsell) {
-    systemPrompt += '\n\nCONTEXT: Guest is responding to your activity suggestions. If they show interest, book immediately.'
+  if (facilities?.length > 0) {
+    systemPrompt += formatFacilitiesForPrompt(facilities)
+  }
+  if (memory) {
+    systemPrompt += formatMemoryForPrompt(memory)
   }
 
-  // 10. Save user message + notification
-  await appendMessage(conv.id, 'user', message)
-  await createNotification(hotel.id, {
-    type:      'guest_message',
-    title:     `${guest.name || 'Guest'} · Room ${guest.room || '?'}`,
-    body:      message.slice(0, 100),
-    link_type: 'conversation',
-    link_id:   conv.id,
-  })
-
-  // 11. Claude
-  let aiResponse
-  try { aiResponse = await callClaude(systemPrompt, history, message) }
-  catch {
-    const fb = {
-      en:'I\'m having a brief issue. Please try again.',
-      ru:'Временная ошибка.',
-      he:'שגיאה זמנית.',
-      es:'Un momento, por favor. Inténtalo de nuevo.',
-      de:'Kurzer Fehler. Bitte versuchen Sie es nochmal.',
-      fr:'Un instant. Veuillez réessayer.',
-      it:'Un momento. Riprova.',
-      pt:'Um momento. Tente novamente.',
-      zh:'请稍候，请重试。',
-      ar:'خطأ مؤقت. حاول مرة أخرى.',
-      nl:'Even een fout. Probeer het opnieuw.',
-      pl:'Chwilowy błąd. Spróbuj ponownie.',
-      sv:'Ett kortvarigt fel. Försök igen.',
-      fi:'Lyhyt virhe. Yritä uudelleen.',
-      uk:'Тимчасова помилка.',
-      el:'Σφάλμα. Δοκιμάστε ξανά.',
-      ca:'Un moment. Torna-ho a intentar.',
-    }
-    await sendWhatsApp(from, fb[guest.language]||fb.en); return
-  }
-
-  // 12. Handoff check
-  const isHandoff = aiResponse.toLowerCase().includes('[handoff]') ||
-    aiResponse.toLowerCase().includes('connect you with our') ||
-    aiResponse.toLowerCase().includes('connect you with reception') ||
-    aiResponse.toLowerCase().includes('te pongo en contacto') ||
-    aiResponse.toLowerCase().includes('je vous mets en contact') ||
-    aiResponse.toLowerCase().includes('verbinde sie mit') ||
-    aiResponse.toLowerCase().includes('vi metto in contatto')
-
-  if (isHandoff) {
-    await supabase.from('conversations').update({ status: 'escalated' }).eq('id', conv.id)
-    await createNotification(hotel.id, {
-      type:      'bot_handoff',
-      title:     `Handoff — ${guest.name || 'Guest'} · Room ${guest.room || '?'}`,
-      body:      `"${message.slice(0, 80)}"`,
-      link_type: 'conversation',
-      link_id:   conv.id,
-    })
-    // 🔔 Push reception immediately
-    notifyReceptionEscalation({
-      hotelId:   hotel.id,
-      guestName: `${guest.name||''} ${guest.surname||''}`.trim() || 'Guest',
-      room:      guest.room || null,
-      convId:    conv.id,
-    }).catch(e => console.error('Push escalation error:', e))
-  }
-
-  // 13. Facility request check
-  const { hasFacility, facility, cleanResponse: facilityClean } = parseFacilityRequest(aiResponse)
-  if (hasFacility && facility) {
-    await processFacilityRequest(facility, hotel, guest, conv.id)
-    await sendWhatsApp(from, facilityClean)
-    await appendMessage(conv.id, 'assistant', facilityClean)
-    return
-  }
-
-  // 14. Parse BOTH booking and product order tags BEFORE sending to guest
-  const { hasBooking, booking, cleanResponse: afterBooking } = parseBookingRequest(aiResponse)
-  const { hasOrder, order: productOrder, cleanResponse: finalReply } = parseProductOrder(afterBooking || aiResponse)
-
-  // Send the clean response (all tags stripped)
-  const replyText = finalReply || afterBooking || aiResponse
-  await sendWhatsApp(from, replyText)
-  await appendMessage(conv.id, 'assistant', replyText)
-
-  if (hasBooking && booking) {
-    const source = isRespondingToUpsell ? 'upsell' : 'guest_request'
-    await processBooking(booking, hotel, guest, partners, source)
-
-    const partner = partners.find(p =>
-      p.name.toLowerCase().includes((booking.partner||'').toLowerCase()) || p.type === booking.type)
-    if (partner || booking.type) {
-      await updateGuestPreferences(guest.id, booking.type, partner?.name)
-    }
-  }
-
-  // 15. Product order — send payment link
-  if (hasOrder && productOrder) {
-    await processProductOrder(productOrder, hotel, guest, conv.id, products, from)
-  }
-}
-
-async function createNotification(hotelId, { type, title, body, link_type, link_id }) {
+  // Add products
   try {
-    await supabase.from('notifications').insert({ hotel_id: hotelId, type, title, body, link_type, link_id })
-  } catch(e) { console.error('Notification error:', e.message) }
-}
+    const products = await getAvailableProducts(hotel.id)
+    if (products?.length > 0) {
+      systemPrompt += formatProductsForPrompt(products)
+    }
+  } catch {}
 
-async function processFacilityRequest(facility, hotel, guest, convId) {
-  try {
-    const description = `FACILITY BOOKING REQUEST\nFacility: ${facility.facility}\nDate: ${facility.date||'TBC'}\nTime: ${facility.time||'TBC'}\nGuests: ${facility.guests||1}\n\nGuest: ${guest.name||''} ${guest.surname||''} · Room ${guest.room||'?'}\nPlease check availability and confirm with guest via WhatsApp.`
+  // 10. Check for facility booking intent
+  const facilityRequest = parseFacilityRequest(message)
+  if (facilityRequest && guest.stay_status === 'active') {
+    // Create internal ticket for facility request
+    const description = `FACILITY BOOKING REQUEST\nFacility: ${facilityRequest.facility}\nDate: ${facilityRequest.date||'TBC'}\nTime: ${facilityRequest.time||'TBC'}\nGuests: ${facilityRequest.guests||1}\n\nGuest: ${guest.name||''} ${guest.surname||''} · Room ${guest.room||'?'}\nPlease check availability and confirm with guest via WhatsApp.`
+
     await supabase.from('internal_tickets').insert({
-      hotel_id: hotel.id, guest_id: guest.id,
-      department: 'concierge', category: 'facility_booking',
-      description, room: guest.room, priority: 'normal',
-      status: 'pending', created_by: 'bot',
-    })
-    await createNotification(hotel.id, {
-      type: 'guest_message',
-      title: `Facility booking — ${facility.facility}`,
-      body: `${guest.name||'Guest'} · Room ${guest.room} · ${facility.date} at ${facility.time}`,
-      link_type: 'conversation', link_id: convId,
-    })
-  } catch(e) { console.error('Facility request error:', e.message) }
-}
-
-async function processBooking(booking, hotel, guest, partners, source = 'guest_request') {
-  const partner = partners.find(p =>
-    p.name.toLowerCase().includes((booking.partner||'').toLowerCase()) || p.type === booking.type)
-  if (!partner) return
-  const base = booking.details?.price || (partner.details?.price_per_person
-    ? partner.details.price_per_person * (booking.details?.passengers||1) : 0)
-  const comm = base > 0 ? +(base * partner.commission_rate / 100).toFixed(2) : 0
-  const { data: saved } = await supabase.from('bookings').insert({
-    hotel_id: hotel.id, guest_id: guest.id, partner_id: partner.id,
-    type: booking.type, details: booking.details||{},
-    commission_amount: comm, status: 'pending', source,
-  }).select().single()
-  if (!saved) return
-  try {
-    const msg = await sendWhatsApp(partner.phone, formatPartnerAlert(booking, guest, hotel))
-    await supabase.from('bookings').update({ partner_alert_sid: msg.sid }).eq('id', saved.id)
-  } catch(e) { console.error('Partner alert failed:', e.message) }
-}
-
-async function processProductOrder(orderData, hotel, guest, convId, products, guestPhone) {
-  console.log('processProductOrder called:', JSON.stringify(orderData))
-
-  // Find the product
-  const product = products.find(p => p.id === orderData.product_id)
-  if (!product) {
-    console.error('processProductOrder: product not found:', orderData.product_id)
-    console.error('Available product IDs:', products.map(p => p.id))
-    return
+      hotel_id:    hotel.id,
+      guest_id:    guest.id,
+      department:  'concierge',
+      category:    'facility_booking',
+      description,
+      room:        guest.room,
+      priority:    'normal',
+      status:      'pending',
+      created_by:  'bot',
+    }).catch(() => {})
   }
 
-  // Find the tier — case-insensitive
-  const tier = (product.tiers || []).find(t =>
-    t.name.toLowerCase() === orderData.tier_name.toLowerCase()
-  )
-  if (!tier) {
-    console.error('processProductOrder: tier not found:', orderData.tier_name)
-    console.error('Available tiers:', (product.tiers||[]).map(t => t.name))
-    return
-  }
+  // 11. Call Claude
+  await appendMessage(conv.id, 'user', message)
 
-  const quantity = orderData.quantity || 1
-  console.log(`Creating order: ${product.name} / ${tier.name} x${quantity} @ €${tier.price}`)
+  const botReply = await callClaude(systemPrompt, [
+    ...history,
+    { role: 'user', content: message }
+  ])
 
-  try {
-    const { order, paymentUrl } = await createGuestOrder({
-      hotelId: hotel.id,
-      guestId: guest.id,
-      convId,
-      product,
-      tier,
-      quantity,
-      hotel,
-      guest,
-    })
+  await appendMessage(conv.id, 'assistant', botReply)
 
-    console.log('Order created:', order.id, 'Payment URL:', paymentUrl)
+  // 12. Parse booking intent
+  if (botReply.includes('[BOOKING_REQUEST]')) {
+    const bookingDetails = parseBookingRequest(botReply, guest, hotel)
+    if (bookingDetails) {
+      const booking = await createBooking({
+        hotel_id:   hotel.id,
+        guest_id:   guest.id,
+        partner_id: bookingDetails.partnerId || null,
+        type:       bookingDetails.type,
+        details:    bookingDetails.details,
+        status:     'pending',
+        created_by: 'bot',
+      })
 
-    const total      = (tier.price * quantity).toFixed(0)
-    const tierLabel  = quantity > 1 ? `${quantity}× ${tier.name}` : tier.name
-    const paymentMsg = [
-      `💳 *${product.name} — ${tierLabel}*`,
-      `Total: €${total}`,
-      ``,
-      `Your secure payment link:`,
-      paymentUrl,
-      ``,
-      `⏱ Valid for 24 hours. Once paid I'll send your confirmation immediately.`,
-    ].join('\n')
-
-    await sendWhatsApp(guestPhone, paymentMsg)
-    await appendMessage(convId, 'assistant', paymentMsg, { sent_by: 'payment_bot' })
-    console.log(`✅ Payment link sent for order ${order.id}: €${total}`)
-
-  } catch(e) {
-    console.error('processProductOrder FAILED:', e.message)
-    console.error(e.stack)
-    // Send a fallback message so guest isn't left hanging
-    try {
-      await sendWhatsApp(guestPhone,
-        `I'm arranging your payment link — please give me just a moment or ask reception to assist. 🙏`
+      const matchedPartner = partners.find(p =>
+        p.type === bookingDetails.type || p.id === bookingDetails.partnerId
       )
-    } catch {}
+
+      if (matchedPartner) {
+        const alertMsg = formatPartnerAlert(booking, guest, hotel, matchedPartner)
+        await sendWhatsApp(matchedPartner.phone, alertMsg)
+      }
+    }
   }
+
+  // 13. Check for product order
+  try {
+    const productOrder = await parseProductOrder(botReply, guest, hotel)
+    if (productOrder) {
+      await createGuestOrder(productOrder)
+    }
+  } catch {}
+
+  // 14. Handle escalation
+  if (botReply.includes('[ESCALATE]') || botReply.includes('[HANDOFF]')) {
+    await supabase
+      .from('conversations')
+      .update({ status: 'escalated' })
+      .eq('id', conv.id)
+
+    await notifyReceptionEscalation({
+      hotelId: hotel.id,
+      guestName: `${guest.name||''} ${guest.surname||''}`.trim() || 'Guest',
+      room:    guest.room,
+      message,
+    }).catch(() => {})
+  } else {
+    await notifyReceptionMessage({
+      hotelId:  hotel.id,
+      guestName: `${guest.name||''} ${guest.surname||''}`.trim() || 'Guest',
+      room:     guest.room,
+      message,
+    }).catch(() => {})
+  }
+
+  // 15. Update guest memory/preferences
+  await updateGuestPreferences(guest.id, message, botReply).catch(() => {})
+
+  // 16. Send reply (clean up internal tags)
+  const cleanReply = botReply
+    .replace(/\[BOOKING_REQUEST\].*$/s, '')
+    .replace(/\[ESCALATE\]/g, '')
+    .replace(/\[HANDOFF\]/g, '')
+    .trim()
+
+  await sendWhatsApp(from, cleanReply)
+
+  // 17. Add stay context note if pre_arrival guest
+  // (bot already handles via system prompt, just log)
+  console.log(`Reply sent to ${from} (stay_status: ${guest.stay_status || 'unknown'})`)
 }
