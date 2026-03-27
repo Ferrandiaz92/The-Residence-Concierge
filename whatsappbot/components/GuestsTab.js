@@ -289,7 +289,7 @@ export default function GuestsTab({ hotelId, selectedGuest }) {
         {/* Timeline */}
         <div style={{ borderRight:'1px solid #E5E7EB', display:'flex', flexDirection:'column', overflow:'hidden' }}>
           <div style={{ padding:'12px 18px', fontSize:'14px', fontWeight:'700', color:'#111827', borderBottom:'1px solid #E5E7EB', background:'white', flexShrink:0, display:'flex', alignItems:'center', gap:'8px' }}>
-            {isDayVisit ? 'Guest' : 'Guest'}
+            {isDayVisit ? 'Visit history' : 'Conversation history'}
             <span style={{ fontSize:'13px', color:'#9CA3AF', fontWeight:'400' }}>
               {allMessages.length} messages · {bookings.length} bookings
             </span>
