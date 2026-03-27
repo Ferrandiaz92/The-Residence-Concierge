@@ -477,9 +477,37 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
       <div style={{ borderLeft:'0.5px solid var(--border)', display:'flex', flexDirection:'column', background:'white', overflow:'hidden' }}>
         <div className="scrollable">
 
-          {/* Issues */}
+          {/* Escalated conversations */}
           <div style={{ borderBottom:'0.5px solid var(--border)' }}>
-            {sh('Alerts', `${issues.length} need action`, issues.length > 0)}
+            {sh('Conversations needing reply', `${escalated.length} escalated`, escalated.length > 0)}
+            {escalated.length === 0 ? (
+              <div style={{ padding:'12px 14px', textAlign:'center', color:'#9CA3AF', fontSize:'12px' }}>No escalated conversations ✓</div>
+            ) : escalated.map(c => {
+              const g = c.guests || {}
+              const lastMsg = c.messages?.[c.messages.length - 1]
+              const preview = lastMsg?.content?.slice(0, 50) || 'No messages'
+              return (
+                <div key={c.id} onClick={() => setSelectedConv(c)}
+                  style={{ display:'flex', alignItems:'flex-start', gap:'10px', padding:'12px 14px', borderBottom:'0.5px solid var(--border)', background:'#FFF5F5', cursor:'pointer' }}>
+                  <div style={{ width:'28px', height:'28px', borderRadius:'50%', background:'#FEE2E2', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'13px', flexShrink:0 }}>💬</div>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:'6px', marginBottom:'2px' }}>
+                      <span style={{ fontSize:'12px', fontWeight:'700', color:'#DC2626' }}>
+                        {g.name ? `${g.name} ${g.surname||''}`.trim() : 'Guest'}
+                      </span>
+                      {g.room && <span style={{ fontSize:'11px', color:'#9CA3AF' }}>Room {g.room}</span>}
+                      <span style={{ marginLeft:'auto', fontSize:'10px', fontWeight:'700', padding:'1px 6px', borderRadius:'4px', background:'#FEE2E2', color:'#DC2626' }}>NEEDS REPLY</span>
+                    </div>
+                    <div style={{ fontSize:'11px', color:'#6B7280', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{preview}</div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Open tickets */}
+          <div style={{ borderBottom:'0.5px solid var(--border)' }}>
+            {sh('Open tickets', `${issues.length} need action`, issues.length > 0)}
             {issues.length === 0 ? (
               <div style={{ padding:'16px', textAlign:'center', color:'#9CA3AF', fontSize:'13px' }}>All clear ✓</div>
             ) : issues.map(t => (
@@ -492,7 +520,7 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
                     {t.description?.slice(0,40)}
                     {t.priority==='urgent' && <span style={{ fontSize:'10px', fontWeight:'700', padding:'1px 6px', borderRadius:'4px', background:'#FEE2E2', color:'#DC2626', marginLeft:'5px' }}>urgent</span>}
                   </div>
-                  <div style={{ fontSize:'11px', color:'#6B7280' }}>Room {t.room} · {t.department} · {t.status}</div>
+                  <div style={{ fontSize:'11px', color:'#6B7280' }}>{t.room ? `Room ${t.room} · ` : ''}{t.department} · {t.status}</div>
                   <button style={{ fontSize:'11px', fontWeight:'600', padding:'3px 9px', borderRadius:'5px', border:'0.5px solid #FCD34D', background:'#FFFBEB', color:'#D97706', cursor:'pointer', marginTop:'5px', fontFamily:'var(--font)' }}>
                     {t.escalation_level===0?'Call supervisor':t.escalation_level===1?'Call team':'Contact manager'}
                   </button>

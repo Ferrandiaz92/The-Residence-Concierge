@@ -521,17 +521,46 @@ function ExpandableBooking({ booking: b, guest: g, tc }) {
   )
 }
 
-function IssuesPanel({ tickets, bookings }) {
-  const issues   = tickets.filter(t => !['resolved','cancelled'].includes(t.status))
-  const upcoming = bookings.filter(b => ['confirmed','pending'].includes(b.status))
-  const done     = bookings.filter(b => ['completed','resolved'].includes(b.status))
-  const typeColors = { taxi:{bg:'#DCFCE7',color:'#14532D',l:'T'}, restaurant:{bg:'#DBEAFE',color:'#1E3A5F',l:'R'}, activity:{bg:'#FEF3C7',color:'#78350F',l:'A'} }
+function IssuesPanel({ tickets, bookings, conversations = [], onOpenThread }) {
+  const escalatedChats = conversations.filter(c => c.status === 'escalated')
+  const issues         = tickets.filter(t => !['resolved','cancelled'].includes(t.status))
+  const upcoming       = bookings.filter(b => ['confirmed','pending'].includes(b.status))
+  const done           = bookings.filter(b => ['completed','resolved'].includes(b.status))
+  const typeColors     = { taxi:{bg:'#DCFCE7',color:'#14532D',l:'T'}, restaurant:{bg:'#DBEAFE',color:'#1E3A5F',l:'R'}, activity:{bg:'#FEF3C7',color:'#78350F',l:'A'} }
+  const totalAlerts    = escalatedChats.length + issues.length
 
   return (
     <div style={{ flex:1, overflowY:'auto', background:'#F9FAFB' }}>
 
-      {/* Issues */}
-      <SectionHeader title="Alerts" badge={issues.length} badgeBg="#FEE2E2" badgeColor="#DC2626" />
+      {/* Escalated conversations */}
+      <SectionHeader title="Conversations needing reply" badge={escalatedChats.length} badgeBg="#FEE2E2" badgeColor="#DC2626" />
+      {escalatedChats.length === 0
+        ? <EmptyRow text="No escalated conversations ✓" />
+        : escalatedChats.map(c => {
+          const g = c.guests || {}
+          const lastMsg = c.messages?.[c.messages.length - 1]
+          const preview = lastMsg?.content?.slice(0, 60) || 'No messages'
+          return (
+            <div key={c.id} onClick={() => onOpenThread(c)}
+              style={{ padding:'14px 16px', background:'#FFF5F5', borderBottom:'1px solid #FEE2E2', display:'flex', gap:'10px', alignItems:'flex-start', cursor:'pointer' }}>
+              <div style={{ width:'28px', height:'28px', borderRadius:'50%', background:'#FEE2E2', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'14px', flexShrink:0 }}>💬</div>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ display:'flex', alignItems:'center', gap:'7px', marginBottom:'2px' }}>
+                  <div style={{ fontSize:'13px', fontWeight:'700', color:'#DC2626' }}>
+                    {g.name ? `${g.name} ${g.surname||''}`.trim() : 'Guest'}
+                  </div>
+                  {g.room && <div style={{ fontSize:'11px', color:'#9CA3AF' }}>Room {g.room}</div>}
+                  <div style={{ marginLeft:'auto', fontSize:'10px', fontWeight:'700', padding:'2px 7px', borderRadius:'4px', background:'#FEE2E2', color:'#DC2626' }}>NEEDS REPLY</div>
+                </div>
+                <div style={{ fontSize:'12px', color:'#6B7280', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{preview}</div>
+              </div>
+            </div>
+          )
+        })
+      }
+
+      {/* Ticket alerts */}
+      <SectionHeader title="Open tickets" badge={issues.length} badgeBg="#FEE2E2" badgeColor="#DC2626" divider />
       {issues.length === 0
         ? <EmptyRow text="All clear ✓" />
         : issues.map(t => (
@@ -542,7 +571,7 @@ function IssuesPanel({ tickets, bookings }) {
             <div style={{ flex:1 }}>
               <div style={{ fontSize:'13px', fontWeight:'600', color:'#111827', marginBottom:'2px' }}>{t.description?.slice(0,70)}{t.description?.length>70?'…':''}</div>
               <div style={{ fontSize:'12px', color:'#6B7280' }}>
-                Room {t.room} · {t.department} · <span style={{ color: t.status==='escalated'?'#DC2626':'#D97706', textTransform:'capitalize' }}>{t.status}</span>
+                {t.room ? `Room ${t.room} · ` : ''}{t.department} · <span style={{ color: t.status==='escalated'?'#DC2626':'#D97706', textTransform:'capitalize' }}>{t.status}</span>
               </div>
               {t.priority==='urgent' && <span style={{ display:'inline-block', marginTop:'4px', fontSize:'10px', fontWeight:'700', padding:'2px 7px', borderRadius:'4px', background:'#FEE2E2', color:'#DC2626' }}>URGENT</span>}
             </div>
@@ -838,7 +867,8 @@ function ReceptionView({ hotelId, session }) {
   }
 
   const escalated  = conversations.filter(c => c.status === 'escalated').length
-  const issueCount = tickets.filter(t => !['resolved','cancelled'].includes(t.status)).length
+  const escalatedConvCount = conversations.filter(c => c.status === 'escalated').length
+  const issueCount = escalatedConvCount + tickets.filter(t => !['resolved','cancelled'].includes(t.status)).length
 
   const TABS = [
     { key:'chats',  label:'Chats',        icon:'💬', badge:escalated,  badgeBg:'#FEE2E2', badgeColor:'#DC2626' },
@@ -881,7 +911,7 @@ function ReceptionView({ hotelId, session }) {
         />
       )}
       {!threadOpen && subtab === 'issues' && (
-        <IssuesPanel tickets={tickets} bookings={bookings} />
+        <IssuesPanel tickets={tickets} bookings={bookings} conversations={conversations} onOpenThread={openThread} />
       )}
 
       {/* Thread — slides over as full-screen overlay within this panel */}
