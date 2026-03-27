@@ -1,23 +1,76 @@
 // app/api/payments/webhook/route.js
-// Stripe sends events here when payments complete or fail
+// Stripe sends events here when payments complete or fail.
 // Add this URL in Stripe Dashboard → Webhooks:
 //   https://your-domain.vercel.app/api/payments/webhook
-// Events to listen for: checkout.session.completed, payment_intent.payment_failed
+// Events to listen for: checkout.session.completed, checkout.session.expired
 
-// Required for Stripe webhook signature verification — must read raw body
 export const dynamic = 'force-dynamic'
 
-import Stripe         from 'stripe'
+import Stripe          from 'stripe'
 import { createClient } from '@supabase/supabase-js'
-import twilio         from 'twilio'
+import twilio           from 'twilio'
 
-function getStripe()   { return new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion:'2024-04-10' }) }
-function getSupabase() { return createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY, { auth:{ persistSession:false } }) }
+function getStripe()   { return new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-04-10' }) }
+function getSupabase() { return createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY, { auth: { persistSession: false } }) }
 
 function sendWhatsApp(to, body) {
   const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN)
   const fmt    = to.startsWith('whatsapp:') ? to : `whatsapp:${to}`
   return client.messages.create({ from: process.env.TWILIO_WHATSAPP_NUMBER, to: fmt, body })
+}
+
+// ── RICH CONFIRMATION BUILDER ─────────────────────────────────
+function buildRichConfirmation(lang, { productName, tierName, quantity, total, meetingPoint, durationText, whatToBring, cancellationPolicy, partnerContact, bookingRef }) {
+  const qStr   = quantity > 1 ? `${quantity}× ` : ''
+  const refStr = bookingRef ? `\n\n🎫 Ref: #${bookingRef.slice(-6).toUpperCase()}` : ''
+
+  function logisticsBlock(labels) {
+    const lines = []
+    if (meetingPoint)       lines.push(`${labels.where} ${meetingPoint}`)
+    if (durationText)       lines.push(`${labels.duration} ${durationText}`)
+    if (whatToBring)        lines.push(`${labels.bring} ${whatToBring}`)
+    if (partnerContact)     lines.push(`${labels.contact} ${partnerContact}`)
+    if (cancellationPolicy) lines.push(`${labels.cancel} ${cancellationPolicy}`)
+    return lines.length ? '\n\n' + lines.join('\n') : ''
+  }
+
+  const templates = {
+    en: () => { const lg = logisticsBlock({ where:'📍', duration:'⏱', bring:'👜', contact:'📞', cancel:'↩️' }); return `✅ *Booking confirmed!*\n\n${productName}\n${qStr}${tierName} — €${total}${refStr}${lg}\n\nHave a wonderful time! 🎉` },
+    ru: () => { const lg = logisticsBlock({ where:'📍', duration:'⏱', bring:'👜', contact:'📞', cancel:'↩️' }); return `✅ *Бронирование подтверждено!*\n\n${productName}\n${qStr}${tierName} — €${total}${refStr}${lg}\n\nПриятного времяпрепровождения! 🎉` },
+    he: () => { const lg = logisticsBlock({ where:'📍', duration:'⏱', bring:'👜', contact:'📞', cancel:'↩️' }); return `✅ *ההזמנה אושרה!*\n\n${productName}\n${qStr}${tierName} — €${total}${refStr}${lg}\n\nתיהנו! 🎉` },
+    de: () => { const lg = logisticsBlock({ where:'📍 Treffpunkt:', duration:'⏱ Dauer:', bring:'👜 Mitbringen:', contact:'📞', cancel:'↩️ Stornierung:' }); return `✅ *Buchung bestätigt!*\n\n${productName}\n${qStr}${tierName} — €${total}${refStr}${lg}\n\nViel Spaß! 🎉` },
+    fr: () => { const lg = logisticsBlock({ where:'📍 Rendez-vous:', duration:'⏱ Durée:', bring:'👜 À apporter:', contact:'📞', cancel:'↩️ Annulation:' }); return `✅ *Réservation confirmée!*\n\n${productName}\n${qStr}${tierName} — €${total}${refStr}${lg}\n\nProfitez-en! 🎉` },
+    es: () => { const lg = logisticsBlock({ where:'📍 Punto de encuentro:', duration:'⏱ Duración:', bring:'👜 Qué llevar:', contact:'📞', cancel:'↩️ Cancelación:' }); return `✅ *¡Reserva confirmada!*\n\n${productName}\n${qStr}${tierName} — €${total}${refStr}${lg}\n\n¡Que lo disfrutes! 🎉` },
+    it: () => { const lg = logisticsBlock({ where:'📍 Punto di incontro:', duration:'⏱ Durata:', bring:'👜 Cosa portare:', contact:'📞', cancel:'↩️ Cancellazione:' }); return `✅ *Prenotazione confermata!*\n\n${productName}\n${qStr}${tierName} — €${total}${refStr}${lg}\n\nBuon divertimento! 🎉` },
+    pt: () => { const lg = logisticsBlock({ where:'📍 Ponto de encontro:', duration:'⏱ Duração:', bring:'👜 O que levar:', contact:'📞', cancel:'↩️ Cancelamento:' }); return `✅ *Reserva confirmada!*\n\n${productName}\n${qStr}${tierName} — €${total}${refStr}${lg}\n\nDivirta-se! 🎉` },
+    zh: () => { const lg = logisticsBlock({ where:'📍 集合地点：', duration:'⏱ 时长：', bring:'👜 建议携带：', contact:'📞', cancel:'↩️ 取消政策：' }); return `✅ *预订已确认！*\n\n${productName}\n${qStr}${tierName} — €${total}${refStr}${lg}\n\n祝您玩得愉快！🎉` },
+    ar: () => { const lg = logisticsBlock({ where:'📍 نقطة الالتقاء:', duration:'⏱ المدة:', bring:'👜 ما تحضره:', contact:'📞', cancel:'↩️ سياسة الإلغاء:' }); return `✅ *تم تأكيد الحجز!*\n\n${productName}\n${qStr}${tierName} — €${total}${refStr}${lg}\n\nاستمتع! 🎉` },
+    nl: () => { const lg = logisticsBlock({ where:'📍 Ontmoetingspunt:', duration:'⏱ Duur:', bring:'👜 Meenemen:', contact:'📞', cancel:'↩️ Annulering:' }); return `✅ *Boeking bevestigd!*\n\n${productName}\n${qStr}${tierName} — €${total}${refStr}${lg}\n\nGeniet ervan! 🎉` },
+    el: () => { const lg = logisticsBlock({ where:'📍 Σημείο συνάντησης:', duration:'⏱ Διάρκεια:', bring:'👜 Τι να φέρετε:', contact:'📞', cancel:'↩️ Ακύρωση:' }); return `✅ *Κράτηση επιβεβαιώθηκε!*\n\n${productName}\n${qStr}${tierName} — €${total}${refStr}${lg}\n\nΚαλή διασκέδαση! 🎉` },
+    pl: () => { const lg = logisticsBlock({ where:'📍 Miejsce zbiórki:', duration:'⏱ Czas trwania:', bring:'👜 Zabrać ze sobą:', contact:'📞', cancel:'↩️ Anulowanie:' }); return `✅ *Rezerwacja potwierdzona!*\n\n${productName}\n${qStr}${tierName} — €${total}${refStr}${lg}\n\nMiłej zabawy! 🎉` },
+    uk: () => { const lg = logisticsBlock({ where:'📍 Місце зустрічі:', duration:'⏱ Тривалість:', bring:'👜 Що взяти:', contact:'📞', cancel:'↩️ Скасування:' }); return `✅ *Бронювання підтверджено!*\n\n${productName}\n${qStr}${tierName} — €${total}${refStr}${lg}\n\nПриємного часу! 🎉` },
+    sv: () => { const lg = logisticsBlock({ where:'📍 Mötesplats:', duration:'⏱ Längd:', bring:'👜 Ta med:', contact:'📞', cancel:'↩️ Avbokning:' }); return `✅ *Bokning bekräftad!*\n\n${productName}\n${qStr}${tierName} — €${total}${refStr}${lg}\n\nHa det så kul! 🎉` },
+    fi: () => { const lg = logisticsBlock({ where:'📍 Kokoontumispaikka:', duration:'⏱ Kesto:', bring:'👜 Ota mukaan:', contact:'📞', cancel:'↩️ Peruutus:' }); return `✅ *Varaus vahvistettu!*\n\n${productName}\n${qStr}${tierName} — €${total}${refStr}${lg}\n\nHyvää huvia! 🎉` },
+  }
+
+  return (templates[lang] || templates.en)()
+}
+
+// ── PARTNER ALERT BUILDER ─────────────────────────────────────
+function buildPartnerAlert({ productName, tierName, quantity, guestName, guestRoom, total, payout, orderId }) {
+  const ref = orderId.slice(-6).toUpperCase()
+  return [
+    `🎟 New booking — ${productName}`,
+    `Ref: #${ref}`,
+    ``,
+    `Tier: ${tierName}${quantity > 1 ? ` × ${quantity}` : ''}`,
+    `Guest: ${guestName || 'Guest'}${guestRoom ? ` · Room ${guestRoom}` : ''}`,
+    `Total paid: €${total}`,
+    `Your payout: €${payout}`,
+    ``,
+    `Reply ✅ to confirm availability.`,
+    `Contact hotel reception if any issues.`,
+  ].join('\n')
 }
 
 export async function POST(request) {
@@ -35,50 +88,69 @@ export async function POST(request) {
   const supabase = getSupabase()
 
   try {
+    // ── PAYMENT SUCCEEDED ────────────────────────────────────
     if (event.type === 'checkout.session.completed') {
-      const session   = event.data.object
-      const orderId   = session.metadata?.order_id
-      const hotelId   = session.metadata?.hotel_id
-      const guestId   = session.metadata?.guest_id
+      const session = event.data.object
+      const orderId = session.metadata?.order_id
+      const hotelId = session.metadata?.hotel_id
+      const guestId = session.metadata?.guest_id
 
       if (!orderId) return new Response('ok', { status: 200 })
 
-      // Update order to paid
+      // Mark order paid — pull full product logistics in one query
       const { data: order } = await supabase
         .from('guest_orders')
-        .update({ status:'paid', paid_at: new Date().toISOString(), stripe_payment_intent: session.payment_intent })
+        .update({
+          status:                'paid',
+          paid_at:               new Date().toISOString(),
+          stripe_payment_intent: session.payment_intent,
+        })
         .eq('id', orderId)
-        .select('*, partner_products(name, tiers, available_times, partners(name, phone))')
+        .select(`
+          *,
+          partner_products (
+            name, tiers, available_times,
+            meeting_point, duration_text, what_to_bring,
+            cancellation_policy, partner_contact,
+            partners ( name, phone )
+          ),
+          guests ( name, surname, room )
+        `)
         .single()
 
       if (!order) return new Response('ok', { status: 200 })
 
-      // Update partner payout to ready
-      await supabase.from('partner_payouts').update({ status:'ready' }).eq('order_id', orderId)
+      await supabase.from('partner_payouts').update({ status: 'ready' }).eq('order_id', orderId)
 
-      // Get guest phone
-      const { data: guest } = await supabase.from('guests').select('phone, name, language').eq('id', guestId).single()
+      const { data: guest } = await supabase
+        .from('guests')
+        .select('phone, name, language')
+        .eq('id', guestId)
+        .single()
+
       if (!guest?.phone) return new Response('ok', { status: 200 })
 
-      // Confirmation messages per language
-      const CONFIRMATIONS = {
-        en: (p, t, q, total) => `✅ *Booking confirmed!*\n\n${p}\n${q > 1 ? `${q}× ` : ''}${t} — €${total}\n\nYou're all set! Have a wonderful time 🎉`,
-        es: (p, t, q, total) => `✅ *¡Reserva confirmada!*\n\n${p}\n${q > 1 ? `${q}× ` : ''}${t} — €${total}\n\n¡Todo listo! Que lo disfrutes mucho 🎉`,
-        fr: (p, t, q, total) => `✅ *Réservation confirmée!*\n\n${p}\n${q > 1 ? `${q}× ` : ''}${t} — €${total}\n\nVous êtes prêt(e)! Profitez-en bien 🎉`,
-        de: (p, t, q, total) => `✅ *Buchung bestätigt!*\n\n${p}\n${q > 1 ? `${q}× ` : ''}${t} — €${total}\n\nAlles bereit! Viel Spaß 🎉`,
-        it: (p, t, q, total) => `✅ *Prenotazione confermata!*\n\n${p}\n${q > 1 ? `${q}× ` : ''}${t} — €${total}\n\nSiete pronti! Buon divertimento 🎉`,
-        ru: (p, t, q, total) => `✅ *Бронирование подтверждено!*\n\n${p}\n${q > 1 ? `${q}× ` : ''}${t} — €${total}\n\nВсё готово! Приятного времяпрепровождения 🎉`,
-        he: (p, t, q, total) => `✅ *ההזמנה אושרה!*\n\n${p}\n${q > 1 ? `${q}× ` : ''}${t} — €${total}\n\nהכל מוכן! תיהנו 🎉`,
-      }
-
-      const productName = order.partner_products?.name || 'Your experience'
+      const product     = order.partner_products || {}
+      const productName = product.name || 'Your experience'
       const total       = order.total_amount.toFixed(0)
-      const confirmFn   = CONFIRMATIONS[guest.language] || CONFIRMATIONS.en
-      const confirmMsg  = confirmFn(productName, order.tier_name, order.quantity, total)
+
+      // ── Rich confirmation → guest ─────────────────────────
+      const confirmMsg = buildRichConfirmation(guest.language || 'en', {
+        productName,
+        tierName:           order.tier_name,
+        quantity:           order.quantity,
+        total,
+        meetingPoint:       product.meeting_point       || null,
+        durationText:       product.duration_text       || product.available_times || null,
+        whatToBring:        product.what_to_bring       || null,
+        cancellationPolicy: product.cancellation_policy || null,
+        partnerContact:     product.partner_contact     || null,
+        bookingRef:         orderId,
+      })
 
       await sendWhatsApp(guest.phone, confirmMsg)
 
-      // Notify hotel (create internal notification)
+      // ── Internal notification → dashboard ────────────────
       await supabase.from('notifications').insert({
         hotel_id:  hotelId,
         type:      'payment_received',
@@ -86,32 +158,33 @@ export async function POST(request) {
         body:      `${session.metadata?.guest_name || 'Guest'} · €${total} · Commission: €${order.commission_amount?.toFixed(0)}`,
         link_type: 'order',
         link_id:   orderId,
-      }).catch(() => {}) // non-fatal
+      }).catch(() => {})
 
-      // Notify partner via WhatsApp if they have a phone
-      const partnerPhone = order.partner_products?.partners?.phone
+      // ── Alert → partner ───────────────────────────────────
+      const partnerPhone = product.partners?.phone
       if (partnerPhone) {
-        const partnerMsg = [
-          `🎟 New booking from ${order.partner_products?.partners?.name || 'The hotel'}`,
-          `Product: ${productName}`,
-          `Tier: ${order.tier_name}${order.quantity > 1 ? ` × ${order.quantity}` : ''}`,
-          `Guest: ${session.metadata?.guest_name || 'Guest'}`,
-          `Total paid: €${total}`,
-          `Your payout: €${(order.total_amount - order.commission_amount).toFixed(0)}`,
-          ``,
-          `Please confirm availability and contact the hotel if any issues.`,
-        ].join('\n')
-        sendWhatsApp(partnerPhone, partnerMsg).catch(e => console.error('Partner notify error:', e.message))
+        const payout = (order.total_amount - (order.commission_amount || 0)).toFixed(0)
+        sendWhatsApp(partnerPhone, buildPartnerAlert({
+          productName,
+          tierName:  order.tier_name,
+          quantity:  order.quantity,
+          guestName: session.metadata?.guest_name || 'Guest',
+          guestRoom: order.guests?.room || null,
+          total,
+          payout,
+          orderId,
+        })).catch(e => console.error('Partner notify error:', e.message))
       }
 
       console.log(`Order ${orderId} confirmed — €${total}`)
     }
 
+    // ── PAYMENT LINK EXPIRED ─────────────────────────────────
     if (event.type === 'checkout.session.expired') {
       const session = event.data.object
       const orderId = session.metadata?.order_id
       if (orderId) {
-        await supabase.from('guest_orders').update({ status:'cancelled' }).eq('id', orderId)
+        await supabase.from('guest_orders').update({ status: 'cancelled' }).eq('id', orderId)
       }
     }
 
