@@ -54,7 +54,7 @@ function BackBtn({ onBack, label }) {
 function GuestChip({ conv }) {
   if (!conv) return null
   const g    = conv.guests || {}
-  const room = g.room || g.guest_room || ''
+  const room = g.room || g.guest_room || '?'
   return (
     <div style={{ display:'flex', alignItems:'center', gap:'8px', flex:1, minWidth:0 }}>
       <div style={{ width:'30px', height:'30px', borderRadius:'50%', background:'#1C3D2E', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'11px', color:'#C9A84C', fontWeight:'700', flexShrink:0 }}>
@@ -100,7 +100,7 @@ function ConversationsList({ conversations, selectedConvId, onOpenThread }) {
         const isActive= selectedConvId === conv.id
         const mins    = Math.floor((Date.now() - new Date(conv.last_message_at)) / 60000)
         const time    = mins === 0 ? 'now' : mins < 60 ? `${mins}m` : `${Math.floor(mins/60)}h`
-        const room    = g.room || g.guest_room || ''
+        const room    = g.room || g.guest_room || '?'
 
         return (
           <div key={conv.id}
@@ -184,7 +184,7 @@ function ChatThread({ conv, session, onBack, onReload }) {
 
   const messages = conv?.messages || []
   const g        = conv?.guests   || {}
-  const room     = g.room || g.guest_room || ''
+  const room     = g.room || g.guest_room || '?'
 
   return (
     <div style={{ display:'flex', flexDirection:'column', height:'100%', overflow:'hidden', background:'#F9FAFB' }}>
@@ -331,7 +331,7 @@ function StaffPortal({ conversations, selectedConv, onSelectConv, session, hotel
               </div>
               <div style={{ flex:1 }}>
                 <div style={{ fontSize:'13px', fontWeight:'600', color:'#111827' }}>{g.name} {g.surname}</div>
-                <div style={{ fontSize:'12px', color:'#6B7280' }}>Room {g.room||g.guest_room||''}</div>
+                <div style={{ fontSize:'12px', color:'#6B7280' }}>Room {g.room||g.guest_room||'?'}</div>
               </div>
               <button onClick={() => setShowConvPicker(s => !s)}
                 style={{ fontSize:'12px', fontWeight:'600', padding:'5px 10px', borderRadius:'8px', border:'1px solid #D1D5DB', background:'white', color:'#374151', cursor:'pointer', fontFamily:"'DM Sans', sans-serif", flexShrink:0 }}>
@@ -472,6 +472,51 @@ function StaffPortal({ conversations, selectedConv, onSelectConv, session, hotel
 // ════════════════════════════════════════════════════════════
 //  ISSUES PANEL
 // ════════════════════════════════════════════════════════════
+
+function ExpandableBooking({ booking: b, guest: g, tc }) {
+  const [open, setOpen] = React.useState(false)
+  const typeEmoji = { taxi:'🚗', restaurant:'🍽️', activity:'⛵', late_checkout:'🕐' }
+  const emoji = typeEmoji[b.type] || '📋'
+  return (
+    <div style={{ background:'white', borderBottom:'1px solid #F3F4F6' }}>
+      <div onClick={() => setOpen(o => !o)}
+        style={{ padding:'12px 16px', display:'flex', alignItems:'center', gap:'10px', cursor:'pointer' }}>
+        <div style={{ width:'28px', height:'28px', borderRadius:'7px', background:tc.bg, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'13px', flexShrink:0 }}>{emoji}</div>
+        <div style={{ flex:1 }}>
+          <div style={{ fontSize:'13px', fontWeight:'600', color:'#111827' }}>{g.name}{g.room ? ` · Room ${g.room}` : ''}</div>
+          <div style={{ fontSize:'12px', color:'#6B7280' }}>{b.partners?.name || b.type}</div>
+        </div>
+        <div style={{ display:'flex', alignItems:'center', gap:'6px' }}>
+          <div style={{ fontSize:'13px', fontWeight:'600', color:'#374151' }}>
+            {b.details?.time || new Date(b.created_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}
+          </div>
+          <div style={{ fontSize:'14px', color:'#9CA3AF', transition:'transform .2s', transform: open ? 'rotate(180deg)' : 'rotate(0deg)' }}>›</div>
+        </div>
+      </div>
+      {open && (
+        <div style={{ padding:'10px 16px 14px 56px', background:'#F9FAFB', borderTop:'1px solid #F3F4F6' }}>
+          <div style={{ fontSize:'12px', color:'#374151', display:'flex', flexDirection:'column', gap:'5px' }}>
+            {b.details?.destination && <div>📍 <strong>To:</strong> {b.details.destination}</div>}
+            {b.details?.pax         && <div>👥 <strong>Passengers:</strong> {b.details.pax}</div>}
+            {b.details?.date        && <div>📅 <strong>Date:</strong> {b.details.date}</div>}
+            {b.details?.time        && <div>🕐 <strong>Time:</strong> {b.details.time}</div>}
+            {b.details?.notes       && <div>📝 <strong>Notes:</strong> {b.details.notes}</div>}
+            {b.commission_amount    && <div>💰 <strong>Commission:</strong> €{b.commission_amount}</div>}
+            <div style={{ marginTop:'4px' }}>
+              <span style={{ fontSize:'10px', fontWeight:'700', padding:'2px 8px', borderRadius:'5px',
+                background: b.status==='confirmed'?'#DCFCE7':'#FEF3C7',
+                color:      b.status==='confirmed'?'#14532D':'#78350F',
+                textTransform:'capitalize' }}>
+                {b.status}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function IssuesPanel({ tickets, bookings }) {
   const issues   = tickets.filter(t => !['resolved','cancelled'].includes(t.status))
   const upcoming = bookings.filter(b => ['confirmed','pending'].includes(b.status))
@@ -482,7 +527,7 @@ function IssuesPanel({ tickets, bookings }) {
     <div style={{ flex:1, overflowY:'auto', background:'#F9FAFB' }}>
 
       {/* Issues */}
-      <SectionHeader title="Issues & Alerts" badge={issues.length} badgeBg="#FEE2E2" badgeColor="#DC2626" />
+      <SectionHeader title="Alerts" badge={issues.length} badgeBg="#FEE2E2" badgeColor="#DC2626" />
       {issues.length === 0
         ? <EmptyRow text="All clear ✓" />
         : issues.map(t => (
@@ -493,7 +538,7 @@ function IssuesPanel({ tickets, bookings }) {
             <div style={{ flex:1 }}>
               <div style={{ fontSize:'13px', fontWeight:'600', color:'#111827', marginBottom:'2px' }}>{t.description?.slice(0,70)}{t.description?.length>70?'…':''}</div>
               <div style={{ fontSize:'12px', color:'#6B7280' }}>
-                {t.room ? `Room ${t.room}` : ''} · {t.department} · <span style={{ color: t.status==='escalated'?'#DC2626':'#D97706', textTransform:'capitalize' }}>{t.status}</span>
+                Room {t.room} · {t.department} · <span style={{ color: t.status==='escalated'?'#DC2626':'#D97706', textTransform:'capitalize' }}>{t.status}</span>
               </div>
               {t.priority==='urgent' && <span style={{ display:'inline-block', marginTop:'4px', fontSize:'10px', fontWeight:'700', padding:'2px 7px', borderRadius:'4px', background:'#FEE2E2', color:'#DC2626' }}>URGENT</span>}
             </div>
@@ -709,7 +754,7 @@ function DeptQueue({ hotelId, session }) {
 
               {/* Room + guest */}
               <div style={{display:'flex',gap:'6px',marginBottom:t.assigned_to_name||!isDone?'10px':'0',flexWrap:'wrap'}}>
-                {t.room && <span style={{fontSize:'11px',fontWeight:'500',padding:'3px 9px',borderRadius:'5px',background:'#F3F4F6',color:'#6B7280'}}>{t.room ? `Room ${t.room}` : ''}</span>}
+                {t.room && <span style={{fontSize:'11px',fontWeight:'500',padding:'3px 9px',borderRadius:'5px',background:'#F3F4F6',color:'#6B7280'}}>Room {t.room}</span>}
                 {t.guest_name && <span style={{fontSize:'11px',color:'#9CA3AF'}}>{t.guest_name} {t.guest_surname||''}</span>}
               </div>
 
@@ -805,7 +850,7 @@ function ReceptionView({ hotelId, session }) {
   const TABS = [
     { key:'chats',  label:'Chats',        icon:'💬', badge:escalated,  badgeBg:'#FEE2E2', badgeColor:'#DC2626' },
     { key:'portal', label:'Staff Portal', icon:'✏️', badge:0 },
-    { key:'issues', label:'Issues',       icon:'⚠️', badge:issueCount, badgeBg:'#FEF3C7', badgeColor:'#D97706' },
+    { key:'issues', label:'Alerts',       icon:'⚠️', badge:issueCount, badgeBg:'#FEF3C7', badgeColor:'#D97706' },
   ]
 
   return (

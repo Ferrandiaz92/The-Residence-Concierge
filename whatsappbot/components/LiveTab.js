@@ -191,7 +191,7 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
             const minsAgo    = Math.floor((Date.now() - new Date(conv.last_message_at)) / 60000)
             const timeLabel  = minsAgo === 0 ? 'now' : minsAgo < 60 ? `${minsAgo}m` : `${Math.floor(minsAgo/60)}h`
             // Room number — check multiple fields
-            const roomNum    = guest.room || guest.guest_room || guest.guest_room_number || '?'
+            const roomNum    = guest.room || guest.guest_room || guest.guest_room_number || ''
 
             return (
               <div key={conv.id} onClick={() => { setSelectedConv(conv); setCentreMode('chat') }}
@@ -245,7 +245,7 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
           ))}
           {selectedConv && (
             <div style={{ fontSize:'12px', color:'#9CA3AF', marginLeft:'8px' }}>
-              {selectedConv.guests?.name} · Room {selectedConv.guests?.room || selectedConv.guests?.guest_room || '?'}
+              {selectedConv.guests?.name} · Room {selectedConv.guests?.room || selectedConv.guests?.guest_room || ''}
               {selectedConv.status === 'escalated' && <span style={{ color:'#DC2626', fontWeight:'700', marginLeft:'6px' }}>Needs reply</span>}
             </div>
           )}
@@ -309,11 +309,11 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
               {selectedConv ? (
                 <div style={{ display:'flex', alignItems:'center', gap:'10px', padding:'10px 12px', background:'white', borderRadius:'10px', border:'0.5px solid #E5E7EB' }}>
                   <div style={{ width:'32px', height:'32px', borderRadius:'50%', background:'var(--green-800)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'12px', color:'var(--gold)', fontWeight:'700', flexShrink:0 }}>
-                    {(selectedConv.guests?.name?.[0]||'?')}{(selectedConv.guests?.surname?.[0]||'')}
+                    {(selectedConv.guests?.name?.[0]||'')}{(selectedConv.guests?.surname?.[0]||'')}
                   </div>
                   <div>
                     <div style={{ fontSize:'13px', fontWeight:'600', color:'#111827' }}>{selectedConv.guests?.name} {selectedConv.guests?.surname}</div>
-                    <div style={{ fontSize:'12px', color:'#6B7280' }}>Room {selectedConv.guests?.room || selectedConv.guests?.guest_room || '?'} · {LANG_COLORS[selectedConv.guests?.language||'en']?.name || (selectedConv.guests?.language||'EN').toUpperCase()}</div>
+                    <div style={{ fontSize:'12px', color:'#6B7280' }}>Room {selectedConv.guests?.room || selectedConv.guests?.guest_room || ''} · {LANG_COLORS[selectedConv.guests?.language||'en']?.name || (selectedConv.guests?.language||'EN').toUpperCase()}</div>
                   </div>
                   <button onClick={()=>setSelectedConv(null)} style={{ marginLeft:'auto', background:'none', border:'none', color:'#D1D5DB', cursor:'pointer', fontSize:'18px', lineHeight:1 }}>×</button>
                 </div>
@@ -418,7 +418,7 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
 
           {/* Issues */}
           <div style={{ borderBottom:'0.5px solid var(--border)' }}>
-            {sh('Issues & alerts', `${issues.length} need action`, issues.length > 0)}
+            {sh('Alerts', `${issues.length} need action`, issues.length > 0)}
             {issues.length === 0 ? (
               <div style={{ padding:'16px', textAlign:'center', color:'#9CA3AF', fontSize:'13px' }}>All clear ✓</div>
             ) : issues.map(t => (
@@ -454,7 +454,7 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
                   <div style={{ width:'7px', height:'7px', borderRadius:'50%', background:'#16A34A', flexShrink:0 }}/>
                   <div style={{ width:'22px', height:'22px', borderRadius:'5px', background:tc.bg, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'10px', fontWeight:'700', color:tc.color, flexShrink:0 }}>{tc.l}</div>
                   <div style={{ flex:1 }}>
-                    <div style={{ fontSize:'12px', fontWeight:'600', color:'#111827' }}>{guest.name} · Room {guest.room || '?'}</div>
+                    <div style={{ fontSize:'12px', fontWeight:'600', color:'#111827' }}>{guest.name} · Room {guest.room || ''}</div>
                     <div style={{ fontSize:'11px', color:'#6B7280', marginTop:'1px' }}>{b.partners?.name || b.type}</div>
                   </div>
                   <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151' }}>
@@ -479,7 +479,7 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
                   <div style={{ width:'7px', height:'7px', borderRadius:'50%', background:'#D1D5DB', flexShrink:0 }}/>
                   <div style={{ width:'22px', height:'22px', borderRadius:'5px', background:'#F3F4F6', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'10px', fontWeight:'700', color:'#9CA3AF', flexShrink:0 }}>{tc.l}</div>
                   <div style={{ flex:1 }}>
-                    <div style={{ fontSize:'12px', color:'#6B7280' }}>{guest.name} · Room {guest.room || '?'}</div>
+                    <div style={{ fontSize:'12px', color:'#6B7280' }}>{guest.name} · Room {guest.room || ''}</div>
                     <div style={{ fontSize:'11px', color:'#9CA3AF', marginTop:'1px' }}>{b.partners?.name || b.type}</div>
                   </div>
                   <div style={{ fontSize:'11px', color:'#9CA3AF' }}>

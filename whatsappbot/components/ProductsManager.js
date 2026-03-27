@@ -28,7 +28,7 @@ const S = {
     width:'100%', padding:'10px 12px', border:'1px solid #E5E7EB',
     borderRadius:'9px', fontSize:'14px', fontFamily:"'DM Sans',sans-serif",
     outline:'none', color:'#111827', resize:'vertical', lineHeight:'1.6',
-    minHeight:'120px', boxSizing:'border-box',
+    minHeight:'160px', boxSizing:'border-box',
   },
   select: {
     width:'100%', padding:'10px 12px', border:'1px solid #E5E7EB',
@@ -176,7 +176,7 @@ function ProductForm({ product, partners, hotelId, onSave, onCancel }) {
           value={form.description||''}
           onChange={e => set('description', e.target.value)}
           placeholder="Describe what's included, how long it lasts, meeting point, what to bring… The bot will use this to answer guest questions."
-          style={S.textarea}
+          style={{ ...S.textarea, fontSize:'13px' }}
         />
       </div>
 
@@ -234,8 +234,8 @@ function ProductForm({ product, partners, hotelId, onSave, onCancel }) {
           <input
             value={form.availableTimes||''}
             onChange={e => set('availableTimes', e.target.value)}
-            placeholder="e.g. Daily 09:00–17:00, Every Friday 20:00, On request…"
-            style={S.input}
+            placeholder="e.g. Daily 09:00, On request…"
+            style={{ ...S.input, fontSize:'13px' }}
           />
         </div>
       </div>

@@ -289,7 +289,7 @@ export default function GuestsTab({ hotelId, selectedGuest }) {
         {/* Timeline */}
         <div style={{ borderRight:'1px solid #E5E7EB', display:'flex', flexDirection:'column', overflow:'hidden' }}>
           <div style={{ padding:'12px 18px', fontSize:'14px', fontWeight:'700', color:'#111827', borderBottom:'1px solid #E5E7EB', background:'white', flexShrink:0, display:'flex', alignItems:'center', gap:'8px' }}>
-            {isDayVisit ? 'Visit & conversation history' : 'Full conversation history'}
+            {isDayVisit ? 'Guest' : 'Guest'}
             <span style={{ fontSize:'13px', color:'#9CA3AF', fontWeight:'400' }}>
               {allMessages.length} messages · {bookings.length} bookings
             </span>
@@ -345,7 +345,7 @@ export default function GuestsTab({ hotelId, selectedGuest }) {
         {/* Summary panel */}
         <div style={{ display:'flex', flexDirection:'column', overflow:'hidden', background:'white' }}>
           <div style={{ padding:'12px 18px', fontSize:'14px', fontWeight:'700', color:'#111827', borderBottom:'1px solid #E5E7EB', flexShrink:0 }}>
-            {isDayVisit ? 'Visitor summary' : 'Stay summary'}
+            {isDayVisit ? 'Guest Summary' : 'Guest Summary'}
           </div>
           <div className="scrollable" style={{ padding:'16px', display:'flex', flexDirection:'column', gap:'16px' }}>
 

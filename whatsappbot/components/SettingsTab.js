@@ -162,7 +162,7 @@ export default function SettingsTab({ hotelId, session }) {
 
   const secBtn = (label, isActive, onClick) => (
     <button onClick={onClick}
-      style={{ padding:'9px 16px', fontSize:'13px', fontWeight:'600', color:isActive?'var(--green-800)':'#9CA3AF', background:'none', border:'none', borderBottom:isActive?'2px solid var(--green-800)':'2px solid transparent', cursor:'pointer', fontFamily:'var(--font)', whiteSpace:'nowrap', flexShrink:0 }}>
+      style={{ padding:'10px 4px', fontSize:'12px', fontWeight:'600', color:isActive?'var(--green-800)':'#9CA3AF', background:'none', border:'none', borderBottom:isActive?'2px solid var(--green-800)':'2px solid transparent', cursor:'pointer', fontFamily:'var(--font)', textAlign:'center', width:'100%', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
       {label}
     </button>
   )
@@ -171,7 +171,7 @@ export default function SettingsTab({ hotelId, session }) {
     <div style={{ height:'100%', overflow:'hidden', display:'flex', flexDirection:'column', fontFamily:'var(--font)' }}>
 
       {/* Section tabs — wraps to 2 lines on mobile */}
-      <div style={{ display:'flex', flexWrap:'wrap', background:'white', borderBottom:'0.5px solid var(--border)', flexShrink:0 }}>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(3, 1fr)', background:'white', borderBottom:'0.5px solid var(--border)', flexShrink:0 }}>
         {canSee.knowledge   && secBtn('Knowledge base', section==='knowledge',   ()=>setSection('knowledge'))}
         {canSee.experiences && secBtn('Experiences',    section==='experiences', ()=>setSection('experiences'))}
         {canSee.partners    && secBtn('Partners',        section==='partners',    ()=>setSection('partners'))}
