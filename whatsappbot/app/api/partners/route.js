@@ -1,9 +1,19 @@
 // app/api/partners/route.js
+// Role guards:
+//   GET    → manager | communications | receptionist (read)
+//   POST   → manager | communications
+//   PATCH  → manager | communications
+//   DELETE → manager only
+
 import { createClient } from '@supabase/supabase-js'
-import { cookies } from 'next/headers'
+import { cookies }      from 'next/headers'
 
 function getSupabase() {
-  return createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY, { auth: { persistSession: false } })
+  return createClient(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_KEY,
+    { auth: { persistSession: false } }
+  )
 }
 
 function getSession() {
@@ -13,12 +23,23 @@ function getSession() {
   } catch { return null }
 }
 
+const CAN_READ   = ['manager', 'admin', 'communications', 'receptionist', 'supervisor']
+const CAN_WRITE  = ['manager', 'admin', 'communications']
+const CAN_DELETE = ['manager', 'admin']
+
 // GET — list all partners
 export async function GET(request) {
   try {
+    const session = getSession()
+    if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!CAN_READ.includes(session.role)) {
+      return Response.json({ error: 'Access denied' }, { status: 403 })
+    }
+
     const { searchParams } = new URL(request.url)
     const hotelId = searchParams.get('hotelId')
     if (!hotelId) return Response.json({ error: 'hotelId required' }, { status: 400 })
+
     const supabase = getSupabase()
     const { data } = await supabase
       .from('partners').select('*').eq('hotel_id', hotelId).order('type').order('name')
@@ -32,18 +53,25 @@ export async function GET(request) {
 export async function POST(request) {
   try {
     const session = getSession()
-    if (!['manager','admin'].includes(session?.role)) {
-      return Response.json({ error: 'Manager access required' }, { status: 403 })
+    if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!CAN_WRITE.includes(session.role)) {
+      return Response.json({ error: 'Access denied' }, { status: 403 })
     }
-    const body = await request.json()
-    const { hotelId, name, type, phone, commission_rate, details } = body
+
+    const { hotelId, name, type, phone, commission_rate, details, contact_name } = await request.json()
     if (!hotelId || !name || !type || !phone) {
       return Response.json({ error: 'hotelId, name, type and phone required' }, { status: 400 })
     }
+
     const supabase = getSupabase()
     const { data, error } = await supabase
       .from('partners')
-      .insert({ hotel_id: hotelId, name, type, phone, commission_rate: commission_rate || 10, details: details || {} })
+      .insert({
+        hotel_id: hotelId, name, type, phone,
+        commission_rate: commission_rate || 10,
+        contact_name: contact_name || null,
+        details: details || {},
+      })
       .select().single()
     if (error) throw error
     return Response.json({ status: 'created', partner: data })
@@ -56,11 +84,14 @@ export async function POST(request) {
 export async function PATCH(request) {
   try {
     const session = getSession()
-    if (!['manager','admin'].includes(session?.role)) {
-      return Response.json({ error: 'Manager access required' }, { status: 403 })
+    if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!CAN_WRITE.includes(session.role)) {
+      return Response.json({ error: 'Access denied' }, { status: 403 })
     }
+
     const { id, ...updates } = await request.json()
     if (!id) return Response.json({ error: 'id required' }, { status: 400 })
+
     const supabase = getSupabase()
     const { data, error } = await supabase
       .from('partners').update(updates).eq('id', id).select().single()
@@ -71,16 +102,19 @@ export async function PATCH(request) {
   }
 }
 
-// DELETE — deactivate partner (soft delete)
+// DELETE — manager only
 export async function DELETE(request) {
   try {
     const session = getSession()
-    if (!['manager','admin'].includes(session?.role)) {
+    if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!CAN_DELETE.includes(session.role)) {
       return Response.json({ error: 'Manager access required' }, { status: 403 })
     }
+
     const { searchParams } = new URL(request.url)
     const id = searchParams.get('id')
     if (!id) return Response.json({ error: 'id required' }, { status: 400 })
+
     const supabase = getSupabase()
     await supabase.from('partners').update({ active: false }).eq('id', id)
     return Response.json({ status: 'deactivated' })
