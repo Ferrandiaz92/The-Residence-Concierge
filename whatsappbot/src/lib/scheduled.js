@@ -205,72 +205,140 @@ function buildPreCheckout(guest, hotel, lang) {
   }, lang)
 }
 
+// ── STEP 1: Overall impression (replaces old 1-5 number prompt) ──
+// Guest replies: 😊  😐  😞  (or "good" / "ok" / "bad" as fallback)
 function buildPostCheckout(guest, hotel, lang) {
   const name = guest.name || 'there'
   const h    = hotel.name
   return t({
-    en: `${name}, thank you for staying at ${h}! 🌴\n\nHow would you rate your experience?\n\n5 ⭐ Excellent\n4 😊 Very good\n3 😐 Good\n2 😕 Could be better\n1 😞 Poor\n\nJust reply with a number!`,
-    ru: `${name}, спасибо за пребывание в ${h}! 🌴\n\nКак оцените?\n\n5 ⭐ Отлично\n4 😊 Очень хорошо\n3 😐 Хорошо\n2 😕 Могло быть лучше\n1 😞 Плохо\n\nОтветьте цифрой!`,
-    he: `${name}, תודה על השהות ב${h}! 🌴\n\nאיך היית מדרג?\n\n5 ⭐ מצוין\n4 😊 טוב מאוד\n3 😐 טוב\n2 😕 יכול להיות טוב יותר\n1 😞 גרוע\n\nענה במספר!`,
-    de: `${name}, vielen Dank für Ihren Aufenthalt in ${h}! 🌴\n\nWie bewerten Sie Ihren Aufenthalt?\n\n5 ⭐ Ausgezeichnet\n4 😊 Sehr gut\n3 😐 Gut\n2 😕 Könnte besser sein\n1 😞 Schlecht\n\nAntworten Sie mit einer Zahl!`,
-    fr: `${name}, merci d'avoir séjourné au ${h}! 🌴\n\nComment évaluez-vous votre séjour?\n\n5 ⭐ Excellent\n4 😊 Très bien\n3 😐 Bien\n2 😕 Peut mieux faire\n1 😞 Mauvais\n\nRépondez avec un chiffre!`,
-    zh: `${name}，感谢您在${h}的入住！🌴\n\n您如何评价？\n\n5 ⭐ 非常好\n4 😊 很好\n3 😐 好\n2 😕 一般\n1 😞 差\n\n请回复一个数字！`,
-    pl: `${name}, dziękujemy za pobyt w ${h}! 🌴\n\nJak oceniasz?\n\n5 ⭐ Doskonale\n4 😊 Bardzo dobrze\n3 😐 Dobrze\n2 😕 Mogło być lepiej\n1 😞 Źle\n\nOdpowiedz cyfrą!`,
-    sv: `${name}, tack för din vistelse på ${h}! 🌴\n\nHur betygsätter du?\n\n5 ⭐ Utmärkt\n4 😊 Mycket bra\n3 😐 Bra\n2 😕 Kunde vara bättre\n1 😞 Dåligt\n\nSvara med en siffra!`,
-    fi: `${name}, kiitos vierailustasi ${h}:ssa! 🌴\n\nMiten arvioisit?\n\n5 ⭐ Erinomainen\n4 😊 Erittäin hyvä\n3 😐 Hyvä\n2 😕 Voisi olla parempi\n1 😞 Huono\n\nVastaa numerolla!`,
-    uk: `${name}, дякуємо за перебування в ${h}! 🌴\n\nЯк оцінюєте?\n\n5 ⭐ Відмінно\n4 😊 Дуже добре\n3 😐 Добре\n2 😕 Могло бути краще\n1 😞 Погано\n\nВідповідайте цифрою!`,
-    ar: `${name}، شكراً لإقامتك في ${h}! 🌴\n\nكيف تقيّم تجربتك؟\n\n5 ⭐ ممتاز\n4 😊 جيد جداً\n3 😐 جيد\n2 😕 يمكن أن يكون أفضل\n1 😞 سيء\n\nأجب برقم!`,
-    nl: `${name}, bedankt voor uw verblijf in ${h}! 🌴\n\nHoe beoordeelt u?\n\n5 ⭐ Uitstekend\n4 😊 Zeer goed\n3 😐 Goed\n2 😕 Kan beter\n1 😞 Slecht\n\nAntwoord met een cijfer!`,
-    el: `${name}, ευχαριστούμε για τη διαμονή σου στο ${h}! 🌴\n\nΠώς θα αξιολογούσες;\n\n5 ⭐ Άριστα\n4 😊 Πολύ καλά\n3 😐 Καλά\n2 😕 Θα μπορούσε να είναι καλύτερα\n1 😞 Κακά\n\nΑπάντησε με αριθμό!`,
-    es: `¡${name}, gracias por quedarte en ${h}! 🌴\n\n¿Cómo valorarías tu experiencia?\n\n5 ⭐ Excelente\n4 😊 Muy buena\n3 😐 Buena\n2 😕 Podría ser mejor\n1 😞 Mala\n\n¡Responde con un número!`,
-    ca: `${name}, gràcies per allotjar-te a ${h}! 🌴\n\nCom valoraries l'experiència?\n\n5 ⭐ Excel·lent\n4 😊 Molt bona\n3 😐 Bona\n2 😕 Podria ser millor\n1 😞 Dolenta\n\nRespon amb un número!`,
-    it: `${name}, grazie per il tuo soggiorno al ${h}! 🌴\n\nCome valuteresti la tua esperienza?\n\n5 ⭐ Eccellente\n4 😊 Molto buona\n3 😐 Buona\n2 😕 Potrebbe essere migliore\n1 😞 Scarsa\n\nRispondi con un numero!`,
-    pt: `${name}, obrigado por se hospedar no ${h}! 🌴\n\nComo avaliaria a sua experiência?\n\n5 ⭐ Excelente\n4 😊 Muito boa\n3 😐 Boa\n2 😕 Podia ser melhor\n1 😞 Má\n\nResponda com um número!`,
+    en: `${name}, thank you for staying at ${h}! 🌴\n\nHow was your overall experience?\n\nReply:  😊 Great  ·  😐 OK  ·  😞 Poor`,
+    ru: `${name}, спасибо за пребывание в ${h}! 🌴\n\nКак вам в целом?\n\nОтветьте:  😊 Отлично  ·  😐 Нормально  ·  😞 Плохо`,
+    he: `${name}, תודה על השהות ב${h}! 🌴\n\nאיך הייתה החוויה בכלל?\n\nענה:  😊 מצוין  ·  😐 בסדר  ·  😞 גרוע`,
+    de: `${name}, vielen Dank für Ihren Aufenthalt in ${h}! 🌴\n\nWie war Ihr Aufenthalt insgesamt?\n\nAntworten Sie:  😊 Super  ·  😐 OK  ·  😞 Schlecht`,
+    fr: `${name}, merci d'avoir séjourné au ${h}! 🌴\n\nComment s'est passé votre séjour?\n\nRépondez:  😊 Super  ·  😐 Correct  ·  😞 Décevant`,
+    es: `¡${name}, gracias por tu estancia en ${h}! 🌴\n\n¿Cómo fue tu experiencia?\n\nResponde:  😊 Genial  ·  😐 Regular  ·  😞 Mala`,
+    it: `${name}, grazie per il soggiorno al ${h}! 🌴\n\nCom'è stata la tua esperienza?\n\nRispondi:  😊 Ottima  ·  😐 OK  ·  😞 Scarsa`,
+    pt: `${name}, obrigado pela sua estadia no ${h}! 🌴\n\nComo foi a sua experiência?\n\nResponda:  😊 Ótima  ·  😐 OK  ·  😞 Má`,
+    zh: `${name}，感谢您在${h}的入住！🌴\n\n您对整体体验的评价如何？\n\n请回复:  😊 很好  ·  😐 一般  ·  😞 差`,
+    ar: `${name}، شكراً لإقامتك في ${h}! 🌴\n\nكيف كانت تجربتك بشكل عام؟\n\nأجب:  😊 رائع  ·  😐 مقبول  ·  😞 سيء`,
+    nl: `${name}, bedankt voor uw verblijf in ${h}! 🌴\n\nHoe was uw ervaring?\n\nAntwoord:  😊 Geweldig  ·  😐 Oké  ·  😞 Slecht`,
+    el: `${name}, ευχαριστούμε για τη διαμονή σου στο ${h}! 🌴\n\nΠώς ήταν η συνολική σου εμπειρία;\n\nΑπάντησε:  😊 Υπέροχα  ·  😐 Εντάξει  ·  😞 Κακά`,
+    pl: `${name}, dziękujemy za pobyt w ${h}! 🌴\n\nJak oceniasz swój pobyt?\n\nOdpowiedz:  😊 Super  ·  😐 OK  ·  😞 Słabo`,
+    uk: `${name}, дякуємо за перебування в ${h}! 🌴\n\nЯк вам загалом?\n\nВідповідайте:  😊 Чудово  ·  😐 Нормально  ·  😞 Погано`,
+    sv: `${name}, tack för din vistelse på ${h}! 🌴\n\nHur var din upplevelse?\n\nSvara:  😊 Toppen  ·  😐 OK  ·  😞 Dålig`,
+    fi: `${name}, kiitos vierailustasi ${h}:ssa! 🌴\n\nMiten kuvailisit kokemustasi?\n\nVastaa:  😊 Loistava  ·  😐 OK  ·  😞 Huono`,
+    ca: `${name}, gràcies per allotjar-te a ${h}! 🌴\n\nCom ha anat la teva estada?\n\nRespon:  😊 Genial  ·  😐 Regular  ·  😞 Dolenta`,
   }, lang)
 }
 
-function buildFeedbackFollowup(rating, hotel, lang, tripadvisorUrl) {
-  const url = tripadvisorUrl || 'https://tripadvisor.com'
-  const high = {
-    en: `Thank you so much! 🌟 We're thrilled you had a great experience.\n\nA review on TripAdvisor would mean the world to us:\n${url}\n\nHope to see you again! 🌴`,
-    ru: `Большое спасибо! 🌟\n\nОтзыв на TripAdvisor очень важен:\n${url}\n\nБудем рады видеть вас снова! 🌴`,
-    he: `תודה רבה! 🌟\n\nביקורת ב-TripAdvisor תעזור לנו מאוד:\n${url}\n\nנשמח לראותך שוב! 🌴`,
-    de: `Vielen Dank! 🌟\n\nEine Bewertung auf TripAdvisor wäre wunderbar:\n${url}\n\nBis bald! 🌴`,
-    fr: `Merci beaucoup! 🌟\n\nUn avis sur TripAdvisor nous aiderait:\n${url}\n\nÀ bientôt! 🌴`,
-    zh: `非常感谢！🌟\n\n请在TripAdvisor上留下评价：\n${url}\n\n期待再次欢迎您！🌴`,
-    pl: `Bardzo dziękujemy! 🌟\n\nOpinia na TripAdvisor bardzo nam pomoże:\n${url}\n\nDo zobaczenia! 🌴`,
-    sv: `Tack så mycket! 🌟\n\nEn recension på TripAdvisor skulle betyda mycket:\n${url}\n\nVi hoppas se dig igen! 🌴`,
-    fi: `Paljon kiitoksia! 🌟\n\nArvostelu TripAdvisorissa auttaisi:\n${url}\n\nToivottavasti näemme sinut pian! 🌴`,
-    uk: `Велике дякую! 🌟\n\nВідгук на TripAdvisor буде дуже важливим:\n${url}\n\nЧекаємо знову! 🌴`,
-    ar: `شكراً جزيلاً! 🌟\n\nمراجعة على TripAdvisor ستعني لنا الكثير:\n${url}\n\nنأمل رؤيتك مرة أخرى! 🌴`,
-    nl: `Heel erg bedankt! 🌟\n\nEen review op TripAdvisor zou veel betekenen:\n${url}\n\nTot ziens! 🌴`,
-    el: `Ευχαριστούμε πολύ! 🌟\n\nΜια αξιολόγηση στο TripAdvisor θα βοηθήσει:\n${url}\n\nΕλπίζουμε να σε δούμε ξανά! 🌴`,
-    es: `¡Muchas gracias! 🌟\n\nUna reseña en TripAdvisor nos ayudaría mucho:\n${url}\n\n¡Hasta pronto! 🌴`,
-    ca: `Moltes gràcies! 🌟\n\nUna ressenya a TripAdvisor ens ajudaria molt:\n${url}\n\nFins aviat! 🌴`,
-    it: `Grazie mille! 🌟\n\nUna recensione su TripAdvisor significherebbe molto:\n${url}\n\nA presto! 🌴`,
-    pt: `Muito obrigado! 🌟\n\nUma avaliação no TripAdvisor significaria muito:\n${url}\n\nAté breve! 🌴`,
+// ── STEP 2: Highlight prompt (sent after a positive reply) ───
+function buildHighlightPrompt(lang) {
+  return t({
+    en: `Wonderful! What was the highlight of your stay?\n\nReply:  🏊 Pool & facilities  ·  🍽 Food  ·  💆 Spa  ·  👋 Staff  ·  📍 Location`,
+    ru: `Замечательно! Что понравилось больше всего?\n\nОтветьте:  🏊 Бассейн  ·  🍽 Еда  ·  💆 СПА  ·  👋 Персонал  ·  📍 Расположение`,
+    he: `נפלא! מה היה הדבר הכי מוצלח בשהות שלך?\n\nענה:  🏊 בריכה  ·  🍽 אוכל  ·  💆 ספא  ·  👋 צוות  ·  📍 מיקום`,
+    de: `Wunderbar! Was hat Ihnen am besten gefallen?\n\nAntworten Sie:  🏊 Pool  ·  🍽 Essen  ·  💆 Spa  ·  👋 Personal  ·  📍 Lage`,
+    fr: `Parfait! Qu'est-ce qui vous a le plus marqué?\n\nRépondez:  🏊 Piscine  ·  🍽 Cuisine  ·  💆 Spa  ·  👋 Équipe  ·  📍 Emplacement`,
+    es: `¡Genial! ¿Qué fue lo más destacado?\n\nResponde:  🏊 Piscina  ·  🍽 Comida  ·  💆 Spa  ·  👋 Personal  ·  📍 Ubicación`,
+    it: `Meraviglioso! Qual è stato il punto forte?\n\nRispondi:  🏊 Piscina  ·  🍽 Cucina  ·  💆 Spa  ·  👋 Staff  ·  📍 Posizione`,
+    pt: `Que bom! O que mais o impressionou?\n\nResponda:  🏊 Piscina  ·  🍽 Comida  ·  💆 Spa  ·  👋 Equipa  ·  📍 Localização`,
+    zh: `太好了！您最满意哪方面？\n\n请回复:  🏊 泳池  ·  🍽 餐饮  ·  💆 水疗  ·  👋 员工  ·  📍 位置`,
+    ar: `رائع! ما كان أبرز ما أعجبك؟\n\nأجب:  🏊 المسبح  ·  🍽 الطعام  ·  💆 السبا  ·  👋 الموظفون  ·  📍 الموقع`,
+    nl: `Geweldig! Wat was het hoogtepunt?\n\nAntwoord:  🏊 Zwembad  ·  🍽 Eten  ·  💆 Spa  ·  👋 Personeel  ·  📍 Locatie`,
+    el: `Υπέροχα! Τι σου άρεσε περισσότερο;\n\nΑπάντησε:  🏊 Πισίνα  ·  🍽 Φαγητό  ·  💆 Spa  ·  👋 Προσωπικό  ·  📍 Τοποθεσία`,
+    pl: `Wspaniale! Co najbardziej Ci się podobało?\n\nOdpowiedz:  🏊 Basen  ·  🍽 Jedzenie  ·  💆 Spa  ·  👋 Personel  ·  📍 Lokalizacja`,
+    uk: `Чудово! Що сподобалось найбільше?\n\nВідповідайте:  🏊 Басейн  ·  🍽 Їжа  ·  💆 Спа  ·  👋 Персонал  ·  📍 Розташування`,
+    sv: `Underbart! Vad var höjdpunkten?\n\nSvara:  🏊 Pool  ·  🍽 Mat  ·  💆 Spa  ·  👋 Personal  ·  📍 Läge`,
+    fi: `Hienoa! Mikä oli parasta?\n\nVastaa:  🏊 Uima-allas  ·  🍽 Ruoka  ·  💆 Kylpylä  ·  👋 Henkilökunta  ·  📍 Sijainti`,
+    ca: `Fantàstic! Què va ser el millor?\n\nRespon:  🏊 Piscina  ·  🍽 Menjar  ·  💆 Spa  ·  👋 Personal  ·  📍 Ubicació`,
+  }, lang)
+}
+
+// ── STEP 3: Review links (sent after highlight reply) ─────────
+// Multi-platform: Google first (higher SEO value), then TripAdvisor, Booking.com
+function buildReviewLinks(lang, hotel) {
+  const name   = hotel.name
+  const google = hotel.config?.google_review_url
+  const ta     = hotel.config?.tripadvisor_url
+  const bk     = hotel.config?.booking_com_url
+
+  // Build only the links that are configured
+  const links = []
+  if (google) links.push(`→ Google: ${google}`)
+  if (ta)     links.push(`→ TripAdvisor: ${ta}`)
+  if (bk)     links.push(`→ Booking.com: ${bk}`)
+
+  // If no review URLs configured at all, skip the review ask
+  if (!links.length) {
+    return t({
+      en: `Thank you for sharing that! 🌟 We hope to welcome you back to ${name} soon.`,
+      ru: `Спасибо, что поделились! 🌟 Ждём вас снова в ${name}.`,
+      he: `תודה שסיפרת! 🌟 נשמח לראותך שוב ב${name}.`,
+      de: `Danke fürs Teilen! 🌟 Wir freuen uns, Sie bald wieder in ${name} zu sehen.`,
+      fr: `Merci pour ce retour! 🌟 Nous espérons vous revoir bientôt au ${name}.`,
+      es: `¡Gracias por compartir! 🌟 Esperamos verte pronto de nuevo en ${name}.`,
+      it: `Grazie per aver condiviso! 🌟 Speriamo di rivederti presto al ${name}.`,
+      pt: `Obrigado por partilhar! 🌟 Esperamos vê-lo em breve no ${name}.`,
+      zh: `感谢您的分享！🌟 期待在${name}再次迎接您。`,
+      ar: `شكراً لمشاركتك! 🌟 نأمل رؤيتك قريباً في ${name}.`,
+      nl: `Bedankt voor het delen! 🌟 We hopen u snel terug te zien in ${name}.`,
+      el: `Ευχαριστώ για το σχόλιο! 🌟 Ελπίζουμε να σας δούμε σύντομα ξανά στο ${name}.`,
+      pl: `Dziękujemy za podzielenie się! 🌟 Mamy nadzieję wkrótce zobaczyć Cię w ${name}.`,
+      uk: `Дякуємо, що поділились! 🌟 Сподіваємось знову побачити вас у ${name}.`,
+      sv: `Tack för att du delade! 🌟 Vi hoppas se dig snart igen på ${name}.`,
+      fi: `Kiitos jakamisesta! 🌟 Toivottavasti näemme sinut pian uudelleen ${name}:ssa.`,
+      ca: `Gràcies per compartir-ho! 🌟 Esperem veure't aviat de nou a ${name}.`,
+    }, lang)
   }
-  const low = {
+
+  const linkBlock = links.join('\n')
+
+  return t({
+    en: `So glad to hear that! 🌟\n\nOne small favour — a quick review helps future guests find us. It only takes 2 minutes:\n\n${linkBlock}\n\nThank you, and hope to see you again soon! 🌴`,
+    ru: `Очень рады! 🌟\n\nНебольшая просьба — отзыв помогает другим гостям найти нас. Это займёт 2 минуты:\n\n${linkBlock}\n\nСпасибо! Ждём вас снова! 🌴`,
+    he: `כל כך שמחים לשמוע! 🌟\n\nבקשה קטנה — ביקורת עוזרת לאורחים למצוא אותנו. זה לוקח 2 דקות:\n\n${linkBlock}\n\nתודה! נשמח לראותך שוב! 🌴`,
+    de: `Das freut uns sehr! 🌟\n\nEine kleine Bitte — eine Bewertung hilft anderen Gästen. Dauert nur 2 Minuten:\n\n${linkBlock}\n\nDanke und bis bald! 🌴`,
+    fr: `Nous en sommes ravis! 🌟\n\nUn petit service — un avis aide les futurs voyageurs. Ça prend 2 minutes:\n\n${linkBlock}\n\nMerci et à bientôt! 🌴`,
+    es: `¡Nos alegra mucho! 🌟\n\nUn pequeño favor — una reseña ayuda a futuros huéspedes. Solo toma 2 minutos:\n\n${linkBlock}\n\n¡Gracias y hasta pronto! 🌴`,
+    it: `Siamo davvero contenti! 🌟\n\nUn piccolo favore — una recensione aiuta gli ospiti futuri. Ci vogliono solo 2 minuti:\n\n${linkBlock}\n\nGrazie e a presto! 🌴`,
+    pt: `Fico muito contente! 🌟\n\nUm pequeno favor — uma avaliação ajuda futuros hóspedes. Leva só 2 minutos:\n\n${linkBlock}\n\nObrigado e até breve! 🌴`,
+    zh: `太高兴了！🌟\n\n一个小小的请求 — 您的评价能帮助未来的客人找到我们。只需2分钟：\n\n${linkBlock}\n\n谢谢，期待再次相见！🌴`,
+    ar: `يسعدنا سماع ذلك! 🌟\n\nطلب صغير — تقييمك يساعد الضيوف القادمين. يستغرق دقيقتين فقط:\n\n${linkBlock}\n\nشكراً ونأمل رؤيتك قريباً! 🌴`,
+    nl: `Geweldig om te horen! 🌟\n\nEen kleine gunst — een review helpt toekomstige gasten. Het duurt maar 2 minuten:\n\n${linkBlock}\n\nBedankt en tot ziens! 🌴`,
+    el: `Χαρήκαμε πολύ! 🌟\n\nΜια μικρή χάρη — μια αξιολόγηση βοηθά μελλοντικούς επισκέπτες. Διαρκεί μόνο 2 λεπτά:\n\n${linkBlock}\n\nΕυχαριστούμε και ελπίζουμε να σε δούμε ξανά! 🌴`,
+    pl: `Bardzo się cieszymy! 🌟\n\nMała prośba — opinia pomaga przyszłym gościom. Zajmuje tylko 2 minuty:\n\n${linkBlock}\n\nDziękujemy i do zobaczenia! 🌴`,
+    uk: `Дуже раді це чути! 🌟\n\nМале прохання — відгук допомагає майбутнім гостям. Це займе 2 хвилини:\n\n${linkBlock}\n\nДякуємо і до зустрічі! 🌴`,
+    sv: `Så roligt att höra! 🌟\n\nEn liten tjänst — en recension hjälper framtida gäster. Det tar bara 2 minuter:\n\n${linkBlock}\n\nTack och välkommen åter! 🌴`,
+    fi: `Hieno kuulla! 🌟\n\nPieni pyyntö — arvostelu auttaa tulevia vieraita. Kestää vain 2 minuuttia:\n\n${linkBlock}\n\nKiitos ja tervetuloa uudelleen! 🌴`,
+    ca: `Ens alegra molt sentir-ho! 🌟\n\nUn petit favor — una ressenya ajuda futurs hostes. Només triga 2 minuts:\n\n${linkBlock}\n\nGràcies i fins aviat! 🌴`,
+  }, lang)
+}
+
+// ── LOW RATING: ask what went wrong ──────────────────────────
+function buildLowRatingFollowup(lang) {
+  return t({
     en: `Thank you for your honest feedback. We're sorry your stay wasn't perfect.\n\nWhat could we have done better? Your feedback goes directly to our manager.`,
     ru: `Спасибо за честный отзыв. Жаль, что не всё было идеально.\n\nЧто мы могли бы улучшить? Ваш отзыв поступит менеджеру.`,
-    he: `תודה על המשוב. מצטערים שהשהות לא הייתה מושלמת.\n\nמה יכולנו לעשות טוב יותר? המשוב יגיע למנהל.`,
-    de: `Danke für Ihr ehrliches Feedback. Es tut uns leid.\n\nWas hätten wir besser machen können? Ihr Feedback geht an unseren Manager.`,
-    fr: `Merci pour votre retour honnête. Nous sommes désolés.\n\nQue pouvions-nous faire mieux? Votre avis va à notre directeur.`,
-    zh: `感谢您的反馈。我们非常抱歉。\n\n哪里可以做得更好？您的反馈将直接发给经理。`,
-    pl: `Dziękujemy za szczerą opinię. Bardzo nam przykro.\n\nCo mogliśmy zrobić lepiej? Twoja opinia trafi do managera.`,
-    sv: `Tack för din ärliga feedback. Vi beklagar.\n\nVad kunde vi ha gjort bättre? Din feedback går till vår chef.`,
-    fi: `Kiitos palautteestasi. Olemme pahoillamme.\n\nMitä olisimme voineet tehdä paremmin? Palautteesi menee johtajallemme.`,
-    uk: `Дякуємо за чесний відгук. Дуже шкода.\n\nЩо ми могли б зробити краще? Ваш відгук надійде менеджеру.`,
-    ar: `شكراً على ملاحظاتك. نحن آسفون.\n\nما الذي كان يمكننا فعله بشكل أفضل؟ ستذهب ملاحظاتك إلى مديرنا.`,
-    nl: `Bedankt voor uw feedback. Het spijt ons.\n\nWat hadden we beter kunnen doen? Uw feedback gaat naar onze manager.`,
-    el: `Ευχαριστούμε για την γνώμη σου. Λυπόμαστε.\n\nΤι θα μπορούσαμε να κάναμε καλύτερα; Η γνώμη σου πηγαίνει στον διευθυντή.`,
-    es: `Gracias por tu opinión sincera. Lo sentimos.\n\n¿Qué podríamos haber hecho mejor? Tu opinión llega al director.`,
-    ca: `Gràcies per la teva opinió sincera. Ho sentim.\n\nQu'hauríem pogut fer millor? La teva opinió arribarà al director.`,
-    it: `Grazie per il feedback onesto. Ci dispiace.\n\nCosa avremmo potuto fare meglio? Il tuo feedback va al direttore.`,
-    pt: `Obrigado pelo feedback honesto. Lamentamos.\n\nO que poderíamos ter feito melhor? O seu feedback vai para o diretor.`,
-  }
-  return rating >= 4 ? t(high, lang) : t(low, lang)
+    he: `תודה על המשוב הכנה. מצטערים שהשהות לא הייתה מושלמת.\n\nמה יכולנו לעשות טוב יותר? המשוב יגיע למנהל.`,
+    de: `Danke für Ihr ehrliches Feedback. Es tut uns leid.\n\nWas hätten wir besser machen können? Ihr Feedback geht direkt an unseren Manager.`,
+    fr: `Merci pour votre retour honnête. Nous sommes désolés.\n\nQue pouvions-nous faire mieux? Votre avis va directement à notre directeur.`,
+    es: `Gracias por tu opinión sincera. Lo sentimos mucho.\n\n¿Qué podríamos haber hecho mejor? Tu opinión llega directamente al director.`,
+    it: `Grazie per il feedback onesto. Ci dispiace.\n\nCosa avremmo potuto fare meglio? Il tuo feedback va direttamente al direttore.`,
+    pt: `Obrigado pelo feedback honesto. Lamentamos.\n\nO que poderíamos ter feito melhor? O seu feedback vai diretamente para o diretor.`,
+    zh: `感谢您的诚实反馈。非常抱歉。\n\n哪里可以做得更好？您的反馈将直接发给经理。`,
+    ar: `شكراً على ملاحظاتك الصريحة. نأسف لذلك.\n\nما الذي كان يمكننا فعله بشكل أفضل؟ ستذهب ملاحظاتك مباشرةً إلى مديرنا.`,
+    nl: `Bedankt voor uw eerlijke feedback. Het spijt ons.\n\nWat hadden we beter kunnen doen? Uw feedback gaat rechtstreeks naar onze manager.`,
+    el: `Ευχαριστούμε για την ειλικρινή γνώμη σου. Λυπόμαστε πολύ.\n\nΤι θα μπορούσαμε να κάναμε καλύτερα; Η γνώμη σου πηγαίνει κατευθείαν στον διευθυντή.`,
+    pl: `Dziękujemy za szczerą opinię. Przykro nam.\n\nCo mogliśmy zrobić lepiej? Twoja opinia trafi bezpośrednio do managera.`,
+    uk: `Дякуємо за чесний відгук. Дуже шкода.\n\nЩо ми могли б зробити краще? Ваш відгук надійде безпосередньо менеджеру.`,
+    sv: `Tack för din ärliga feedback. Vi beklagar.\n\nVad kunde vi ha gjort bättre? Din feedback går direkt till vår chef.`,
+    fi: `Kiitos rehellisestä palautteestasi. Olemme pahoillamme.\n\nMitä olisimme voineet tehdä paremmin? Palautteesi menee suoraan johtajallemme.`,
+    ca: `Gràcies per la teva opinió sincera. Ho sentim molt.\n\nQu'hauríem pogut fer millor? La teva opinió arribarà directament al director.`,
+  }, lang)
 }
+
+// buildFeedbackFollowup removed — replaced by buildHighlightPrompt,
+// buildReviewLinks, and buildLowRatingFollowup above.
 
 // ── MAIN SCHEDULER ────────────────────────────────────────────
 export async function processScheduledMessages(hotelId) {
@@ -397,9 +465,11 @@ export async function processScheduledMessages(hotelId) {
     if (localToday === preCheckoutTarget && isEvening && await shouldSend('pre_checkout'))
       await send('pre_checkout', buildPreCheckout(guest, hotel, lang))
 
-    // ── Post-checkout feedback (afternoon 13:00-17:00) ────
-    const isAfternoon = hour >= 13 && hour < 17
-    if (localToday === checkoutDate && isAfternoon && await shouldSend('post_checkout'))
+    // ── Post-checkout feedback (day after checkout, 10:00-14:00) ────
+    // Sent the day AFTER checkout so guest is home and relaxed, not at the airport.
+    const postCheckoutTarget = getDateOffset(checkoutDate, 1)
+    const isMidMorning       = hour >= 10 && hour < 14
+    if (localToday === postCheckoutTarget && isMidMorning && await shouldSend('post_checkout'))
       await send('post_checkout', buildPostCheckout(guest, hotel, lang))
   }
 
@@ -407,45 +477,147 @@ export async function processScheduledMessages(hotelId) {
 }
 
 // ── HANDLE FEEDBACK REPLY ─────────────────────────────────────
+// Two-step flow:
+//   Step 1 — guest replies to post_checkout survey (😊 / 😐 / 😞)
+//             → positive: ask highlight question (step 2)
+//             → negative: ask what went wrong + alert manager
+//   Step 2 — guest replies to highlight question (🏊 / 🍽 / etc.)
+//             → send review links
+//
+// State is tracked via feedback_step column in guest_feedback:
+//   null / missing = no survey sent yet
+//   'awaiting_impression' = step 1 sent, waiting for 😊/😐/😞
+//   'awaiting_highlight'  = step 2 sent (positive only), waiting for highlight
+//   'complete'            = done
+
 export async function handleFeedbackReply(from, message, hotelId) {
   const supabase = getSupabase()
-  const rating   = parseInt(message.trim())
-  if (isNaN(rating) || rating < 1 || rating > 5) return false
+  const msg      = message.trim()
 
-  const { data: guest } = await supabase.from('guests').select('*')
-    .eq('phone', from).eq('hotel_id', hotelId).single()
+  // Load guest
+  const { data: guest } = await supabase
+    .from('guests')
+    .select('*')
+    .eq('phone', from)
+    .eq('hotel_id', hotelId)
+    .single()
   if (!guest) return false
 
-  const { data: scheduled } = await supabase.from('scheduled_messages').select('*')
-    .eq('guest_id', guest.id).eq('message_type', 'post_checkout').eq('status', 'sent').single()
+  // Check a post_checkout message was actually sent to this guest
+  const { data: scheduled } = await supabase
+    .from('scheduled_messages')
+    .select('*')
+    .eq('guest_id', guest.id)
+    .eq('message_type', 'post_checkout')
+    .eq('status', 'sent')
+    .single()
   if (!scheduled) return false
 
-  const { data: existing } = await supabase.from('guest_feedback').select('id')
-    .eq('guest_id', guest.id).single()
-  if (existing) return false
+  const { data: hotel } = await supabase
+    .from('hotels')
+    .select('*')
+    .eq('id', hotelId)
+    .single()
 
-  await supabase.from('guest_feedback').insert({
-    hotel_id: hotelId, guest_id: guest.id,
-    rating, language: guest.language || 'en',
-  })
+  const lang = guest.language || 'en'
 
-  const { data: hotel } = await supabase.from('hotels').select('*').eq('id', hotelId).single()
-  const followup = buildFeedbackFollowup(rating, hotel, guest.language || 'en', hotel?.config?.tripadvisor_url)
+  // Load existing feedback record if any
+  const { data: existing } = await supabase
+    .from('guest_feedback')
+    .select('*')
+    .eq('guest_id', guest.id)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single()
 
-  const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN)
-  await client.messages.create({
-    from: process.env.TWILIO_WHATSAPP_NUMBER,
-    to:   from.startsWith('whatsapp:') ? from : `whatsapp:${from}`,
-    body: followup,
-  })
+  const feedbackStep = existing?.feedback_step || 'awaiting_impression'
 
-  if (rating <= 2) {
-    await supabase.from('notifications').insert({
-      hotel_id: hotelId, type: 'guest_message',
-      title: `Low rating ${rating}⭐ — ${guest.name || 'Guest'} · Room ${guest.room}`,
-      body:  `Check-out: ${new Date(guest.check_out).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}`,
+  // Helper to send a WhatsApp reply
+  async function reply(body) {
+    const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN)
+    await client.messages.create({
+      from: process.env.TWILIO_WHATSAPP_NUMBER,
+      to:   from.startsWith('whatsapp:') ? from : `whatsapp:${from}`,
+      body,
     })
   }
 
-  return true
+  // ── STEP 1: Parse overall impression ─────────────────────────
+  if (feedbackStep === 'awaiting_impression') {
+    const positive = ['😊','great','good','excellent','amazing','wonderful','super','genial','ottima','bien','gut','super','super','super','ممتاز','отлично','чудово','מצוין','geweldig','υπέροχα','loistava','toppen','świetnie'].some(k => msg.toLowerCase().includes(k.toLowerCase()))
+    const negative = ['😞','poor','bad','terrible','awful','disappointing','schlecht','malo','scarso','mal','slecht','κακά','плохо','погано','גרוע','سيء','huono','dålig','słabo'].some(k => msg.toLowerCase().includes(k.toLowerCase()))
+    const neutral  = ['😐','ok','okay','fine','correct','gut','bra','bene','bien','goed','εντάξει','нормально','нормально','בסדר','مقبول'].some(k => msg.toLowerCase().includes(k.toLowerCase()))
+
+    // Also treat a plain number rating as before (backward compat)
+    const numRating = parseInt(msg)
+    const isPositiveNum = !isNaN(numRating) && numRating >= 4
+    const isNegativeNum = !isNaN(numRating) && numRating <= 2
+
+    const isPositive = positive || isPositiveNum
+    const isNegative = negative || isNegativeNum
+    const isNeutral  = neutral  || (!isNaN(numRating) && numRating === 3)
+
+    // Not a recognisable impression reply — don't consume the message
+    if (!isPositive && !isNegative && !isNeutral) return false
+
+    // Determine numeric score for storage (positive=5, neutral=3, negative=1)
+    const rating = isPositive ? 5 : isNeutral ? 3 : 1
+
+    if (existing) {
+      // Update existing record
+      await supabase.from('guest_feedback')
+        .update({ rating, feedback_step: isPositive ? 'awaiting_highlight' : 'complete' })
+        .eq('id', existing.id)
+    } else {
+      // Create new record
+      await supabase.from('guest_feedback').insert({
+        hotel_id:      hotelId,
+        guest_id:      guest.id,
+        rating,
+        language:      lang,
+        feedback_step: isPositive ? 'awaiting_highlight' : 'complete',
+      })
+    }
+
+    if (isPositive) {
+      // Step 2: ask what they loved most
+      await reply(buildHighlightPrompt(lang))
+    } else {
+      // Negative or neutral: ask what went wrong, alert manager
+      await reply(buildLowRatingFollowup(lang))
+
+      if (rating <= 2) {
+        await supabase.from('notifications').insert({
+          hotel_id: hotelId,
+          type:     'guest_message',
+          title:    `⚠️ Low rating — ${guest.name || 'Guest'} · Room ${guest.room}`,
+          body:     `Checked out: ${new Date(guest.check_out).toLocaleDateString('en-GB', { day:'numeric', month:'short' })}`,
+        })
+      }
+    }
+
+    return true
+  }
+
+  // ── STEP 2: Parse highlight + send review links ───────────────
+  if (feedbackStep === 'awaiting_highlight') {
+    // Accept any reply here — guest may type freely or pick an emoji
+    const highlight = msg.length > 0 ? msg : null
+
+    // Save highlight and mark complete
+    await supabase.from('guest_feedback')
+      .update({
+        highlight,
+        feedback_step: 'complete',
+      })
+      .eq('id', existing.id)
+
+    // Send review links
+    await reply(buildReviewLinks(lang, hotel))
+
+    return true
+  }
+
+  // Survey already complete — don't intercept
+  return false
 }
