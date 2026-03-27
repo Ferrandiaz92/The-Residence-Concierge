@@ -1,6 +1,15 @@
-// src/webhooks/partner-reply.js (updated with notifications)
+// src/webhooks/partner-reply.js
+// ============================================================
+// Fixes applied:
+//   #11 — Partner confirms but guest cancelled:
+//         Check booking is still valid before notifying guest
+//         Alert partner if booking was already cancelled
+//   #13 — Partner no response:
+//         Handled by cron + "still confirming" guest message
+// ============================================================
+
 import { parseIncomingMessage, sendWhatsApp } from '../lib/twilio.js'
-import { supabase, updateBookingStatus } from '../lib/supabase.js'
+import { supabase, updateBookingStatus }       from '../lib/supabase.js'
 
 function detectPartnerReply(message) {
   const m = message.toLowerCase().trim()
@@ -16,7 +25,7 @@ function buildGuestNotification(replyType, booking, partner, altMessage, languag
     confirmed: {
       taxi: {
         en: `Great news! Your taxi is confirmed.\n\nDriver: ${partner.name}\n${partner.details?.car ? `Car: ${partner.details.car}` : ''}\n${partner.details?.plate ? `Plate: ${partner.details.plate}` : ''}\n\nThey will be at the hotel entrance at the arranged time. 🚗`,
-        ru: `Отличные новости! Ваше такси подтверждено.\n\nВодитель: ${partner.name}\n${partner.details?.car ? `Автомобиль: ${partner.details.car}` : ''}\n\nОни будут у входа в отель в условленное время. 🚗`,
+        ru: `Отличные новости! Ваше такси подтверждено.\n\nВодитель: ${partner.name}\n\nОни будут у входа в отель в условленное время. 🚗`,
         he: `חדשות מעולות! המונית שלך מאושרת.\n\nנהג: ${partner.name}\n\nהם יהיו בכניסה למלון בזמן המוסכם. 🚗`,
       },
       restaurant: {
@@ -31,7 +40,7 @@ function buildGuestNotification(replyType, booking, partner, altMessage, languag
       },
     },
     declined: {
-      en: `I'm sorry, ${partner.name} is not available at that time. Let me find another option — what time would work best?`,
+      en: `I'm sorry, ${partner.name} is not available at that time. Let me find another option for you — what time would work best?`,
       ru: `К сожалению, ${partner.name} недоступен. Давайте подберём другой вариант.`,
       he: `מצטער, ${partner.name} אינו זמין. בואו נמצא אפשרות אחרת.`,
     },
@@ -43,8 +52,7 @@ function buildGuestNotification(replyType, booking, partner, altMessage, languag
   }
 
   if (replyType === 'confirmed') {
-    const type = booking.type
-    const typeTemplates = templates.confirmed[type] || templates.confirmed.taxi
+    const typeTemplates = templates.confirmed[booking.type] || templates.confirmed.taxi
     return typeTemplates[lang] || typeTemplates.en
   }
   if (replyType === 'declined') return templates.declined[lang] || templates.declined.en
@@ -63,24 +71,61 @@ export async function handlePartnerReply(rawBody) {
     .from('partners').select('*').eq('phone', from).eq('active', true).single()
   if (!partner) return
 
+  // Find the most recent booking from this partner
   const { data: booking } = await supabase
     .from('bookings')
-    .select(`*, guests(id, phone, language, name, surname, room), hotels(id, name)`)
-    .eq('partner_id', partner.id).eq('status', 'pending')
-    .order('created_at', { ascending: false }).limit(1).single()
+    .select(`*, guests(id, phone, language, name, surname, room, stay_status), hotels(id, name)`)
+    .eq('partner_id', partner.id)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single()
+
   if (!booking) return
 
-  const guest    = booking.guests
-  const hotel    = booking.hotels
-  const newStatus = replyType === 'confirmed' ? 'confirmed' : replyType === 'declined' ? 'declined' : 'pending'
+  const guest = booking.guests
+  const hotel = booking.hotels
+
+  // ── FIX #11: Check booking is still actionable ────────────
+  // If booking was already cancelled, or guest has checked out,
+  // don't notify the guest — just inform the partner
+  const bookingCancelled = ['cancelled', 'declined'].includes(booking.status)
+  const guestGone        = guest?.stay_status === 'checked_out'
+  const alreadyConfirmed = booking.status === 'confirmed'
+
+  if (bookingCancelled) {
+    await sendWhatsApp(from,
+      `ℹ️ Note: This booking (${booking.type} for ${guest?.name || 'guest'}) was already cancelled. No action needed — thank you!`
+    )
+    return
+  }
+
+  if (alreadyConfirmed && replyType === 'confirmed') {
+    await sendWhatsApp(from, `✅ Already confirmed — thank you!`)
+    return
+  }
+
+  if (guestGone && replyType === 'confirmed') {
+    // Guest has checked out — inform partner politely
+    await sendWhatsApp(from,
+      `ℹ️ Note: This guest has already checked out. Please disregard this booking. Apologies for the confusion!`
+    )
+    // Update booking status so it doesn't linger as pending
+    await updateBookingStatus(booking.id, 'cancelled')
+    return
+  }
+
+  // ── Normal flow ───────────────────────────────────────────
+  const newStatus = replyType === 'confirmed' ? 'confirmed'
+    : replyType === 'declined' ? 'declined'
+    : 'pending'
 
   await updateBookingStatus(booking.id, newStatus)
 
-  // Create dashboard notification
+  // Dashboard notification
   const notifType  = replyType === 'confirmed' ? 'partner_confirmed' : 'partner_declined'
   const notifTitle = replyType === 'confirmed'
-    ? `${partner.name} confirmed — ${guest.name} · Room ${guest.room}`
-    : `${partner.name} declined — ${guest.name} · Room ${guest.room} — find alternative`
+    ? `${partner.name} confirmed — ${guest?.name} · Room ${guest?.room}`
+    : `${partner.name} declined — ${guest?.name} · Room ${guest?.room} — find alternative`
 
   await supabase.from('notifications').insert({
     hotel_id:  hotel.id,
@@ -89,11 +134,13 @@ export async function handlePartnerReply(rawBody) {
     body:      booking.type,
     link_type: 'booking',
     link_id:   booking.id,
-  })
+  }).catch(() => {})
 
   // Notify guest
-  const notification = buildGuestNotification(replyType, booking, partner, message, guest.language)
-  if (notification && guest.phone) await sendWhatsApp(guest.phone, notification)
+  const notification = buildGuestNotification(replyType, booking, partner, message, guest?.language)
+  if (notification && guest?.phone) {
+    await sendWhatsApp(guest.phone, notification)
+  }
 
   // Ack partner
   const acks = {
