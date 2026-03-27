@@ -91,7 +91,7 @@ export async function handleInboundWhatsApp(rawBody) {
   } else if (stayStatus === 'active') {
     systemPrompt += `\n\n[STAY CONTEXT] Guest is currently checked in. Room: ${guest.room}. ` +
       `Check-out: ${guest.check_out}. Provide full concierge service.`
-  }`
+  }
 
   // Add facilities
   const facilityText = formatFacilitiesForPrompt(facilities)
