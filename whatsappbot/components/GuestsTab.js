@@ -241,6 +241,18 @@ export default function GuestsTab({ hotelId, selectedGuest }) {
                 {guest.welcome_sent_at && (
                   <span style={{ fontSize:'12px', color:'#9CA3AF' }}>Welcome sent ✓</span>
                 )}
+                {/* Stay status badge */}
+                {guest.stay_status && guest.stay_status !== 'prospect' && (() => {
+                  const statusConfig = {
+                    pre_arrival:  { label:'Pre-arrival',  bg:'#DBEAFE', color:'#1E3A5F' },
+                    active:       { label:'In house',     bg:'#DCFCE7', color:'#14532D' },
+                    checked_out:  { label:'Checked out',  bg:'#F3F4F6', color:'#6B7280' },
+                    no_show:      { label:'No show',      bg:'#FEF3C7', color:'#78350F' },
+                    cancelled:    { label:'Cancelled',    bg:'#FEE2E2', color:'#DC2626' },
+                  }
+                  const sc = statusConfig[guest.stay_status]
+                  return sc ? <Badge label={sc.label} bg={sc.bg} color={sc.color} /> : null
+                })()}
               </>
             )}
 
@@ -289,7 +301,7 @@ export default function GuestsTab({ hotelId, selectedGuest }) {
         {/* Timeline */}
         <div style={{ borderRight:'1px solid #E5E7EB', display:'flex', flexDirection:'column', overflow:'hidden' }}>
           <div style={{ padding:'12px 18px', fontSize:'14px', fontWeight:'700', color:'#111827', borderBottom:'1px solid #E5E7EB', background:'white', flexShrink:0, display:'flex', alignItems:'center', gap:'8px' }}>
-            {isDayVisit ? 'Visit history' : 'Conversation history'}
+            {isDayVisit ? 'Visit & conversation history' : 'Full conversation history'}
             <span style={{ fontSize:'13px', color:'#9CA3AF', fontWeight:'400' }}>
               {allMessages.length} messages · {bookings.length} bookings
             </span>
@@ -345,7 +357,7 @@ export default function GuestsTab({ hotelId, selectedGuest }) {
         {/* Summary panel */}
         <div style={{ display:'flex', flexDirection:'column', overflow:'hidden', background:'white' }}>
           <div style={{ padding:'12px 18px', fontSize:'14px', fontWeight:'700', color:'#111827', borderBottom:'1px solid #E5E7EB', flexShrink:0 }}>
-            {isDayVisit ? 'Guest Summary' : 'Guest Summary'}
+            {isDayVisit ? 'Visitor summary' : 'Stay summary'}
           </div>
           <div className="scrollable" style={{ padding:'16px', display:'flex', flexDirection:'column', gap:'16px' }}>
 
