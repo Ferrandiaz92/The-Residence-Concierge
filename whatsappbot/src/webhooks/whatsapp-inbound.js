@@ -138,11 +138,19 @@ Always phrase the photo request naturally and explain why it helps.`
   }
 
   // 10. Save user message + notification
-  await appendMessage(conv.id, 'user', message)
+  // If the guest sent photos, append a visible indicator so reception
+  // can see in the dashboard that an image was involved.
+  const hasMedia      = mediaUrls && mediaUrls.length > 0
+  const mediaLabel    = hasMedia
+    ? `📷 [Guest sent ${mediaUrls.length} photo${mediaUrls.length > 1 ? 's' : ''}]`
+    : ''
+  const savedMessage  = [message.trim(), mediaLabel].filter(Boolean).join('\n')
+
+  await appendMessage(conv.id, 'user', savedMessage)
   await createNotification(hotel.id, {
     type:      'guest_message',
-    title:     `${guest.name || 'Guest'} · Room ${guest.room || '?'}`,
-    body:      message.slice(0, 100),
+    title:     `${guest.name || 'Guest'} · Room ${guest.room || '?'}${hasMedia ? ' · 📷 Photo' : ''}`,
+    body:      savedMessage.slice(0, 100),
     link_type: 'conversation',
     link_id:   conv.id,
   })
