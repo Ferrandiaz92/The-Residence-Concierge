@@ -34,7 +34,7 @@ const PRIORITIES = [
   { key:'planned', label:'Planned', sub:'future task', color:'#2563EB', bg:'#EFF6FF', border:'#93C5FD' },
 ]
 
-const canReply   = (role) => ['receptionist','manager','admin'].includes(role)
+const canReply   = (role) => ['receptionist','manager','admin','supervisor'].includes(role)
 const DEPT_ROLES = ['maintenance','housekeeping','concierge','fnb','security','valet','frontdesk']
 
 // ── Back button ──────────────────────────────────────────────
@@ -810,6 +810,13 @@ function DeptQueue({ hotelId, session }) {
                 <div style={{fontSize:'12px',color:'#9CA3AF',textAlign:'center',padding:'4px'}}>
                   Being handled by {t.assigned_to_name}
                 </div>
+              )}
+              {/* Fix #17: Reopen button for resolved tickets */}
+              {subtab === 'resolved' && (
+                <button onClick={()=>updateStatus(t.id,'pending')} disabled={updating===t.id}
+                  style={{width:'100%',padding:'9px',background:'white',border:'1px solid #D1D5DB',borderRadius:'10px',fontSize:'12px',fontWeight:'600',color:'#6B7280',cursor:'pointer',fontFamily:"'DM Sans', sans-serif",marginTop:'4px'}}>
+                  {updating===t.id?'…':'↩ Reopen ticket'}
+                </button>
               )}
             </div>
           )

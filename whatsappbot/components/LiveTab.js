@@ -39,7 +39,7 @@ const TYPE_BORDERS = {
   prospect:    '#64748B',       // gray
 }
 
-const canReply   = (role) => ['receptionist','manager','admin'].includes(role)
+const canReply   = (role) => ['receptionist','manager','admin','supervisor'].includes(role)
 const isDeptRole = (role) => ['maintenance','housekeeping','concierge','fnb','security','valet','frontdesk'].includes(role)
 
 const PRIORITIES = [
