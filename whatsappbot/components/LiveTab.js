@@ -8,7 +8,7 @@
 // 6. Dynamic departments from API
 
 'use client'
-import { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import DepartmentQueue from './DepartmentQueue'
 
 const LANG_COLORS = {
@@ -47,6 +47,67 @@ const PRIORITIES = [
   { key:'today',   label:'Today',   sub:'same day',    color:'#D97706', bg:'#FFFBEB', border:'#FCD34D' },
   { key:'planned', label:'Planned', sub:'future task', color:'#2563EB', bg:'#EFF6FF', border:'#93C5FD' },
 ]
+
+
+// ── EXPANDABLE BOOKING ROW (desktop) ─────────────────────
+function ExpandableBookingDesktop({ b }) {
+  const [open, setOpen] = React.useState(false)
+  const guest = b.guests || {}
+  const typeColors = {
+    taxi:          { bg:'#DCFCE7', color:'#14532D', emoji:'🚗' },
+    restaurant:    { bg:'#DBEAFE', color:'#1E3A5F', emoji:'🍽️' },
+    activity:      { bg:'#FEF3C7', color:'#78350F', emoji:'⛵' },
+    late_checkout: { bg:'#FAF5FF', color:'#581C87', emoji:'🕐' },
+  }
+  const tc = typeColors[b.type] || { bg:'#F1F5F9', color:'#334155', emoji:'📋' }
+  const time = b.details?.time
+    ? b.details.time
+    : new Date(b.confirmed_at||b.created_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})
+
+  return (
+    <div style={{ borderBottom:'0.5px solid var(--border)', background: open ? '#F9FAFB' : 'white' }}>
+      <div onClick={() => setOpen(o => !o)}
+        style={{ display:'flex', alignItems:'center', gap:'8px', padding:'10px 14px', cursor:'pointer' }}>
+        <div style={{ width:'7px', height:'7px', borderRadius:'50%', background:'#16A34A', flexShrink:0 }}/>
+        <div style={{ width:'26px', height:'26px', borderRadius:'6px', background:tc.bg, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'13px', flexShrink:0 }}>{tc.emoji}</div>
+        <div style={{ flex:1 }}>
+          <div style={{ fontSize:'12px', fontWeight:'600', color:'#111827' }}>
+            {guest.name}{guest.room ? ` · Room ${guest.room}` : ''}
+          </div>
+          <div style={{ fontSize:'11px', color:'#6B7280', marginTop:'1px' }}>{b.partners?.name || b.type}</div>
+        </div>
+        <div style={{ display:'flex', alignItems:'center', gap:'6px' }}>
+          <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151' }}>{time}</div>
+          <div style={{ width:'18px', height:'18px', borderRadius:'4px', background: open ? '#1C3D2E' : '#F3F4F6', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, transition:'all .2s' }}>
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+              <path d={open ? 'M1 7L5 3L9 7' : 'M1 3L5 7L9 3'} stroke={open ? 'white' : '#6B7280'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+      {open && (
+        <div style={{ padding:'8px 14px 12px 51px', background:'#F9FAFB', borderTop:'0.5px solid #F3F4F6' }}>
+          <div style={{ fontSize:'11px', color:'#374151', display:'flex', flexDirection:'column', gap:'4px' }}>
+            {b.details?.destination && <div>📍 <strong>To:</strong> {b.details.destination}</div>}
+            {b.details?.pax         && <div>👥 <strong>Passengers:</strong> {b.details.pax}</div>}
+            {b.details?.date        && <div>📅 <strong>Date:</strong> {b.details.date}</div>}
+            {b.details?.time        && <div>🕐 <strong>Time:</strong> {b.details.time}</div>}
+            {b.details?.notes       && <div>📝 <strong>Notes:</strong> {b.details.notes}</div>}
+            {b.commission_amount > 0 && <div>💰 <strong>Commission:</strong> €{b.commission_amount}</div>}
+            <div style={{ marginTop:'3px' }}>
+              <span style={{ fontSize:'10px', fontWeight:'700', padding:'2px 7px', borderRadius:'4px',
+                background: b.status==='confirmed' ? '#DCFCE7' : '#FEF3C7',
+                color:      b.status==='confirmed' ? '#14532D' : '#78350F',
+                textTransform:'capitalize' }}>
+                {b.status}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function LiveTab({ hotelId, session, onSelectGuest }) {
   if (isDeptRole(session?.role)) {
@@ -191,7 +252,7 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
             const minsAgo    = Math.floor((Date.now() - new Date(conv.last_message_at)) / 60000)
             const timeLabel  = minsAgo === 0 ? 'now' : minsAgo < 60 ? `${minsAgo}m` : `${Math.floor(minsAgo/60)}h`
             // Room number — check multiple fields
-            const roomNum    = guest.room || guest.guest_room || guest.guest_room_number || ''
+            const roomNum    = guest.room || guest.guest_room || guest.guest_room_number || '?'
 
             return (
               <div key={conv.id} onClick={() => { setSelectedConv(conv); setCentreMode('chat') }}
@@ -245,7 +306,7 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
           ))}
           {selectedConv && (
             <div style={{ fontSize:'12px', color:'#9CA3AF', marginLeft:'8px' }}>
-              {selectedConv.guests?.name} · Room {selectedConv.guests?.room || selectedConv.guests?.guest_room || ''}
+              {selectedConv.guests?.name} · Room {selectedConv.guests?.room || selectedConv.guests?.guest_room || '?'}
               {selectedConv.status === 'escalated' && <span style={{ color:'#DC2626', fontWeight:'700', marginLeft:'6px' }}>Needs reply</span>}
             </div>
           )}
@@ -309,11 +370,11 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
               {selectedConv ? (
                 <div style={{ display:'flex', alignItems:'center', gap:'10px', padding:'10px 12px', background:'white', borderRadius:'10px', border:'0.5px solid #E5E7EB' }}>
                   <div style={{ width:'32px', height:'32px', borderRadius:'50%', background:'var(--green-800)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'12px', color:'var(--gold)', fontWeight:'700', flexShrink:0 }}>
-                    {(selectedConv.guests?.name?.[0]||'')}{(selectedConv.guests?.surname?.[0]||'')}
+                    {(selectedConv.guests?.name?.[0]||'?')}{(selectedConv.guests?.surname?.[0]||'')}
                   </div>
                   <div>
                     <div style={{ fontSize:'13px', fontWeight:'600', color:'#111827' }}>{selectedConv.guests?.name} {selectedConv.guests?.surname}</div>
-                    <div style={{ fontSize:'12px', color:'#6B7280' }}>Room {selectedConv.guests?.room || selectedConv.guests?.guest_room || ''} · {LANG_COLORS[selectedConv.guests?.language||'en']?.name || (selectedConv.guests?.language||'EN').toUpperCase()}</div>
+                    <div style={{ fontSize:'12px', color:'#6B7280' }}>Room {selectedConv.guests?.room || selectedConv.guests?.guest_room || '?'} · {LANG_COLORS[selectedConv.guests?.language||'en']?.name || (selectedConv.guests?.language||'EN').toUpperCase()}</div>
                   </div>
                   <button onClick={()=>setSelectedConv(null)} style={{ marginLeft:'auto', background:'none', border:'none', color:'#D1D5DB', cursor:'pointer', fontSize:'18px', lineHeight:1 }}>×</button>
                 </div>
@@ -445,24 +506,9 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
             {sh('Upcoming', 'today & tomorrow')}
             {upcoming.length === 0 ? (
               <div style={{ padding:'16px', textAlign:'center', color:'#9CA3AF', fontSize:'13px' }}>No upcoming bookings</div>
-            ) : upcoming.slice(0,8).map(b => {
-              const guest = b.guests || {}
-              const typeColors = { taxi:{bg:'#DCFCE7',color:'#14532D',l:'T'}, restaurant:{bg:'#DBEAFE',color:'#1E3A5F',l:'R'}, activity:{bg:'#FEF3C7',color:'#78350F',l:'A'}, late_checkout:{bg:'#FAF5FF',color:'#581C87',l:'L'} }
-              const tc = typeColors[b.type] || {bg:'#F1F5F9',color:'#334155',l:'?'}
-              return (
-                <div key={b.id} style={{ display:'flex', alignItems:'center', gap:'8px', padding:'10px 14px', borderBottom:'0.5px solid var(--border)' }}>
-                  <div style={{ width:'7px', height:'7px', borderRadius:'50%', background:'#16A34A', flexShrink:0 }}/>
-                  <div style={{ width:'22px', height:'22px', borderRadius:'5px', background:tc.bg, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'10px', fontWeight:'700', color:tc.color, flexShrink:0 }}>{tc.l}</div>
-                  <div style={{ flex:1 }}>
-                    <div style={{ fontSize:'12px', fontWeight:'600', color:'#111827' }}>{guest.name} · Room {guest.room || ''}</div>
-                    <div style={{ fontSize:'11px', color:'#6B7280', marginTop:'1px' }}>{b.partners?.name || b.type}</div>
-                  </div>
-                  <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151' }}>
-                    {b.details?.time || new Date(b.created_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}
-                  </div>
-                </div>
-              )
-            })}
+            ) : upcoming.slice(0,8).map(b => (
+              <ExpandableBookingDesktop key={b.id} b={b} />
+            ))}
           </div>
 
           {/* Completed */}
