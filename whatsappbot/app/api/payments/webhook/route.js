@@ -183,8 +183,42 @@ export async function POST(request) {
     if (event.type === 'checkout.session.expired') {
       const session = event.data.object
       const orderId = session.metadata?.order_id
+      const guestId = session.metadata?.guest_id
+
       if (orderId) {
         await supabase.from('guest_orders').update({ status: 'cancelled' }).eq('id', orderId)
+
+        // Notify guest — they're not left wondering what happened
+        if (guestId) {
+          const { data: guest } = await supabase
+            .from('guests').select('phone, language, name').eq('id', guestId).single()
+
+          if (guest?.phone) {
+            const productName = session.metadata?.product_name || 'your experience'
+            const name        = guest.name ? ` ${guest.name}` : ''
+            const lang        = guest.language || 'en'
+            const EXPIRED = {
+              en: `Hi${name}! Your payment link for ${productName} has expired (links are valid for 24 hours).\n\nWould you like me to send a new one? Just reply and I'll sort it right away 😊`,
+              ru: `Привет${name}! Ссылка для оплаты ${productName} истекла.\n\nОтправить новую? Просто ответьте 😊`,
+              he: `היי${name}! קישור התשלום עבור ${productName} פג תוקפו.\n\nרוצה קישור חדש? פשוט ענה לי 😊`,
+              de: `Hallo${name}! Ihr Zahlungslink für ${productName} ist abgelaufen.\n\nNeuen senden? Antworten Sie einfach 😊`,
+              fr: `Bonjour${name}! Votre lien de paiement pour ${productName} a expiré.\n\nJe vous en envoie un nouveau? Répondez simplement 😊`,
+              es: `¡Hola${name}! Tu enlace de pago para ${productName} ha caducado.\n\n¿Te envío uno nuevo? Solo responde 😊`,
+              it: `Ciao${name}! Il link di pagamento per ${productName} è scaduto.\n\nTe ne mando uno nuovo? Rispondi qui 😊`,
+              pt: `Olá${name}! O link de pagamento para ${productName} expirou.\n\nEnvio um novo? Responda aqui 😊`,
+              zh: `您好${name}！${productName}的支付链接已过期。\n\n需要新链接吗？直接回复即可 😊`,
+              ar: `مرحباً${name}! انتهت صلاحية رابط الدفع لـ${productName}.\n\nتريد رابطاً جديداً؟ فقط رد هنا 😊`,
+              nl: `Hallo${name}! Uw betaallink voor ${productName} is verlopen.\n\nNieuwe sturen? Antwoord gewoon 😊`,
+              el: `Γεια${name}! Ο σύνδεσμος πληρωμής για ${productName} έχει λήξει.\n\nΝα στείλω νέο; Απλώς απάντησε 😊`,
+              pl: `Cześć${name}! Link płatności dla ${productName} wygasł.\n\nWysłać nowy? Wystarczy odpowiedzieć 😊`,
+              uk: `Привіт${name}! Посилання для оплати ${productName} закінчилось.\n\nНадіслати нове? Просто відповідайте 😊`,
+              sv: `Hej${name}! Betalningslänken för ${productName} har gått ut.\n\nSka jag skicka en ny? Svara bara 😊`,
+              fi: `Hei${name}! Maksulinkki ${productName} on vanhentunut.\n\nLähetänkö uuden? Vastaa vain 😊`,
+            }
+            sendWhatsApp(guest.phone, EXPIRED[lang] || EXPIRED.en)
+              .catch(e => console.error('Expiry notify failed:', e.message))
+          }
+        }
       }
     }
 
