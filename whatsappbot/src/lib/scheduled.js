@@ -75,26 +75,31 @@ function getDateOffset(baseDateStr, offsetDays) {
 // ── MESSAGE BUILDERS (same as before) ────────────────────────
 
 function buildPreCheckin7d(guest, hotel, lang) {
-  const name = guest.name || 'there'
-  const h    = hotel.name
+  const name        = guest.name || 'there'
+  const h           = hotel.name
+  const parkingCode = hotel.config?.parking_code || null
+  const parkingLine = parkingCode
+    ? { en:`🚗 Free underground parking — code ${parkingCode}`, ru:`🚗 Бесплатная подземная парковка — код ${parkingCode}`, he:`🚗 חניה חינם במרתף — קוד ${parkingCode}`, de:`🚗 Kostenlose Tiefgarage — Code ${parkingCode}`, fr:`🚗 Parking souterrain gratuit — code ${parkingCode}`, zh:`🚗 免费地下停车场 — 密码${parkingCode}`, pl:`🚗 Bezpłatny parking podziemny — kod ${parkingCode}`, sv:`🚗 Gratis underjordisk parkering — kod ${parkingCode}`, fi:`🚗 Ilmainen maanalainen parkki — koodi ${parkingCode}`, uk:`🚗 Безкоштовна підземна парковка — код ${parkingCode}`, ar:`🚗 موقف مجاني تحت الأرض — الكود ${parkingCode}`, nl:`🚗 Gratis ondergrondse parkeerplaats — code ${parkingCode}`, el:`🚗 Δωρεάν υπόγεια στάθμευση — κωδικός ${parkingCode}`, es:`🚗 Parking subterráneo gratuito — código ${parkingCode}`, ca:`🚗 Aparcament subterrani gratuït — codi ${parkingCode}`, it:`🚗 Parcheggio sotterraneo gratuito — codice ${parkingCode}`, pt:`🚗 Estacionamento subterrâneo gratuito — código ${parkingCode}` }
+    : { en:`🚗 Free underground parking available`, ru:`🚗 Бесплатная подземная парковка`, he:`🚗 חניה חינם זמינה`, de:`🚗 Kostenlose Tiefgarage vorhanden`, fr:`🚗 Parking souterrain gratuit disponible`, zh:`🚗 免费地下停车场`, pl:`🚗 Bezpłatny parking podziemny`, sv:`🚗 Gratis underjordisk parkering`, fi:`🚗 Ilmainen maanalainen parkki`, uk:`🚗 Безкоштовна підземна парковка`, ar:`🚗 موقف مجاني تحت الأرض`, nl:`🚗 Gratis ondergrondse parkeerplaats`, el:`🚗 Δωρεάν υπόγεια στάθμευση`, es:`🚗 Parking subterráneo gratuito`, ca:`🚗 Aparcament subterrani gratuït`, it:`🚗 Parcheggio sotterraneo gratuito`, pt:`🚗 Estacionamento subterrâneo gratuito` }
+  const p = parkingLine[lang] || parkingLine.en
   return t({
-    en: `Hi ${name}! 🌴 We're looking forward to welcoming you to ${h} in 7 days.\n\nA few tips:\n🌊 The Mediterranean is perfect for swimming\n🚗 Free underground parking — code 4521\n✈️ Arriving by air? We can arrange a transfer\n\nAny questions? Just reply!`,
-    ru: `Привет, ${name}! 🌴 Через 7 дней ждём вас в ${h}.\n\n🌊 Средиземное море идеально\n🚗 Бесплатная подземная парковка — код 4521\n✈️ Нужен трансфер из аэропорта?\n\nЕсть вопросы? Пишите!`,
-    he: `היי ${name}! 🌴 אנחנו מצפים לקבל אותך ב${h} בעוד 7 ימים.\n\n🌊 הים התיכון מושלם לשחייה\n🚗 חניה חינם במרתף — קוד 4521\n✈️ מגיע בטיסה? נוכל לסדר העברה\n\nשאלות? פשוט שלח!`,
-    de: `Hallo ${name}! 🌴 Wir freuen uns, Sie in 7 Tagen in ${h} begrüßen zu dürfen.\n\n🌊 Das Mittelmeer ist perfekt\n🚗 Kostenlose Tiefgarage — Code 4521\n✈️ Flughafentransfer möglich\n\nFragen? Einfach antworten!`,
-    fr: `Bonjour ${name}! 🌴 Nous avons hâte de vous accueillir au ${h} dans 7 jours.\n\n🌊 La Méditerranée est parfaite\n🚗 Parking souterrain gratuit — code 4521\n✈️ Transfer depuis l'aéroport possible\n\nDes questions? Répondez!`,
-    zh: `您好 ${name}！🌴 我们期待7天后在${h}迎接您。\n\n🌊 地中海非常适合游泳\n🚗 免费地下停车场 — 密码4521\n✈️ 可安排机场接送\n\n有问题请随时回复！`,
-    pl: `Cześć ${name}! 🌴 Nie możemy się doczekać, aby powitać Cię w ${h} za 7 dni.\n\n🌊 Morze Śródziemne idealne\n🚗 Bezpłatny parking podziemny — kod 4521\n✈️ Transfer z lotniska możliwy\n\nMasz pytania? Napisz!`,
-    sv: `Hej ${name}! 🌴 Vi ser fram emot att välkomna dig till ${h} om 7 dagar.\n\n🌊 Medelhavet är perfekt\n🚗 Gratis underjordisk parkering — kod 4521\n✈️ Flygplatstransfer möjlig\n\nFrågor? Svara bara!`,
-    fi: `Hei ${name}! 🌴 Odotamme innolla tervetuliaisi ${h}:iin 7 päivän päästä.\n\n🌊 Välimeri täydellinen\n🚗 Ilmainen maanalainen parkki — koodi 4521\n✈️ Lentokenttäkuljetus mahdollinen\n\nKysyttävää? Vastaa vain!`,
-    uk: `Привіт, ${name}! 🌴 Чекаємо на вас у ${h} через 7 днів.\n\n🌊 Середземне море ідеальне\n🚗 Безкоштовна підземна парковка — код 4521\n✈️ Трансфер з аеропорту можливий\n\nЄ питання? Пишіть!`,
-    ar: `مرحباً ${name}! 🌴 نتطلع لاستقبالك في ${h} بعد 7 أيام.\n\n🌊 البحر المتوسط مثالي\n🚗 موقف مجاني تحت الأرض — الكود 4521\n✈️ نقل من المطار متاح\n\nأي أسئلة؟ فقط رد!`,
-    nl: `Hallo ${name}! 🌴 We kijken ernaar uit u over 7 dagen te verwelkomen in ${h}.\n\n🌊 De Middellandse Zee is perfect\n🚗 Gratis ondergrondse parkeerplaats — code 4521\n✈️ Luchthavenstransfer mogelijk\n\nVragen? Stuur gewoon een bericht!`,
-    el: `Γεια σου ${name}! 🌴 Ανυπομονούμε να σε καλωσορίσουμε στο ${h} σε 7 μέρες.\n\n🌊 Η Μεσόγειος είναι τέλεια\n🚗 Δωρεάν υπόγεια στάθμευση — κωδικός 4521\n✈️ Μεταφορά από αεροδρόμιο διαθέσιμη\n\nΕρωτήσεις; Απλά απάντησε!`,
-    es: `¡Hola ${name}! 🌴 Estamos deseando darte la bienvenida en ${h} en 7 días.\n\n🌊 El Mediterráneo es perfecto\n🚗 Parking subterráneo gratuito — código 4521\n✈️ Traslado desde el aeropuerto posible\n\n¿Tienes preguntas? ¡Solo responde!`,
-    ca: `Hola ${name}! 🌴 Estem desitjant donar-te la benvinguda a ${h} d'aquí 7 dies.\n\n🌊 La Mediterrània és perfecta\n🚗 Aparcament subterrani gratuït — codi 4521\n✈️ Trasllat des de l'aeroport possible\n\nTens preguntes? Simplement respon!`,
-    it: `Ciao ${name}! 🌴 Non vediamo l'ora di darti il benvenuto al ${h} tra 7 giorni.\n\n🌊 Il Mediterraneo è perfetto\n🚗 Parcheggio sotterraneo gratuito — codice 4521\n✈️ Transfer dall'aeroporto disponibile\n\nHai domande? Rispondi qui!`,
-    pt: `Olá ${name}! 🌴 Estamos ansiosos para recebê-lo no ${h} daqui a 7 dias.\n\n🌊 O Mediterrâneo é perfeito\n🚗 Estacionamento subterrâneo gratuito — código 4521\n✈️ Transfer do aeroporto disponível\n\nTem perguntas? Responda aqui!`,
+    en: `Hi ${name}! 🌴 We're looking forward to welcoming you to ${h} in 7 days.\n\nA few tips:\n🌊 The Mediterranean is perfect for swimming\n${p}\n✈️ Arriving by air? We can arrange a transfer\n\nAny questions? Just reply!`,
+    ru: `Привет, ${name}! 🌴 Через 7 дней ждём вас в ${h}.\n\n🌊 Средиземное море идеально\n${p}\n✈️ Нужен трансфер из аэропорта?\n\nЕсть вопросы? Пишите!`,
+    he: `היי ${name}! 🌴 אנחנו מצפים לקבל אותך ב${h} בעוד 7 ימים.\n\n🌊 הים התיכון מושלם לשחייה\n${p}\n✈️ מגיע בטיסה? נוכל לסדר העברה\n\nשאלות? פשוט שלח!`,
+    de: `Hallo ${name}! 🌴 Wir freuen uns, Sie in 7 Tagen in ${h} begrüßen zu dürfen.\n\n🌊 Das Mittelmeer ist perfekt\n${p}\n✈️ Flughafentransfer möglich\n\nFragen? Einfach antworten!`,
+    fr: `Bonjour ${name}! 🌴 Nous avons hâte de vous accueillir au ${h} dans 7 jours.\n\n🌊 La Méditerranée est parfaite\n${p}\n✈️ Transfer depuis l'aéroport possible\n\nDes questions? Répondez!`,
+    zh: `您好 ${name}！🌴 我们期待7天后在${h}迎接您。\n\n🌊 地中海非常适合游泳\n${p}\n✈️ 可安排机场接送\n\n有问题请随时回复！`,
+    pl: `Cześć ${name}! 🌴 Nie możemy się doczekać, aby powitać Cię w ${h} za 7 dni.\n\n🌊 Morze Śródziemne idealne\n${p}\n✈️ Transfer z lotniska możliwy\n\nMasz pytania? Napisz!`,
+    sv: `Hej ${name}! 🌴 Vi ser fram emot att välkomna dig till ${h} om 7 dagar.\n\n🌊 Medelhavet är perfekt\n${p}\n✈️ Flygplatstransfer möjlig\n\nFrågor? Svara bara!`,
+    fi: `Hei ${name}! 🌴 Odotamme innolla tervetuliaisi ${h}:iin 7 päivän päästä.\n\n🌊 Välimeri täydellinen\n${p}\n✈️ Lentokenttäkuljetus mahdollinen\n\nKysyttävää? Vastaa vain!`,
+    uk: `Привіт, ${name}! 🌴 Чекаємо на вас у ${h} через 7 днів.\n\n🌊 Середземне море ідеальне\n${p}\n✈️ Трансфер з аеропорту можливий\n\nЄ питання? Пишіть!`,
+    ar: `مرحباً ${name}! 🌴 نتطلع لاستقبالك في ${h} بعد 7 أيام.\n\n🌊 البحر المتوسط مثالي\n${p}\n✈️ نقل من المطار متاح\n\nأي أسئلة؟ فقط رد!`,
+    nl: `Hallo ${name}! 🌴 We kijken ernaar uit u over 7 dagen te verwelkomen in ${h}.\n\n🌊 De Middellandse Zee is perfect\n${p}\n✈️ Luchthavenstransfer mogelijk\n\nVragen? Stuur gewoon een bericht!`,
+    el: `Γεια σου ${name}! 🌴 Ανυπομονούμε να σε καλωσορίσουμε στο ${h} σε 7 μέρες.\n\n🌊 Η Μεσόγειος είναι τέλεια\n${p}\n✈️ Μεταφορά από αεροδρόμιο διαθέσιμη\n\nΕρωτήσεις; Απλά απάντησε!`,
+    es: `¡Hola ${name}! 🌴 Estamos deseando darte la bienvenida en ${h} en 7 días.\n\n🌊 El Mediterráneo es perfecto\n${p}\n✈️ Traslado desde el aeropuerto posible\n\n¿Tienes preguntas? ¡Solo responde!`,
+    ca: `Hola ${name}! 🌴 Estem desitjant donar-te la benvinguda a ${h} d'aquí 7 dies.\n\n🌊 La Mediterrània és perfecta\n${p}\n✈️ Trasllat des de l'aeroport possible\n\nTens preguntes? Simplement respon!`,
+    it: `Ciao ${name}! 🌴 Non vediamo l'ora di darti il benvenuto al ${h} tra 7 giorni.\n\n🌊 Il Mediterraneo è perfetto\n${p}\n✈️ Transfer dall'aeroporto disponibile\n\nHai domande? Rispondi qui!`,
+    pt: `Olá ${name}! 🌴 Estamos ansiosos para recebê-lo no ${h} daqui a 7 dias.\n\n🌊 O Mediterrâneo é perfeito\n${p}\n✈️ Transfer do aeroporto disponível\n\nTem perguntas? Responda aqui!`,
   }, lang)
 }
 
@@ -102,24 +107,61 @@ function buildPreCheckin24h(guest, hotel, lang) {
   const name = guest.name || 'there'
   const room = guest.room ? `Room ${guest.room}` : 'your room'
   const h    = hotel.name
+
+  // Pull from hotel.config — all optional, lines omitted if not configured
+  const checkinTime      = hotel.config?.checkin_time      || '14:00'
+  const earlyCheckinTime = hotel.config?.early_checkin_time|| '10:00'
+  const earlyCheckinFee  = hotel.config?.early_checkin_fee || null
+  const parkingCode      = hotel.config?.parking_code      || null
+  const wifiName         = hotel.config?.wifi_name         || null
+  const wifiPassword     = hotel.config?.wifi_password     || null
+
+  // Build the optional lines dynamically
+  function lines(lang) {
+    const result = []
+
+    // Parking line
+    if (parkingCode) {
+      const parkingLabels = { en:`🚗 Underground parking — code ${parkingCode}`, ru:`🚗 Подземная парковка — код ${parkingCode}`, he:`🚗 חניה תת-קרקעית — קוד ${parkingCode}`, de:`🚗 Tiefgarage — Code ${parkingCode}`, fr:`🚗 Parking souterrain — code ${parkingCode}`, zh:`🚗 地下停车场 — 密码${parkingCode}`, pl:`🚗 Parking podziemny — kod ${parkingCode}`, sv:`🚗 Underjordisk parkering — kod ${parkingCode}`, fi:`🚗 Maanalainen parkki — koodi ${parkingCode}`, uk:`🚗 Підземна парковка — код ${parkingCode}`, ar:`🚗 موقف تحت الأرض — الكود ${parkingCode}`, nl:`🚗 Ondergrondse parkeerplaats — code ${parkingCode}`, el:`🚗 Υπόγειο πάρκινγκ — κωδικός ${parkingCode}`, es:`🚗 Parking subterráneo — código ${parkingCode}`, ca:`🚗 Aparcament subterrani — codi ${parkingCode}`, it:`🚗 Parcheggio sotterraneo — codice ${parkingCode}`, pt:`🚗 Estacionamento subterrâneo — código ${parkingCode}` }
+      result.push(parkingLabels[lang] || parkingLabels.en)
+    }
+
+    // WiFi line — only show if both name and password are configured
+    if (wifiName && wifiPassword) {
+      const wifiLabels = { en:`📶 WiFi: ${wifiName} | Password: ${wifiPassword}`, ru:`📶 WiFi: ${wifiName} | Пароль: ${wifiPassword}`, he:`📶 WiFi: ${wifiName} | סיסמה: ${wifiPassword}`, de:`📶 WLAN: ${wifiName} | Passwort: ${wifiPassword}`, fr:`📶 WiFi: ${wifiName} | Mot de passe: ${wifiPassword}`, zh:`📶 WiFi: ${wifiName} | 密码: ${wifiPassword}`, pl:`📶 WiFi: ${wifiName} | Hasło: ${wifiPassword}`, sv:`📶 WiFi: ${wifiName} | Lösenord: ${wifiPassword}`, fi:`📶 WiFi: ${wifiName} | Salasana: ${wifiPassword}`, uk:`📶 WiFi: ${wifiName} | Пароль: ${wifiPassword}`, ar:`📶 واي فاي: ${wifiName} | كلمة المرور: ${wifiPassword}`, nl:`📶 WiFi: ${wifiName} | Wachtwoord: ${wifiPassword}`, el:`📶 WiFi: ${wifiName} | Κωδικός: ${wifiPassword}`, es:`📶 WiFi: ${wifiName} | Contraseña: ${wifiPassword}`, ca:`📶 WiFi: ${wifiName} | Contrasenya: ${wifiPassword}`, it:`📶 WiFi: ${wifiName} | Password: ${wifiPassword}`, pt:`📶 WiFi: ${wifiName} | Password: ${wifiPassword}` }
+      result.push(wifiLabels[lang] || wifiLabels.en)
+    }
+
+    // Early check-in line
+    if (earlyCheckinFee) {
+      const earlyLabels = { en:`☀️ Early check-in from ${earlyCheckinTime} for €${earlyCheckinFee}`, ru:`☀️ Ранний заезд с ${earlyCheckinTime} за €${earlyCheckinFee}`, he:`☀️ צ'ק-אין מוקדם מ-${earlyCheckinTime} ב-€${earlyCheckinFee}`, de:`☀️ Früh-Check-in ab ${earlyCheckinTime} für €${earlyCheckinFee}`, fr:`☀️ Check-in anticipé dès ${earlyCheckinTime} pour €${earlyCheckinFee}`, zh:`☀️ ${earlyCheckinTime}起提前入住，费用€${earlyCheckinFee}`, pl:`☀️ Wczesne zameldowanie od ${earlyCheckinTime} za €${earlyCheckinFee}`, sv:`☀️ Tidig incheckning från ${earlyCheckinTime} för €${earlyCheckinFee}`, fi:`☀️ Aikainen sisäänkirjautuminen klo ${earlyCheckinTime} alkaen €${earlyCheckinFee}`, uk:`☀️ Ранній заїзд з ${earlyCheckinTime} за €${earlyCheckinFee}`, ar:`☀️ وصول مبكر من ${earlyCheckinTime} بـ €${earlyCheckinFee}`, nl:`☀️ Vroeg inchecken vanaf ${earlyCheckinTime} voor €${earlyCheckinFee}`, el:`☀️ Πρώιμο check-in από τις ${earlyCheckinTime} για €${earlyCheckinFee}`, es:`☀️ Check-in anticipado desde las ${earlyCheckinTime} por €${earlyCheckinFee}`, ca:`☀️ Check-in anticipat des de les ${earlyCheckinTime} per €${earlyCheckinFee}`, it:`☀️ Check-in anticipato dalle ${earlyCheckinTime} per €${earlyCheckinFee}`, pt:`☀️ Check-in antecipado a partir das ${earlyCheckinTime} por €${earlyCheckinFee}` }
+      result.push(earlyLabels[lang] || earlyLabels.en)
+    }
+
+    return result.join('\n')
+  }
+
+  const optionalLines = lines(lang)
+  const sep = optionalLines ? '\n' + optionalLines + '\n' : '\n'
+
   return t({
-    en: `${name}, your stay at ${h} starts tomorrow! 🎉\n\n📍 Check-in from 14:00 — ${room} will be ready\n🚗 Underground parking — code 4521\n📶 WiFi: FourSeasons_Guest | Password: Limassol2026\n☀️ Early check-in from 10:00 for €30\n\nNeed an airport transfer? Reply with your flight time!`,
-    ru: `${name}, ваш отдых в ${h} начинается завтра! 🎉\n\n📍 Заезд с 14:00 — ${room} будет готов\n🚗 Подземная парковка — код 4521\n📶 WiFi: FourSeasons_Guest | Пароль: Limassol2026\n☀️ Ранний заезд с 10:00 за €30\n\nНужен трансфер? Напишите время прилёта!`,
-    he: `${name}, השהות שלך ב${h} מתחילה מחר! 🎉\n\n📍 צ'ק-אין מ-14:00 — ${room} יהיה מוכן\n🚗 חניה תת-קרקעית — קוד 4521\n📶 WiFi: FourSeasons_Guest | סיסמה: Limassol2026\n☀️ צ'ק-אין מוקדם מ-10:00 ב-€30\n\nרוצה העברה? שלח שעת נחיתה!`,
-    de: `${name}, Ihr Aufenthalt in ${h} beginnt morgen! 🎉\n\n📍 Check-in ab 14:00 — ${room} wird bereit sein\n🚗 Tiefgarage — Code 4521\n📶 WLAN: FourSeasons_Guest | Passwort: Limassol2026\n☀️ Früh-Check-in ab 10:00 für €30\n\nBrauchen Sie einen Transfer? Schreiben Sie Ihre Ankunftszeit!`,
-    fr: `${name}, votre séjour au ${h} commence demain! 🎉\n\n📍 Check-in à partir de 14h — ${room} sera prêt\n🚗 Parking souterrain — code 4521\n📶 WiFi: FourSeasons_Guest | Mot de passe: Limassol2026\n☀️ Check-in anticipé dès 10h pour €30\n\nBesoin d'un transfert? Indiquez l'heure de votre vol!`,
-    zh: `${name}，您在${h}的入住明天开始！🎉\n\n📍 入住从14:00起 — ${room}将准备好\n🚗 地下停车场 — 密码4521\n📶 WiFi: FourSeasons_Guest | 密码: Limassol2026\n☀️ 10:00起提前入住，费用€30\n\n需要机场接送？请告诉我航班到达时间！`,
-    pl: `${name}, Twój pobyt w ${h} zaczyna się jutro! 🎉\n\n📍 Zameldowanie od 14:00 — ${room} będzie gotowy\n🚗 Parking podziemny — kod 4521\n📶 WiFi: FourSeasons_Guest | Hasło: Limassol2026\n☀️ Wczesne zameldowanie od 10:00 za €30\n\nPotrzebujesz transferu? Podaj godzinę przylotu!`,
-    sv: `${name}, din vistelse på ${h} börjar imorgon! 🎉\n\n📍 Incheckning från 14:00 — ${room} kommer att vara redo\n🚗 Underjordisk parkering — kod 4521\n📶 WiFi: FourSeasons_Guest | Lösenord: Limassol2026\n☀️ Tidig incheckning från 10:00 för €30\n\nBehöver du transfer? Svara med din ankomsttid!`,
-    fi: `${name}, vierailusi ${h}:ssa alkaa huomenna! 🎉\n\n📍 Sisäänkirjautuminen klo 14:00 alkaen — ${room} on valmis\n🚗 Maanalainen parkki — koodi 4521\n📶 WiFi: FourSeasons_Guest | Salasana: Limassol2026\n☀️ Aikainen sisäänkirjautuminen klo 10:00 alkaen €30\n\nTarvitsetko kuljetuksen? Lähetä saapumisaikasi!`,
-    uk: `${name}, ваше перебування в ${h} починається завтра! 🎉\n\n📍 Заселення з 14:00 — ${room} буде готовий\n🚗 Підземна парковка — код 4521\n📶 WiFi: FourSeasons_Guest | Пароль: Limassol2026\n☀️ Ранній заїзд з 10:00 за €30\n\nПотрібен трансфер? Напишіть час прильоту!`,
-    ar: `${name}، إقامتك في ${h} تبدأ غداً! 🎉\n\n📍 تسجيل الوصول من 14:00 — ${room} سيكون جاهزاً\n🚗 موقف تحت الأرض — الكود 4521\n📶 واي فاي: FourSeasons_Guest | كلمة المرور: Limassol2026\n☀️ وصول مبكر من 10:00 بـ €30\n\nتحتاج نقل؟ أرسل وقت وصول رحلتك!`,
-    nl: `${name}, uw verblijf in ${h} begint morgen! 🎉\n\n📍 Inchecken vanaf 14:00 — ${room} zal klaar zijn\n🚗 Ondergrondse parkeerplaats — code 4521\n📶 WiFi: FourSeasons_Guest | Wachtwoord: Limassol2026\n☀️ Vroeg inchecken vanaf 10:00 voor €30\n\nHeeft u een transfer nodig? Stuur uw aankomsttijd!`,
-    el: `${name}, η διαμονή σου στο ${h} αρχίζει αύριο! 🎉\n\n📍 Check-in από τις 14:00 — ${room} θα είναι έτοιμο\n🚗 Υπόγειο πάρκινγκ — κωδικός 4521\n📶 WiFi: FourSeasons_Guest | Κωδικός: Limassol2026\n☀️ Πρώιμο check-in από τις 10:00 για €30\n\nΧρειάζεσαι μεταφορά; Στείλε την ώρα άφιξης!`,
-    es: `¡${name}, tu estancia en ${h} empieza mañana! 🎉\n\n📍 Check-in a partir de las 14:00 — ${room} estará listo\n🚗 Parking subterráneo — código 4521\n📶 WiFi: FourSeasons_Guest | Contraseña: Limassol2026\n☀️ Check-in anticipado desde las 10:00 por €30\n\n¿Necesitas traslado? ¡Dime tu hora de llegada!`,
-    ca: `${name}, la teva estada a ${h} comença demà! 🎉\n\n📍 Check-in a partir de les 14:00 — ${room} estarà llest\n🚗 Aparcament subterrani — codi 4521\n📶 WiFi: FourSeasons_Guest | Contrasenya: Limassol2026\n☀️ Check-in anticipat des de les 10:00 per €30\n\nNecessites trasllat? Digues-me la teva hora d'arribada!`,
-    it: `${name}, il tuo soggiorno al ${h} inizia domani! 🎉\n\n📍 Check-in dalle 14:00 — ${room} sarà pronto\n🚗 Parcheggio sotterraneo — codice 4521\n📶 WiFi: FourSeasons_Guest | Password: Limassol2026\n☀️ Check-in anticipato dalle 10:00 per €30\n\nHai bisogno di un transfer? Dimmi l'orario del tuo volo!`,
-    pt: `${name}, a sua estadia no ${h} começa amanhã! 🎉\n\n📍 Check-in a partir das 14:00 — ${room} estará pronto\n🚗 Estacionamento subterrâneo — código 4521\n📶 WiFi: FourSeasons_Guest | Password: Limassol2026\n☀️ Check-in antecipado a partir das 10:00 por €30\n\nPrecisa de transfer? Diga-me a hora de chegada do seu voo!`,
+    en: `${name}, your stay at ${h} starts tomorrow! 🎉\n\n📍 Check-in from ${checkinTime} — ${room} will be ready${sep}\nNeed an airport transfer? Reply with your flight time!`,
+    ru: `${name}, ваш отдых в ${h} начинается завтра! 🎉\n\n📍 Заезд с ${checkinTime} — ${room} будет готов${sep}\nНужен трансфер? Напишите время прилёта!`,
+    he: `${name}, השהות שלך ב${h} מתחילה מחר! 🎉\n\n📍 צ'ק-אין מ-${checkinTime} — ${room} יהיה מוכן${sep}\nרוצה העברה? שלח שעת נחיתה!`,
+    de: `${name}, Ihr Aufenthalt in ${h} beginnt morgen! 🎉\n\n📍 Check-in ab ${checkinTime} — ${room} wird bereit sein${sep}\nBrauchen Sie einen Transfer? Schreiben Sie Ihre Ankunftszeit!`,
+    fr: `${name}, votre séjour au ${h} commence demain! 🎉\n\n📍 Check-in à partir de ${checkinTime} — ${room} sera prêt${sep}\nBesoin d'un transfert? Indiquez l'heure de votre vol!`,
+    zh: `${name}，您在${h}的入住明天开始！🎉\n\n📍 入住从${checkinTime}起 — ${room}将准备好${sep}\n需要机场接送？请告诉我航班到达时间！`,
+    pl: `${name}, Twój pobyt w ${h} zaczyna się jutro! 🎉\n\n📍 Zameldowanie od ${checkinTime} — ${room} będzie gotowy${sep}\nPotrzebujesz transferu? Podaj godzinę przylotu!`,
+    sv: `${name}, din vistelse på ${h} börjar imorgon! 🎉\n\n📍 Incheckning från ${checkinTime} — ${room} kommer att vara redo${sep}\nBehöver du transfer? Svara med din ankomsttid!`,
+    fi: `${name}, vierailusi ${h}:ssa alkaa huomenna! 🎉\n\n📍 Sisäänkirjautuminen klo ${checkinTime} alkaen — ${room} on valmis${sep}\nTarvitsetko kuljetuksen? Lähetä saapumisaikasi!`,
+    uk: `${name}, ваше перебування в ${h} починається завтра! 🎉\n\n📍 Заселення з ${checkinTime} — ${room} буде готовий${sep}\nПотрібен трансфер? Напишіть час прильоту!`,
+    ar: `${name}، إقامتك في ${h} تبدأ غداً! 🎉\n\n📍 تسجيل الوصول من ${checkinTime} — ${room} سيكون جاهزاً${sep}\nتحتاج نقل؟ أرسل وقت وصول رحلتك!`,
+    nl: `${name}, uw verblijf in ${h} begint morgen! 🎉\n\n📍 Inchecken vanaf ${checkinTime} — ${room} zal klaar zijn${sep}\nHeeft u een transfer nodig? Stuur uw aankomsttijd!`,
+    el: `${name}, η διαμονή σου στο ${h} αρχίζει αύριο! 🎉\n\n📍 Check-in από τις ${checkinTime} — ${room} θα είναι έτοιμο${sep}\nΧρειάζεσαι μεταφορά; Στείλε την ώρα άφιξης!`,
+    es: `¡${name}, tu estancia en ${h} empieza mañana! 🎉\n\n📍 Check-in a partir de las ${checkinTime} — ${room} estará listo${sep}\n¿Necesitas traslado? ¡Dime tu hora de llegada!`,
+    ca: `${name}, la teva estada a ${h} comença demà! 🎉\n\n📍 Check-in a partir de les ${checkinTime} — ${room} estarà llest${sep}\nNecessites trasllat? Digues-me la teva hora d'arribada!`,
+    it: `${name}, il tuo soggiorno al ${h} inizia domani! 🎉\n\n📍 Check-in dalle ${checkinTime} — ${room} sarà pronto${sep}\nHai bisogno di un transfer? Dimmi l'orario del tuo volo!`,
+    pt: `${name}, a sua estadia no ${h} começa amanhã! 🎉\n\n📍 Check-in a partir das ${checkinTime} — ${room} estará pronto${sep}\nPrecisa de transfer? Diga-me a hora de chegada do seu voo!`,
   }, lang)
 }
 

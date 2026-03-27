@@ -140,7 +140,15 @@ BOOKING PARTNERS:
 ${partnerList || 'No partners configured yet.'}
 
 MAKING A BOOKING:
-When confirming a booking, output at the END of your message (hidden from guest):
+When a guest confirms a booking, your visible reply MUST always include:
+- The service type (taxi, restaurant, boat tour etc.)
+- The time and date
+- The destination or venue
+- The price if known
+- The partner name
+Example: "Perfect! I have arranged a taxi with Christos for tomorrow at 18:00 to Larnaca Airport. He will be waiting at the hotel entrance. 🚗"
+
+Then output at the END of your message (hidden from guest):
 [BOOKING]{"type":"taxi","partner":"Partner Name","details":{"destination":"Airport","time":"18:00","passengers":2},"price":45}
 
 ESCALATION:
