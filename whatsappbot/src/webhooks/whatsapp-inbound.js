@@ -14,6 +14,8 @@ import { handleFeedbackReply } from '../lib/scheduled.js'
 import { loadGuestMemory, formatMemoryForPrompt, updateGuestPreferences } from '../lib/memory.js'
 import { notifyReceptionEscalation, notifyReceptionMessage } from '../lib/push.js'
 import { getAvailableProducts, formatProductsForPrompt, parseProductOrder, createGuestOrder } from '../lib/stripe.js'
+import { checkInbound, RESTRICTED_PROMPT } from '../lib/abuse.js'
+import { getFlightStatus, extractFlightNumber, calculateTaxiTime, formatFlightStatus } from '../lib/flights.js'
 
 export async function handleInboundWhatsApp(rawBody) {
   const { from, to, message, profileName } = parseIncomingMessage(rawBody)
@@ -36,6 +38,41 @@ export async function handleInboundWhatsApp(rawBody) {
     await updateGuest(guest.id, { name: parts[0]||null, surname: parts.slice(1).join(' ')||null })
     guest.name = parts[0]||null; guest.surname = parts.slice(1).join(' ')||null
   }
+
+  // 3b. Abuse / security check — before doing anything else
+  const abuseCheck = await checkInbound(from, message, hotel.id, guest, guest.language || 'en')
+
+  if (abuseCheck.action === 'block') {
+    console.log(`Blocked message from ${from}`)
+    return  // Silence — no response
+  }
+
+  if (abuseCheck.action === 'redirect') {
+    // Known guest who is blocked — redirect to reception, don't block silently
+    await sendWhatsApp(from, abuseCheck.warnMsg)
+    return
+  }
+
+  if (abuseCheck.action === 'warn') {
+    await sendWhatsApp(from, abuseCheck.warnMsg)
+    // For high severity warnings, also escalate conversation
+    if (abuseCheck.escalate) {
+      const { data: conv } = await supabase
+        .from('conversations')
+        .select('id')
+        .eq('guest_id', guest.id)
+        .in('status', ['active','escalated'])
+        .order('created_at', { ascending: false })
+        .limit(1).single()
+      if (conv) {
+        await supabase.from('conversations').update({ status: 'escalated' }).eq('id', conv.id)
+      }
+    }
+    return
+  }
+
+  // action === 'restrict' — continue but add restriction to system prompt later
+  const isRestricted = abuseCheck.action === 'restrict'
 
   // 4. Language detection — only switch after 2+ consecutive messages in new language
   const lang = detectLanguage(message)
@@ -102,6 +139,11 @@ export async function handleInboundWhatsApp(rawBody) {
   } else if (stayStatus === 'active') {
     systemPrompt += `\n\n[STAY CONTEXT] Guest is currently checked in. Room: ${guest.room}. ` +
       `Check-out: ${guest.check_out}. Provide full concierge service.`
+  }
+
+  // Restricted mode — only hotel topics allowed
+  if (isRestricted) {
+    systemPrompt += RESTRICTED_PROMPT
   }
 
   // FIX #2: Frustration detector — count recent unresolved guest messages
@@ -175,6 +217,23 @@ export async function handleInboundWhatsApp(rawBody) {
       ca:'Un moment. Torna-ho a intentar.',
     }
     await sendWhatsApp(from, fb[guest.language]||fb.en); return
+  }
+
+  // 11b. Flight status check — if guest mentions a flight number in any message
+  const mentionedFlight = extractFlightNumber(message)
+  if (mentionedFlight && !autoTicketCreated) {
+    // Add real-time flight status to system prompt context
+    const flightData = await getFlightStatus(mentionedFlight).catch(() => null)
+    if (flightData) {
+      const statusSummary = formatFlightStatus(flightData, guest.language || 'en')
+      systemPrompt += `\n\n[FLIGHT DATA - REAL TIME] Guest mentioned flight ${mentionedFlight}. ` +
+        `Current status: ${flightData.status}. ` +
+        `${flightData.arriveDelay > 0 ? `Arrival delayed ${flightData.arriveDelay} minutes.` : 'On time.'} ` +
+        `Scheduled arrival: ${flightData.scheduledArrive ? new Date(flightData.scheduledArrive).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}) : 'unknown'}. ` +
+        `Estimated arrival: ${flightData.estimatedArrive ? new Date(flightData.estimatedArrive).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}) : 'unknown'}. ` +
+        `If booking a taxi for this flight, use the estimated arrival time + 30 minutes for immigration/baggage. ` +
+        `You can share this flight status with the guest naturally.`
+    }
   }
 
   // 12a. Auto-ticket for maintenance/facility issues
@@ -463,6 +522,32 @@ async function processBooking(booking, hotel, guest, partners, source = 'guest_r
 }
 
 async function _sendToPartner(partner, booking, hotel, guest, source, lowConfidence = false, matchReasons = []) {
+  const details = booking.details || {}
+
+  // ── Flight status check — correct pickup time if flight delayed ──
+  if (details.flight) {
+    const flightNum = extractFlightNumber(details.flight)
+    if (flightNum) {
+      const flightData = await getFlightStatus(flightNum).catch(() => null)
+      if (flightData) {
+        const direction = details.destination?.toLowerCase().includes('airport') ? 'arrival'
+          : details.pickup?.toLowerCase().includes('airport') ? 'departure'
+          : 'arrival'
+
+        const taxiCalc = calculateTaxiTime(flightData, direction, hotel.config)
+        if (taxiCalc) {
+          // Correct the time in booking details
+          details.time         = taxiCalc.pickupTimeStr
+          details.flight_status = flightData.status
+          details.flight_delay  = taxiCalc.delayMins
+          if (taxiCalc.note) details.flight_note = taxiCalc.note
+
+          console.log(`Flight ${flightNum}: ${flightData.status}, delay ${taxiCalc.delayMins}min, taxi adjusted to ${taxiCalc.pickupTimeStr}`)
+        }
+      }
+    }
+  }
+
   const base = booking.details?.price || (partner.details?.price_per_person
     ? partner.details.price_per_person * (booking.details?.passengers || booking.details?.pax || 1) : 0)
   const comm = base > 0 ? +(base * partner.commission_rate / 100).toFixed(2) : 0
