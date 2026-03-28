@@ -109,6 +109,31 @@ function ExpandableBookingDesktop({ b }) {
   )
 }
 
+function SelectedGuestChip({ conv, onClear }) {
+  const sg   = conv.guests || {}
+  const isEsc = conv.status === 'escalated'
+  const stay  = sg.stay_status || 'prospect'
+  const chipBorder = isEsc             ? '3px solid #DC2626'
+    : stay === 'active'                ? '3px solid #16A34A'
+    : stay === 'pre_arrival'           ? '3px solid #60A5FA'
+    : stay === 'checked_out'           ? '3px solid #D1D5DB'
+    : '3px solid transparent'
+  return (
+    <div style={{ display:'flex', alignItems:'center', gap:'10px', padding:'10px 12px', background:'white', borderRadius:'10px', border:'0.5px solid #E5E7EB', borderLeft: chipBorder }}>
+      <div style={{ width:'34px', height:'34px', borderRadius:'50%', background:'var(--green-800)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'13px', color:'var(--gold)', fontWeight:'700', flexShrink:0 }}>
+        {(sg.name?.[0]||'?').toUpperCase()}{(sg.surname?.[0]||'').toUpperCase()}
+      </div>
+      <div style={{ flex:1, minWidth:0 }}>
+        <div style={{ fontSize:'13px', fontWeight:'600', color:'#111827' }}>{sg.name} {sg.surname}</div>
+        <div style={{ fontSize:'12px', color:'#6B7280' }}>
+          {(sg.room || sg.guest_room) ? `Room ${sg.room || sg.guest_room}` : 'No room assigned'}
+        </div>
+      </div>
+      <button onClick={onClear} style={{ background:'none', border:'none', color:'#D1D5DB', cursor:'pointer', fontSize:'18px', lineHeight:1, flexShrink:0 }}>×</button>
+    </div>
+  )
+}
+
 export default function LiveTab({ hotelId, session, onSelectGuest }) {
   if (isDeptRole(session?.role)) {
     return <DepartmentQueue hotelId={hotelId} session={session} />
@@ -396,30 +421,8 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
             {/* Guest chip */}
             <div>
               <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151', marginBottom:'6px' }}>Guest</div>
-              {selectedConv ? (() => {
-                const sg      = selectedConv.guests || {}
-                const isEsc   = selectedConv.status === 'escalated'
-                const stay    = sg.stay_status || 'prospect'
-                const chipBorder = isEsc           ? '3px solid #DC2626'
-                  : stay === 'active'              ? '3px solid #16A34A'
-                  : stay === 'pre_arrival'          ? '3px solid #60A5FA'
-                  : stay === 'checked_out'          ? '3px solid #D1D5DB'
-                  : '3px solid transparent'
-                return (
-                <div style={{ display:'flex', alignItems:'center', gap:'10px', padding:'10px 12px', background:'white', borderRadius:'10px', border:'0.5px solid #E5E7EB', borderLeft: chipBorder }}>
-                  <div style={{ width:'34px', height:'34px', borderRadius:'50%', background:'var(--green-800)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'13px', color:'var(--gold)', fontWeight:'700', flexShrink:0 }}>
-                    {(sg.name?.[0]||'?').toUpperCase()}{(sg.surname?.[0]||'').toUpperCase()}
-                  </div>
-                  <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ fontSize:'13px', fontWeight:'600', color:'#111827' }}>{sg.name} {sg.surname}</div>
-                    <div style={{ fontSize:'12px', color:'#6B7280' }}>
-                      {(sg.room || sg.guest_room) ? `Room ${sg.room || sg.guest_room}` : 'No room assigned'}
-                    </div>
-                  </div>
-                  <button onClick={()=>{ setSelectedConv(null); setNoGuest(false) }} style={{ background:'none', border:'none', color:'#D1D5DB', cursor:'pointer', fontSize:'18px', lineHeight:1, flexShrink:0 }}>×</button>
-                </div>
-                )
-              })()
+              {selectedConv ? (
+                <SelectedGuestChip conv={selectedConv} onClear={() => { setSelectedConv(null); setNoGuest(false) }} />
               ) : (
                 <div style={{ padding:'12px', background:'white', borderRadius:'10px', border:'0.5px dashed #D1D5DB', textAlign:'center', fontSize:'12px', color:'#9CA3AF' }}>
                   Select a conversation from the left panel
