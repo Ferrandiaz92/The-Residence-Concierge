@@ -100,7 +100,7 @@ function ConversationsList({ conversations, selectedConvId, onOpenThread }) {
         const isActive= selectedConvId === conv.id
         const mins    = Math.floor((Date.now() - new Date(conv.last_message_at)) / 60000)
         const time    = mins === 0 ? 'now' : mins < 60 ? `${mins}m` : `${Math.floor(mins/60)}h`
-        const room    = g.room || g.guest_room || '?'
+        const room    = g.room || g.guest_room || null
 
         // Stay status color coding
         const stayStatus  = g.stay_status || 'prospect'
@@ -125,26 +125,37 @@ function ConversationsList({ conversations, selectedConvId, onOpenThread }) {
               cursor:'pointer', display:'flex', gap:'12px', alignItems:'flex-start',
             }}>
             <div style={{ width:'40px', height:'40px', borderRadius:'50%', background:'#1C3D2E', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'14px', color:'#C9A84C', fontWeight:'700', flexShrink:0 }}>
-              {(g.name?.[0]||'?')}{(g.surname?.[0]||'')}
+              {(g.name?.[0]||'?').toUpperCase()}{(g.surname?.[0]||'').toUpperCase()}
             </div>
             <div style={{ flex:1, minWidth:0 }}>
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'2px' }}>
                 <span style={{ fontSize:'14px', fontWeight:'600', color:'#111827' }}>{g.name||'Guest'} {g.surname||''}</span>
                 <span style={{ fontSize:'11px', color:'#9CA3AF', flexShrink:0, marginLeft:'8px' }}>{time}</span>
               </div>
-              <div style={{ fontSize:'12px', color:'#6B7280', marginBottom:'4px', display:'flex', alignItems:'center', gap:'6px' }}>
-                {room !== '?' && room ? `Room ${room}` : stayStatus === 'prospect' ? 'New visitor' : '—'}
-                {stayStatus === 'active'      && <span style={{ fontSize:'9px', fontWeight:'700', padding:'1px 5px', borderRadius:'3px', background:'#DCFCE7', color:'#14532D' }}>IN HOUSE</span>}
-                {stayStatus === 'pre_arrival' && <span style={{ fontSize:'9px', fontWeight:'700', padding:'1px 5px', borderRadius:'3px', background:'#DBEAFE', color:'#1E3A5F' }}>ARRIVING</span>}
-                {stayStatus === 'checked_out' && <span style={{ fontSize:'9px', fontWeight:'700', padding:'1px 5px', borderRadius:'3px', background:'#F3F4F6', color:'#6B7280' }}>CHECKED OUT</span>}
+              <div style={{ fontSize:'12px', color:'#6B7280', marginBottom:'4px', display:'flex', alignItems:'center', gap:'5px', flexWrap:'wrap' }}>
+                {/* Prospect — no room, just label */}
+                {stayStatus === 'prospect' && <span>New visitor</span>}
+                {/* Pre-arrival — show check-in date, no room yet */}
+                {stayStatus === 'pre_arrival' && <>
+                  <span>{g.check_in ? `Arriving ${new Date(g.check_in).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}` : 'Arriving soon'}</span>
+                  <span style={{ fontSize:'9px', fontWeight:'700', padding:'1px 5px', borderRadius:'3px', background:'#DBEAFE', color:'#1E3A5F' }}>ARRIVING</span>
+                </>}
+                {/* Active — room + check-out date */}
+                {stayStatus === 'active' && <>
+                  {room && <span>Room {room}</span>}
+                  {g.check_out && <span style={{ color:'#9CA3AF' }}>· Out {new Date(g.check_out).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</span>}
+                </>}
+                {/* Checked out — room + badge */}
+                {stayStatus === 'checked_out' && <>
+                  {room && <span>Room {room}</span>}
+                  <span style={{ fontSize:'9px', fontWeight:'700', padding:'1px 5px', borderRadius:'3px', background:'#F3F4F6', color:'#6B7280' }}>CHECKED OUT</span>
+                </>}
               </div>
               <div style={{ fontSize:'12px', color: isEsc ? '#DC2626' : '#9CA3AF', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', fontWeight: isEsc ? '600' : '400' }}>
                 {isEsc ? '↩ Reply needed' : (last?.content || 'No messages')}
               </div>
-              <div style={{ marginTop:'5px', display:'flex', gap:'5px', alignItems:'center' }}>
+              <div style={{ marginTop:'5px' }}>
                 <span style={{ fontSize:'10px', fontWeight:'600', padding:'2px 7px', borderRadius:'5px', background:lc.bg, color:lc.color }}>{lc.name}</span>
-                {isEsc && <span style={{ fontSize:'10px', fontWeight:'700', padding:'2px 7px', borderRadius:'5px', background:'#FEE2E2', color:'#DC2626' }}>escalated</span>}
-                {isActive && <span style={{ fontSize:'10px', fontWeight:'600', padding:'2px 7px', borderRadius:'5px', background:'rgba(28,61,46,0.08)', color:'#1C3D2E' }}>selected</span>}
               </div>
             </div>
           </div>

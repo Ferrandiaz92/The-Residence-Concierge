@@ -282,11 +282,24 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
                     <div style={{ fontSize:'11px', color:'#9CA3AF' }}>{timeLabel}</div>
                   </div>
                 </div>
-                <div style={{ fontSize:'12px', fontWeight:'500', color:'#6B7280', marginBottom:'5px', display:'flex', alignItems:'center', gap:'5px' }}>
-                  {roomNum ? `Room ${roomNum}` : stayStatus === 'prospect' ? 'New visitor' : '—'}
-                  {stayStatus === 'active'      && <span style={{ fontSize:'9px', fontWeight:'700', padding:'1px 5px', borderRadius:'3px', background:'#DCFCE7', color:'#14532D' }}>IN HOUSE</span>}
-                  {stayStatus === 'pre_arrival' && <span style={{ fontSize:'9px', fontWeight:'700', padding:'1px 5px', borderRadius:'3px', background:'#DBEAFE', color:'#1E3A5F' }}>ARRIVING</span>}
-                  {stayStatus === 'checked_out' && <span style={{ fontSize:'9px', fontWeight:'700', padding:'1px 5px', borderRadius:'3px', background:'#F3F4F6', color:'#6B7280' }}>CHECKED OUT</span>}
+                <div style={{ fontSize:'12px', fontWeight:'500', color:'#6B7280', marginBottom:'5px', display:'flex', alignItems:'center', gap:'5px', flexWrap:'wrap' }}>
+                  {/* Prospect */}
+                  {stayStatus === 'prospect' && <span>New visitor</span>}
+                  {/* Pre-arrival — arriving date, no room */}
+                  {stayStatus === 'pre_arrival' && <>
+                    <span>{guest.check_in ? `Arriving ${new Date(guest.check_in).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}` : 'Arriving soon'}</span>
+                    <span style={{ fontSize:'9px', fontWeight:'700', padding:'1px 5px', borderRadius:'3px', background:'#DBEAFE', color:'#1E3A5F' }}>ARRIVING</span>
+                  </>}
+                  {/* Active — room + checkout date */}
+                  {stayStatus === 'active' && <>
+                    {roomNum && <span>Room {roomNum}</span>}
+                    {guest.check_out && <span style={{ color:'#9CA3AF' }}>· Out {new Date(guest.check_out).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</span>}
+                  </>}
+                  {/* Checked out — room + badge */}
+                  {stayStatus === 'checked_out' && <>
+                    {roomNum && <span>Room {roomNum}</span>}
+                    <span style={{ fontSize:'9px', fontWeight:'700', padding:'1px 5px', borderRadius:'3px', background:'#F3F4F6', color:'#6B7280' }}>CHECKED OUT</span>
+                  </>}
                 </div>
                 <div style={{ fontSize:'11px', color:'#9CA3AF', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:'200px' }}>
                   {isEsc
