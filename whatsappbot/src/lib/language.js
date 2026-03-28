@@ -140,16 +140,19 @@ BOOKING PARTNERS:
 ${partnerList || 'No partners configured yet.'}
 
 MAKING A BOOKING:
-When a guest confirms a booking, your visible reply MUST always include:
-- The service type (taxi, restaurant, boat tour etc.)
-- The time and date
-- The destination or venue
-- The price if known
-- The partner name
-Example: "Perfect! I have arranged a taxi with Christos for tomorrow at 18:00 to Larnaca Airport. He will be waiting at the hotel entrance. 🚗"
+When confirming a booking, output at the END of your message (hidden from guest):
+[BOOKING]{"type":"taxi","partner":"Partner Name","details":{"destination":"Larnaca Airport","pickup":"Hotel entrance","date":"2026-03-29","time":"18:00","passengers":2,"luggage":3,"requirements":["child_seat","large_luggage"],"flight":"LCA247","notes":"Guest needs help with bags"}}
 
-Then output at the END of your message (hidden from guest):
-[BOOKING]{"type":"taxi","partner":"Partner Name","details":{"destination":"Airport","time":"18:00","passengers":2},"price":45}
+IMPORTANT for taxi bookings — always extract and include in details:
+- destination: exact destination name
+- pickup: where the guest will be picked up (hotel name/address if from hotel)
+- date: specific date (YYYY-MM-DD format)
+- time: exact pickup time (HH:MM format)
+- passengers: number of people
+- luggage: number of bags/suitcases if mentioned
+- requirements: array of special needs e.g. ["wheelchair","child_seat","van","dog_friendly","large_luggage"]
+- flight: flight number if mentioned (for airport pickups)
+If any of these are unclear, ASK the guest before confirming.
 
 ESCALATION:
 If you cannot help or the guest is unhappy:
@@ -172,13 +175,17 @@ export function formatPartnerAlert(booking, guest, hotel) {
     `👤 Guest: ${guestName} · Room ${room}`,
     `📋 Service: ${booking.type}`,
   ]
-  if (details.destination) lines.push(`📍 Destination: ${details.destination}`)
-  if (details.time)        lines.push(`🕐 Time: ${details.time}`)
-  if (details.date)        lines.push(`📅 Date: ${details.date}`)
-  if (details.passengers)  lines.push(`👥 Passengers: ${details.passengers}`)
-  if (details.people)      lines.push(`👥 People: ${details.people}`)
-  if (details.description) lines.push(`📝 Notes: ${details.description}`)
-  if (details.price)       lines.push(`💶 Amount: €${details.price}`)
+  if (details.destination)                    lines.push(`📍 Destination: ${details.destination}`)
+  if (details.pickup)                         lines.push(`📍 Pickup: ${details.pickup}`)
+  if (details.date)                           lines.push(`📅 Date: ${details.date}`)
+  if (details.time)                           lines.push(`🕐 Time: ${details.time}`)
+  if (details.passengers || details.pax)      lines.push(`👥 Passengers: ${details.passengers || details.pax}`)
+  if (details.luggage)                        lines.push(`🧳 Luggage: ${details.luggage} bags`)
+  if (details.requirements?.length > 0)       lines.push(`⚙️ Requirements: ${details.requirements.join(', ')}`)
+  if (details.flight)                         lines.push(`✈️ Flight: ${details.flight}`)
+  if (details.people)                         lines.push(`👥 People: ${details.people}`)
+  if (details.description)                    lines.push(`📝 Notes: ${details.description}`)
+  if (details.price)                          lines.push(`💶 Amount: €${details.price}`)
   lines.push('', 'Reply ✅ to confirm or ❌ to decline')
   return lines.join('\n')
 }
