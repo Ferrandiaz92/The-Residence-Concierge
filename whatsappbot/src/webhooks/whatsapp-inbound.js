@@ -115,7 +115,7 @@ export async function handleInboundWhatsApp(rawBody) {
     systemPrompt += `\n\n[FRUSTRATION ALERT] This guest has sent ${recentGuest.length} messages without resolution. ` +
       `If you cannot resolve their request in this reply, you MUST use [HANDOFF] to escalate to reception. ` +
       `Do not keep asking clarifying questions — act or escalate.`
-  }`
+  }
 
   // Add facilities
   const facilityText = formatFacilitiesForPrompt(facilities)
