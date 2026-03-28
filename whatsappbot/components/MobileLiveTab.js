@@ -323,54 +323,90 @@ function StaffPortal({ conversations, selectedConv, onSelectConv, session, hotel
 
         {/* ── Guest selector ── */}
         <div>
-          <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151', marginBottom:'8px' }}>Guest</div>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'8px' }}>
+            <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151' }}>
+              Guest {reqType === 'internal' && <span style={{ fontSize:'11px', fontWeight:'400', color:'#9CA3AF' }}>— optional for internal tickets</span>}
+            </div>
+            {selectedConv && (
+              <button onClick={() => { onSelectConv(null); setShowConvPicker(false) }}
+                style={{ fontSize:'11px', color:'#9CA3AF', background:'none', border:'none', cursor:'pointer', padding:0 }}>
+                Clear
+              </button>
+            )}
+          </div>
 
           {/* Selected guest chip */}
           {selectedConv ? (
-            <div style={{ display:'flex', alignItems:'center', gap:'10px', padding:'12px 14px', background:'white', borderRadius:'12px', border:'1px solid #E5E7EB' }}>
-              <div style={{ width:'34px', height:'34px', borderRadius:'50%', background:'#1C3D2E', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'13px', color:'#C9A84C', fontWeight:'700', flexShrink:0 }}>
-                {(g.name?.[0]||'?')}{(g.surname?.[0]||'')}
-              </div>
-              <div style={{ flex:1 }}>
-                <div style={{ fontSize:'13px', fontWeight:'600', color:'#111827' }}>{g.name} {g.surname}</div>
-                <div style={{ fontSize:'12px', color:'#6B7280' }}>Room {g.room||g.guest_room||'?'}</div>
+            <div style={{ display:'flex', alignItems:'center', gap:'10px', padding:'12px 14px', background:'#F0FDF4', borderRadius:'12px', border:'1px solid #BBF7D0' }}>
+              {/* Room badge — most important identifier */}
+              {(g.room || g.guest_room) && (
+                <div style={{ background:'#1C3D2E', color:'white', borderRadius:'8px', padding:'6px 10px', fontSize:'13px', fontWeight:'700', flexShrink:0 }}>
+                  Rm {g.room || g.guest_room}
+                </div>
+              )}
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontSize:'13px', fontWeight:'600', color:'#111827' }}>
+                  {g.name ? `${g.name} ${g.surname||''}`.trim() : 'Guest'}
+                </div>
+                <div style={{ fontSize:'11px', color:'#16A34A', fontWeight:'500' }}>✓ Selected</div>
               </div>
               <button onClick={() => setShowConvPicker(s => !s)}
-                style={{ fontSize:'12px', fontWeight:'600', padding:'5px 10px', borderRadius:'8px', border:'1px solid #D1D5DB', background:'white', color:'#374151', cursor:'pointer', fontFamily:"'DM Sans', sans-serif", flexShrink:0 }}>
+                style={{ fontSize:'12px', padding:'5px 10px', borderRadius:'8px', border:'1px solid #D1D5DB', background:'white', color:'#374151', cursor:'pointer', fontFamily:"'DM Sans', sans-serif", flexShrink:0 }}>
                 Change
               </button>
             </div>
           ) : (
             <button onClick={() => setShowConvPicker(s => !s)}
-              style={{ width:'100%', padding:'14px', background:'white', border:'1px dashed #D1D5DB', borderRadius:'12px', textAlign:'center', fontSize:'13px', color:'#9CA3AF', cursor:'pointer', fontFamily:"'DM Sans', sans-serif" }}>
-              Tap to select a guest conversation →
+              style={{ width:'100%', padding:'12px 14px', background:'white', border:'1px dashed #D1D5DB', borderRadius:'12px', display:'flex', alignItems:'center', gap:'10px', cursor:'pointer' }}>
+              <div style={{ fontSize:'13px', color:'#9CA3AF', flex:1, textAlign:'left', fontFamily:"'DM Sans', sans-serif" }}>
+                {reqType === 'internal' ? 'Link to a guest conversation (optional)' : 'Select a guest conversation →'}
+              </div>
+              <span style={{ fontSize:'16px', color:'#D1D5DB' }}>›</span>
             </button>
           )}
 
-          {/* Conv picker dropdown */}
+          {/* Conv picker dropdown — redesigned with room number prominent */}
           {showConvPicker && (
-            <div style={{ marginTop:'8px', background:'white', borderRadius:'12px', border:'1px solid #E5E7EB', overflow:'hidden', maxHeight:'200px', overflowY:'auto' }}>
-              {conversations.length === 0 && (
+            <div style={{ marginTop:'8px', background:'white', borderRadius:'12px', border:'1px solid #E5E7EB', overflow:'hidden', maxHeight:'240px', overflowY:'auto' }}>
+              {conversations.length === 0 ? (
                 <div style={{ padding:'16px', textAlign:'center', color:'#9CA3AF', fontSize:'13px' }}>No active conversations</div>
-              )}
-              {conversations.map(conv => {
-                const cg   = conv.guests || {}
-                const room = cg.room || cg.guest_room || '?'
-                return (
-                  <div key={conv.id}
-                    onClick={() => { onSelectConv(conv); setShowConvPicker(false) }}
-                    style={{ padding:'12px 14px', borderBottom:'1px solid #F3F4F6', display:'flex', alignItems:'center', gap:'10px', cursor:'pointer', background: selectedConv?.id===conv.id ? 'rgba(28,61,46,0.06)' : 'white' }}>
-                    <div style={{ width:'32px', height:'32px', borderRadius:'50%', background:'#1C3D2E', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'12px', color:'#C9A84C', fontWeight:'700', flexShrink:0 }}>
-                      {(cg.name?.[0]||'?')}{(cg.surname?.[0]||'')}
-                    </div>
-                    <div style={{ flex:1, minWidth:0 }}>
-                      <div style={{ fontSize:'13px', fontWeight:'600', color:'#111827' }}>{cg.name||'Guest'} {cg.surname||''}</div>
-                      <div style={{ fontSize:'12px', color:'#6B7280' }}>Room {room}</div>
-                    </div>
-                    {selectedConv?.id === conv.id && <span style={{ fontSize:'12px', color:'#C9A84C' }}>✓</span>}
+              ) : (
+                <>
+                  <div style={{ padding:'8px 14px', fontSize:'11px', fontWeight:'600', color:'#9CA3AF', background:'#F9FAFB', borderBottom:'1px solid #F3F4F6' }}>
+                    SELECT GUEST
                   </div>
-                )
-              })}
+                  {conversations.map(conv => {
+                    const cg   = conv.guests || {}
+                    const room = cg.room || cg.guest_room
+                    const name = cg.name ? `${cg.name} ${cg.surname||''}`.trim() : null
+                    const isSelected = selectedConv?.id === conv.id
+                    return (
+                      <div key={conv.id}
+                        onClick={() => { onSelectConv(conv); setShowConvPicker(false) }}
+                        style={{ padding:'12px 14px', borderBottom:'1px solid #F3F4F6', display:'flex', alignItems:'center', gap:'12px', cursor:'pointer', background: isSelected ? '#F0FDF4' : 'white' }}>
+                        {/* Room number — big and prominent */}
+                        <div style={{ minWidth:'48px', height:'40px', borderRadius:'8px', background: room ? '#1C3D2E' : '#F3F4F6', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                          {room ? (
+                            <span style={{ fontSize:'12px', fontWeight:'700', color:'white' }}>Rm {room}</span>
+                          ) : (
+                            <span style={{ fontSize:'10px', color:'#9CA3AF' }}>?</span>
+                          )}
+                        </div>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ fontSize:'13px', fontWeight:'600', color: isSelected ? '#14532D' : '#111827' }}>
+                            {name || 'Guest'}
+                          </div>
+                          <div style={{ fontSize:'11px', color:'#9CA3AF', marginTop:'1px' }}>
+                            {conv.status === 'escalated' ? '🔴 Needs reply' : '🟢 Active'}
+                            {cg.language ? ` · ${cg.language.toUpperCase()}` : ''}
+                          </div>
+                        </div>
+                        {isSelected && <span style={{ fontSize:'14px', color:'#16A34A' }}>✓</span>}
+                      </div>
+                    )
+                  })}
+                </>
+              )}
             </div>
           )}
         </div>
@@ -453,16 +489,17 @@ function StaffPortal({ conversations, selectedConv, onSelectConv, session, hotel
         </div>
 
         {/* ── Send button ── */}
-        <button onClick={handleSend} disabled={sending || !details.trim() || !selectedConv}
+        <button onClick={handleSend}
+          disabled={sending || !details.trim() || (reqType === 'external' && !selectedConv)}
           style={{
             width:'100%', padding:'14px',
-            background: sent ? '#16A34A' : (!details.trim()||!selectedConv) ? '#E5E7EB' : '#1C3D2E',
+            background: sent ? '#16A34A' : (!details.trim() || (reqType==='external' && !selectedConv)) ? '#E5E7EB' : '#1C3D2E',
             border:'none', borderRadius:'12px', fontSize:'15px', fontWeight:'700',
-            color: (!details.trim()||!selectedConv) ? '#9CA3AF' : 'white',
-            cursor: (!details.trim()||!selectedConv) ? 'not-allowed' : 'pointer',
+            color: (!details.trim() || (reqType==='external' && !selectedConv)) ? '#9CA3AF' : 'white',
+            cursor: (!details.trim() || (reqType==='external' && !selectedConv)) ? 'not-allowed' : 'pointer',
             fontFamily:"'DM Sans', sans-serif",
           }}>
-          {sent ? '✓ Sent!' : sending ? 'Sending…' : reqType==='external' ? 'Send booking request' : 'Create internal ticket'}
+          {sent ? '✓ Created!' : sending ? 'Creating…' : reqType==='external' ? 'Send booking request' : 'Create ticket'}
         </button>
 
         <div style={{ height:'20px' }}/>
@@ -523,6 +560,57 @@ function ExpandableBooking({ booking: b, guest: g, tc }) {
   )
 }
 
+
+function TicketAlertRow({ ticket: t, session, hotelId, onUpdate }) {
+  const [depts, setDepts] = useState([])
+  const isSupervisorRole = session?.role === 'supervisor' || session?.role === 'manager'
+
+  useEffect(() => {
+    if (!isSupervisorRole || !hotelId) return
+    fetch(`/api/config?hotelId=${hotelId}`)
+      .then(r => r.json())
+      .then(d => setDepts(d.departments || []))
+      .catch(() => {})
+  }, [hotelId, isSupervisorRole])
+
+  async function reassign(newDept) {
+    await fetch('/api/tickets', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ticketId: t.id, status: t.status, department: newDept }),
+    })
+    onUpdate?.()
+  }
+
+  return (
+    <div style={{ padding:'14px 16px', background:'white', borderBottom:'1px solid #F3F4F6' }}>
+      <div style={{ display:'flex', gap:'10px', alignItems:'flex-start' }}>
+        <div style={{ width:'28px', height:'28px', borderRadius:'8px', background: t.priority==='urgent'?'#FEE2E2':'#FFFBEB', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'14px', flexShrink:0 }}>
+          {t.priority==='urgent'?'🚨':'⚠️'}
+        </div>
+        <div style={{ flex:1 }}>
+          <div style={{ fontSize:'13px', fontWeight:'600', color:'#111827', marginBottom:'2px' }}>{t.description?.slice(0,70)}{t.description?.length>70?'…':''}</div>
+          <div style={{ fontSize:'12px', color:'#6B7280' }}>
+            {t.room ? `Room ${t.room} · ` : ''}{t.department} · <span style={{ color: t.status==='escalated'?'#DC2626':'#D97706', textTransform:'capitalize' }}>{t.status}</span>
+          </div>
+          {t.priority==='urgent' && <span style={{ display:'inline-block', marginTop:'4px', fontSize:'10px', fontWeight:'700', padding:'2px 7px', borderRadius:'4px', background:'#FEE2E2', color:'#DC2626' }}>URGENT</span>}
+        </div>
+      </div>
+      {/* Reassign — supervisor + manager only */}
+      {isSupervisorRole && depts.length > 0 && (
+        <select onChange={e => { if (e.target.value) { reassign(e.target.value); e.target.value = '' } }}
+          style={{ width:'100%', marginTop:'10px', padding:'8px 10px', border:'0.5px solid #E5E7EB', borderRadius:'8px', fontSize:'12px', color:'#6B7280', background:'white', cursor:'pointer', fontFamily:"'DM Sans', sans-serif" }}>
+          <option value=''>↩ Reassign to department…</option>
+          {depts.map(d => (
+            <option key={d.id} value={d.key} disabled={d.key === t.department}>
+              {d.name}{d.key === t.department ? ' (current)' : ''}
+            </option>
+          ))}
+        </select>
+      )}
+    </div>
+  )
+}
+
 function IssuesPanel({ tickets, bookings, conversations = [], onOpenThread }) {
   const escalatedChats = conversations.filter(c => c.status === 'escalated')
   const issues         = tickets.filter(t => !['resolved','cancelled'].includes(t.status))
@@ -566,18 +654,7 @@ function IssuesPanel({ tickets, bookings, conversations = [], onOpenThread }) {
       {issues.length === 0
         ? <EmptyRow text="All clear ✓" />
         : issues.map(t => (
-          <div key={t.id} style={{ padding:'14px 16px', background:'white', borderBottom:'1px solid #F3F4F6', display:'flex', gap:'10px', alignItems:'flex-start' }}>
-            <div style={{ width:'28px', height:'28px', borderRadius:'8px', background: t.priority==='urgent'?'#FEE2E2':'#FFFBEB', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'14px', flexShrink:0 }}>
-              {t.priority==='urgent'?'🚨':'⚠️'}
-            </div>
-            <div style={{ flex:1 }}>
-              <div style={{ fontSize:'13px', fontWeight:'600', color:'#111827', marginBottom:'2px' }}>{t.description?.slice(0,70)}{t.description?.length>70?'…':''}</div>
-              <div style={{ fontSize:'12px', color:'#6B7280' }}>
-                {t.room ? `Room ${t.room} · ` : ''}{t.department} · <span style={{ color: t.status==='escalated'?'#DC2626':'#D97706', textTransform:'capitalize' }}>{t.status}</span>
-              </div>
-              {t.priority==='urgent' && <span style={{ display:'inline-block', marginTop:'4px', fontSize:'10px', fontWeight:'700', padding:'2px 7px', borderRadius:'4px', background:'#FEE2E2', color:'#DC2626' }}>URGENT</span>}
-            </div>
-          </div>
+          <TicketAlertRow key={t.id} ticket={t} session={session} hotelId={hotelId} onUpdate={()=>{}} />
         ))
       }
 
