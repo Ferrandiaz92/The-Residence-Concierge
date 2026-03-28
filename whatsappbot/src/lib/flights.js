@@ -17,16 +17,35 @@ const BASE_URL = 'https://api.aviationstack.com/v1'
 
 // ── FLIGHT NUMBER PATTERN ─────────────────────────────────────
 // Matches: LCA247, LH401, BA 123, EK 007, CY 301
-export const FLIGHT_PATTERN = /\b([A-Z]{2,3})\s*(\d{1,4}[A-Z]?)\b/
+export const FLIGHT_PATTERN = /\b([A-Z][A-Z0-9]|[A-Z]{3})\s*(\d{1,4}[A-Z]?)\b/
 
 export function extractFlightNumber(text) {
-  const match = text.toUpperCase().match(FLIGHT_PATTERN)
-  if (!match) return null
-  // Filter out common false positives
-  const iata = match[1] + match[2]
-  const FALSE_POSITIVES = ['TV', 'AC', 'TV4', 'UK', 'EU', 'US', 'OK']
-  if (FALSE_POSITIVES.includes(match[1])) return null
-  return iata
+  const FALSE_POSITIVES = new Set(['TV', 'AC', 'OK', 'NO', 'MY', 'TO', 'GO', 'DO', 'SO', 'IT', 'BE', 'AM'])
+  const re      = new RegExp(FLIGHT_PATTERN.source, 'g')
+  const upper   = text.toUpperCase()
+  const matches = []
+  let m
+  while ((m = re.exec(upper)) !== null) {
+    const iata = m[1] + m[2]
+    if (!FALSE_POSITIVES.has(m[1])) matches.push(iata)
+  }
+  if (matches.length === 0) return null
+  // Return first match (operating carrier for codeshares)
+  return matches[0]
+}
+
+// Extract ALL flight numbers from text (for codeshares)
+export function extractAllFlightNumbers(text) {
+  const FALSE_POSITIVES = new Set(['TV', 'AC', 'OK', 'NO', 'MY', 'TO', 'GO', 'DO', 'SO', 'IT', 'BE', 'AM'])
+  const re      = new RegExp(FLIGHT_PATTERN.source, 'g')
+  const upper   = text.toUpperCase()
+  const matches = []
+  let m
+  while ((m = re.exec(upper)) !== null) {
+    const iata = m[1] + m[2]
+    if (!FALSE_POSITIVES.has(m[1])) matches.push(iata)
+  }
+  return matches
 }
 
 // ── FETCH FLIGHT STATUS ───────────────────────────────────────
