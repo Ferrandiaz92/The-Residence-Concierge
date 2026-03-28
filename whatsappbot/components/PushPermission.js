@@ -21,16 +21,19 @@ export default function PushPermission({ session, isMobile }) {
   const [showBanner, setShowBanner] = useState(false)
 
   useEffect(() => {
-    if (!isMobile) return
-    if (!session)  return
-    if (!VAPID_PUBLIC_KEY) return
+    if (!session)        return
+    if (!VAPID_PUBLIC_KEY) {
+      console.warn('Push: VAPID key not configured — set NEXT_PUBLIC_VAPID_PUBLIC_KEY in Vercel')
+      return
+    }
 
-    // Only for reception and dept staff
-    const PUSH_ROLES = ['receptionist','maintenance','housekeeping','concierge','fnb','security','valet','frontdesk']
+    // All operational roles get push — desktop and mobile
+    const PUSH_ROLES = ['receptionist','manager','admin','supervisor',
+      'maintenance','housekeeping','concierge','fnb','security','valet','frontdesk','employee']
     if (!PUSH_ROLES.includes(session.role)) return
 
     checkAndRegister()
-  }, [session, isMobile])
+  }, [session])
 
   async function checkAndRegister() {
     // Check browser support
