@@ -300,13 +300,15 @@ function StaffPortal({ conversations, selectedConv, onSelectConv, session, hotel
   }, [hotelId])
 
   async function handleSend() {
-    if (!details.trim() || !selectedConv || sending) return
+    if (!details.trim() || sending) return
+    // Guest is optional for internal tickets (manager/supervisor can create without conversation)
+    if (reqType === 'external' && !selectedConv) return
     setSending(true)
     try {
       const endpoint = reqType === 'external' ? '/api/bookings' : '/api/tickets'
       const body = reqType === 'external'
         ? { hotelId, guestId: selectedConv.guests?.id, type: category, details: { description: details }, createdBy: `staff:${session?.name||''}` }
-        : { hotelId, guestId: selectedConv.guests?.id, department, category: deptCategory||department, description: details, room: selectedConv.guests?.room||selectedConv.guests?.guest_room, priority, createdBy: `staff:${session?.name||''}` }
+        : { hotelId, guestId: selectedConv?.guests?.id || null, department, category: deptCategory||department, description: details, room: selectedConv?.guests?.room||selectedConv?.guests?.guest_room||null, priority, createdBy: `staff:${session?.name||''}` }
       await fetch(endpoint, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) })
       setSent(true); setDetails('')
       setTimeout(() => setSent(false), 3000)

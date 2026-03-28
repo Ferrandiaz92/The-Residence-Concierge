@@ -19,15 +19,22 @@ const STATUS_COLUMNS = [
 ]
 
 export default function DepartmentQueue({ hotelId, session }) {
-  const [tickets, setTickets]   = useState([])
-  const [loading, setLoading]   = useState(true)
-  const [updating, setUpdating] = useState(null)
+  const [tickets,     setTickets]     = useState([])
+  const [loading,     setLoading]     = useState(true)
+  const [updating,    setUpdating]    = useState(null)
+  const [departments, setDepartments] = useState([])
 
   const dept = session?.department || session?.role
+  const isSupervisor = session?.role === 'supervisor'
 
   useEffect(() => {
     if (!hotelId) return
     loadTickets()
+    // Load departments for reassign dropdown
+    fetch(`/api/config?hotelId=${hotelId}`)
+      .then(r => r.json())
+      .then(d => setDepartments(d.departments || []))
+      .catch(() => {})
     const interval = setInterval(loadTickets, 30000)
     return () => clearInterval(interval)
   }, [hotelId])
@@ -40,13 +47,25 @@ export default function DepartmentQueue({ hotelId, session }) {
     } finally { setLoading(false) }
   }
 
-  async function updateStatus(ticketId, status) {
+  async function updateStatus(ticketId, status, extra = {}) {
     setUpdating(ticketId)
     try {
       await fetch('/api/tickets', {
         method:  'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ ticketId, status }),
+        body:    JSON.stringify({ ticketId, status, ...extra }),
+      })
+      loadTickets()
+    } finally { setUpdating(null) }
+  }
+
+  async function reassignTicket(ticketId, newDepartment, currentStatus) {
+    setUpdating(ticketId)
+    try {
+      await fetch('/api/tickets', {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ ticketId, status: currentStatus, department: newDepartment }),
       })
       loadTickets()
     } finally { setUpdating(null) }
@@ -180,6 +199,20 @@ export default function DepartmentQueue({ hotelId, session }) {
                             ❌ Can't fix
                           </button>
                         </div>
+                      )}
+                      {/* Reassign dropdown — supervisor only */}
+                      {isSupervisor && col.key !== 'resolved' && departments.length > 0 && (
+                        <select
+                          onChange={e => { if (e.target.value) { reassignTicket(t.id, e.target.value, t.status); e.target.value = '' } }}
+                          disabled={updating === t.id}
+                          style={{ width:'100%',marginTop:'6px',padding:'6px 8px',border:'0.5px solid var(--border)',borderRadius:'var(--radius-sm)',fontSize:'11px',color:'var(--gray-500)',background:'white',cursor:'pointer',fontFamily:'var(--font)' }}>
+                          <option value=''>↩ Reassign to department…</option>
+                          {departments.map(d => (
+                            <option key={d.id} value={d.key} disabled={d.key === t.department}>
+                              {d.name}{d.key === t.department ? ' (current)' : ''}
+                            </option>
+                          ))}
+                        </select>
                       )}
                     </div>
                   )
