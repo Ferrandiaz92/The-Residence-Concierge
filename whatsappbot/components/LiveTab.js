@@ -383,17 +383,30 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
             {/* Guest chip */}
             <div>
               <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151', marginBottom:'6px' }}>Guest</div>
-              {selectedConv ? (
-                <div style={{ display:'flex', alignItems:'center', gap:'10px', padding:'10px 12px', background:'white', borderRadius:'10px', border:'0.5px solid #E5E7EB' }}>
-                  <div style={{ width:'32px', height:'32px', borderRadius:'50%', background:'var(--green-800)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'12px', color:'var(--gold)', fontWeight:'700', flexShrink:0 }}>
-                    {(selectedConv.guests?.name?.[0]||'?')}{(selectedConv.guests?.surname?.[0]||'')}
+              {selectedConv ? (() => {
+                const sg      = selectedConv.guests || {}
+                const isEsc   = selectedConv.status === 'escalated'
+                const stay    = sg.stay_status || 'prospect'
+                const chipBorder = isEsc           ? '3px solid #DC2626'
+                  : stay === 'active'              ? '3px solid #16A34A'
+                  : stay === 'pre_arrival'          ? '3px solid #60A5FA'
+                  : stay === 'checked_out'          ? '3px solid #D1D5DB'
+                  : '3px solid transparent'
+                return (
+                <div style={{ display:'flex', alignItems:'center', gap:'10px', padding:'10px 12px', background:'white', borderRadius:'10px', border:'0.5px solid #E5E7EB', borderLeft: chipBorder }}>
+                  <div style={{ width:'34px', height:'34px', borderRadius:'50%', background:'var(--green-800)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'13px', color:'var(--gold)', fontWeight:'700', flexShrink:0 }}>
+                    {(sg.name?.[0]||'?').toUpperCase()}{(sg.surname?.[0]||'').toUpperCase()}
                   </div>
-                  <div>
-                    <div style={{ fontSize:'13px', fontWeight:'600', color:'#111827' }}>{selectedConv.guests?.name} {selectedConv.guests?.surname}</div>
-                    <div style={{ fontSize:'12px', color:'#6B7280' }}>{selectedConv.guests?.room || selectedConv.guests?.guest_room ? `Room ${selectedConv.guests?.room || selectedConv.guests?.guest_room}` : 'No room assigned'} · {LANG_COLORS[selectedConv.guests?.language||'en']?.name || (selectedConv.guests?.language||'EN').toUpperCase()}</div>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:'13px', fontWeight:'600', color:'#111827' }}>{sg.name} {sg.surname}</div>
+                    <div style={{ fontSize:'12px', color:'#6B7280' }}>
+                      {(sg.room || sg.guest_room) ? `Room ${sg.room || sg.guest_room}` : 'No room assigned'}
+                    </div>
                   </div>
-                  <button onClick={()=>{ setSelectedConv(null); setNoGuest(false) }} style={{ marginLeft:'auto', background:'none', border:'none', color:'#D1D5DB', cursor:'pointer', fontSize:'18px', lineHeight:1 }}>×</button>
+                  <button onClick={()=>{ setSelectedConv(null); setNoGuest(false) }} style={{ background:'none', border:'none', color:'#D1D5DB', cursor:'pointer', fontSize:'18px', lineHeight:1, flexShrink:0 }}>×</button>
                 </div>
+                )
+              })()
               ) : (
                 <div style={{ padding:'12px', background:'white', borderRadius:'10px', border:'0.5px dashed #D1D5DB', textAlign:'center', fontSize:'12px', color:'#9CA3AF' }}>
                   Select a conversation from the left panel

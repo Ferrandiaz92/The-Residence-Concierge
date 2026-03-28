@@ -374,26 +374,31 @@ function StaffPortal({ conversations, selectedConv, onSelectConv, session, hotel
                 <div style={{ padding:'16px', textAlign:'center', color:'#9CA3AF', fontSize:'13px' }}>No active conversations</div>
               )}
               {conversations.map(conv => {
-                const cg   = conv.guests || {}
-                const room = cg.room || cg.guest_room
+                const cg         = conv.guests || {}
+                const room       = cg.room || cg.guest_room
+                const isSelected = selectedConv?.id === conv.id
+                const isEsc      = conv.status === 'escalated'
+                const stay       = cg.stay_status || 'prospect'
+                const leftBorder = isEsc             ? '3px solid #DC2626'
+                  : stay === 'active'                ? '3px solid #16A34A'
+                  : stay === 'pre_arrival'            ? '3px solid #60A5FA'
+                  : stay === 'checked_out'            ? '3px solid #D1D5DB'
+                  : '3px solid transparent'
                 return (
                   <div key={conv.id}
                     onClick={() => { onSelectConv(conv); setShowConvPicker(false); setNoGuest(false) }}
-                    style={{ padding:'12px 14px', borderBottom:'1px solid #F3F4F6', display:'flex', alignItems:'center', gap:'10px', cursor:'pointer', background: selectedConv?.id===conv.id ? 'rgba(28,61,46,0.06)' : 'white' }}>
-                    {/* Room badge — prominent */}
-                    <div style={{ minWidth:'44px', height:'36px', borderRadius:'8px', background: room ? '#1C3D2E' : '#F3F4F6', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
-                      {room
-                        ? <span style={{ fontSize:'11px', fontWeight:'700', color:'white' }}>Rm {room}</span>
-                        : <span style={{ fontSize:'10px', color:'#9CA3AF' }}>—</span>
-                      }
+                    style={{ padding:'11px 14px', borderBottom:'1px solid #F3F4F6', display:'flex', alignItems:'center', gap:'10px', cursor:'pointer', borderLeft: leftBorder, background: isSelected ? 'rgba(28,61,46,0.06)' : 'white' }}>
+                    <div style={{ width:'36px', height:'36px', borderRadius:'50%', background:'#1C3D2E', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'13px', color:'#C9A84C', fontWeight:'700', flexShrink:0 }}>
+                      {(cg.name?.[0]||'?').toUpperCase()}{(cg.surname?.[0]||'').toUpperCase()}
                     </div>
                     <div style={{ flex:1, minWidth:0 }}>
-                      <div style={{ fontSize:'13px', fontWeight:'600', color:'#111827' }}>{cg.name||'Guest'} {cg.surname||''}</div>
-                      <div style={{ fontSize:'11px', color: conv.status==='escalated'?'#DC2626':'#9CA3AF' }}>
-                        {conv.status === 'escalated' ? '🔴 Needs reply' : '🟢 Active'}
+                      <div style={{ fontSize:'13px', fontWeight:'600', color: isEsc?'#DC2626':'#111827' }}>{cg.name||'Guest'} {cg.surname||''}</div>
+                      <div style={{ fontSize:'11px', color:'#9CA3AF' }}>
+                        {room ? `Room ${room}` : 'New visitor'}
+                        {isEsc ? ' · Needs reply' : ''}
                       </div>
                     </div>
-                    {selectedConv?.id === conv.id && <span style={{ fontSize:'12px', color:'#C9A84C' }}>✓</span>}
+                    {isSelected && <span style={{ fontSize:'12px', color:'#C9A84C', flexShrink:0 }}>✓</span>}
                   </div>
                 )
               })}
