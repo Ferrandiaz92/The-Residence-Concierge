@@ -15,7 +15,7 @@ import { loadGuestMemory, formatMemoryForPrompt, updateGuestPreferences } from '
 import { notifyReceptionEscalation, notifyReceptionMessage } from '../lib/push.js'
 import { getAvailableProducts, formatProductsForPrompt, parseProductOrder, createGuestOrder } from '../lib/stripe.js'
 import { checkInbound, RESTRICTED_PROMPT } from '../lib/abuse.js'
-import { getFlightStatus, extractFlightNumber, calculateTaxiTime, formatFlightStatus } from '../lib/flights.js'
+import { getFlightStatus, extractFlightNumber, extractAllFlightNumbers, calculateTaxiTime, formatFlightStatus } from '../lib/flights.js'
 
 export async function handleInboundWhatsApp(rawBody) {
   const { from, to, message, profileName } = parseIncomingMessage(rawBody)
@@ -237,10 +237,15 @@ export async function handleInboundWhatsApp(rawBody) {
   }
 
   // 11b. Flight status check — if guest mentions a flight number in any message
-  const mentionedFlight = extractFlightNumber(message)
+  const allFlights    = extractAllFlightNumbers(message)
+  const mentionedFlight = allFlights[0] || null
   if (mentionedFlight && !autoTicketCreated) {
-    // Add real-time flight status to system prompt context
-    const flightData = await getFlightStatus(mentionedFlight).catch(() => null)
+    // Try each flight number until we find data (handles codeshares like EK0109/QF8109)
+    let flightData = null
+    for (const fn of allFlights) {
+      flightData = await getFlightStatus(fn).catch(() => null)
+      if (flightData) break
+    }
     if (flightData) {
       const statusSummary = formatFlightStatus(flightData, guest.language || 'en')
       systemPrompt += `\n\n[FLIGHT DATA - REAL TIME] Guest mentioned flight ${mentionedFlight}. ` +
@@ -545,12 +550,16 @@ async function _sendToPartner(partner, booking, hotel, guest, source, lowConfide
 
   // ── Flight status check — correct pickup time if flight delayed ──
   if (details.flight) {
-    const flightNum = extractFlightNumber(details.flight)
-    if (flightNum) {
-      const flightData = await getFlightStatus(flightNum).catch(() => null)
+    const allFlightNums = extractAllFlightNumbers(details.flight)
+    if (allFlightNums.length > 0) {
+      let flightData = null
+      for (const fn of allFlightNums) {
+        flightData = await getFlightStatus(fn).catch(() => null)
+        if (flightData) break
+      }
       if (flightData) {
-        const direction = details.destination?.toLowerCase().includes('airport') ? 'arrival'
-          : details.pickup?.toLowerCase().includes('airport') ? 'departure'
+        const direction = (details.destination || '').toLowerCase().includes('airport') ? 'arrival'
+          : (details.pickup || '').toLowerCase().includes('airport') ? 'departure'
           : 'arrival'
 
         const taxiCalc = calculateTaxiTime(flightData, direction, hotel.config)
