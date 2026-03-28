@@ -270,18 +270,20 @@ export async function handleInboundWhatsApp(rawBody) {
         .select('*', { count:'exact', head:true }).eq('hotel_id', hotel.id)
       const ticketNum = (count || 0) + 1
 
-      await supabase.from('internal_tickets').insert({
-        hotel_id:    hotel.id,
-        guest_id:    guest.id,
-        department:  'maintenance',
-        category:    'room_issue',
-        description: `[AUTO] Guest report: "${message.slice(0, 200)}"`,
-        room:        guest.room,
-        priority:    'normal',
-        status:      'pending',
-        created_by:  'bot',
-        ticket_number: ticketNum,
-      }).catch(() => {})
+      try {
+        await supabase.from('internal_tickets').insert({
+          hotel_id:    hotel.id,
+          guest_id:    guest.id,
+          department:  'maintenance',
+          category:    'room_issue',
+          description: `[AUTO] Guest report: "${message.slice(0, 200)}"`,
+          room:        guest.room,
+          priority:    'normal',
+          status:      'pending',
+          created_by:  'bot',
+          ticket_number: ticketNum,
+        })
+      } catch(e) { console.error('Auto-ticket insert failed:', e.message) }
 
       autoTicketCreated = true
       console.log(`Auto-ticket created for room ${guest.room}: ${message.slice(0, 50)}`)
@@ -578,14 +580,14 @@ async function _sendToPartner(partner, booking, hotel, guest, source, lowConfide
 
   // If low confidence — also notify reception so they can manually verify
   if (lowConfidence) {
-    await supabase.from('notifications').insert({
+    try { await supabase.from('notifications').insert({
       hotel_id:  hotel.id,
       type:      'booking_low_confidence',
       title:     `⚠ Low-confidence partner match — ${booking.type} for ${guest.name || 'Guest'}`,
       body:      `Sent to ${partner.name} but match score was low. Please verify.`,
       link_type: 'booking',
       link_id:   saved.id,
-    }).catch(() => {})
+    }) } catch {}
   }
 
   try {
