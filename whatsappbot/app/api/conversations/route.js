@@ -37,12 +37,14 @@ function getSession() {
 export async function GET(request) {
   const session = getSession()
 
-  // supervisor and employee have no conversation access
+  // supervisor: read-only, no PII (like communications but sees all messages)
+  // employee: no access
   const guard = requireRole(
     session,
     ROLES.MANAGER,
     ROLES.RECEPTIONIST,
-    ROLES.COMMUNICATIONS
+    ROLES.COMMUNICATIONS,
+    ROLES.SUPERVISOR
   )
   if (guard) return guard
 
