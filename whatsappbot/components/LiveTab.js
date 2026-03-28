@@ -205,6 +205,7 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
 
   async function handleSendRequest() {
     if (!requestText.trim()) return
+    if (!selectedConv && !noGuest) return
     setSending(true)
     try {
       const endpoint = requestType === 'external' ? '/api/bookings' : '/api/tickets'
@@ -266,7 +267,7 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
             const rowBgHover  = stayStatus === 'checked_out' ? '#F5F5F5' : '#F9FAFB'
 
             return (
-              <div key={conv.id} onClick={() => { setSelectedConv(conv); setCentreMode('chat') }}
+              <div key={conv.id} onClick={() => { setSelectedConv(conv); setCentreMode('chat'); setNoGuest(false) }}
                 style={{ padding:'11px 14px', borderBottom:'0.5px solid var(--border)', borderLeft: leftBorder, background: rowBg, cursor:'pointer' }}
                 onMouseEnter={e=>{ if(!isActive) e.currentTarget.style.background=rowBgHover }}
                 onMouseLeave={e=>{ if(!isActive) e.currentTarget.style.background=rowBg }}
@@ -388,9 +389,9 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
                   </div>
                   <div>
                     <div style={{ fontSize:'13px', fontWeight:'600', color:'#111827' }}>{selectedConv.guests?.name} {selectedConv.guests?.surname}</div>
-                    <div style={{ fontSize:'12px', color:'#6B7280' }}>Room {selectedConv.guests?.room || selectedConv.guests?.guest_room || '?'} · {LANG_COLORS[selectedConv.guests?.language||'en']?.name || (selectedConv.guests?.language||'EN').toUpperCase()}</div>
+                    <div style={{ fontSize:'12px', color:'#6B7280' }}>{selectedConv.guests?.room || selectedConv.guests?.guest_room ? `Room ${selectedConv.guests?.room || selectedConv.guests?.guest_room}` : 'No room assigned'} · {LANG_COLORS[selectedConv.guests?.language||'en']?.name || (selectedConv.guests?.language||'EN').toUpperCase()}</div>
                   </div>
-                  <button onClick={()=>setSelectedConv(null)} style={{ marginLeft:'auto', background:'none', border:'none', color:'#D1D5DB', cursor:'pointer', fontSize:'18px', lineHeight:1 }}>×</button>
+                  <button onClick={()=>{ setSelectedConv(null); setNoGuest(false) }} style={{ marginLeft:'auto', background:'none', border:'none', color:'#D1D5DB', cursor:'pointer', fontSize:'18px', lineHeight:1 }}>×</button>
                 </div>
               ) : (
                 <div style={{ padding:'12px', background:'white', borderRadius:'10px', border:'0.5px dashed #D1D5DB', textAlign:'center', fontSize:'12px', color:'#9CA3AF' }}>
@@ -479,15 +480,18 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
             </div>
 
             {/* CTA */}
-            {/* No guest note */}
+            {/* No guest toggle */}
             {!selectedConv && (
-              <div style={{ fontSize:'11px', color:'#9CA3AF', textAlign:'center', marginBottom:'6px' }}>
-                No guest linked — will create without guest
+              <div style={{ marginBottom:'6px' }}>
+                <button onClick={() => setNoGuest(g => !g)}
+                  style={{ width:'100%', padding:'8px 12px', background: noGuest?'#F0FDF4':'white', border:`0.5px solid ${noGuest?'#86EFAC':'#D1D5DB'}`, borderRadius:'8px', fontSize:'12px', fontWeight: noGuest?'600':'400', color: noGuest?'#14532D':'#9CA3AF', cursor:'pointer', fontFamily:'var(--font)', textAlign:'center' }}>
+                  No guest — Ticket without a guest
+                </button>
               </div>
             )}
             <button onClick={handleSendRequest}
-              disabled={sending || !requestText.trim()}
-              style={{ width:'100%', padding:'11px', background: sent?'#16A34A':!requestText.trim()?'#E5E7EB':'var(--green-800)', border:'none', borderRadius:'10px', fontSize:'13px', fontWeight:'700', color:!requestText.trim()?'#9CA3AF':'white', cursor:!requestText.trim()?'not-allowed':'pointer', fontFamily:'var(--font)', transition:'background 0.2s', letterSpacing:'0.2px' }}>
+              disabled={sending || !requestText.trim() || (!selectedConv && !noGuest)}
+              style={{ width:'100%', padding:'11px', background: sent?'#16A34A':(!requestText.trim()||(!selectedConv&&!noGuest))?'#E5E7EB':'var(--green-800)', border:'none', borderRadius:'10px', fontSize:'13px', fontWeight:'700', color:(!requestText.trim()||(!selectedConv&&!noGuest))?'#9CA3AF':'white', cursor:(!requestText.trim()||(!selectedConv&&!noGuest))?'not-allowed':'pointer', fontFamily:'var(--font)', transition:'background 0.2s', letterSpacing:'0.2px' }}>
               {sent?'✓ Created':sending?'Creating...':requestType==='external'?'Send request':'Create internal ticket'}
             </button>
           </div>

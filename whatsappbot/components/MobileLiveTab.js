@@ -304,6 +304,7 @@ function StaffPortal({ conversations, selectedConv, onSelectConv, session, hotel
   const [partnerTypes, setPartnerTypes] = useState([])
   const [departments,  setDepartments]  = useState([])
   const [showConvPicker, setShowConvPicker] = useState(false)
+  const [noGuest,        setNoGuest]        = useState(false)
 
   useEffect(() => {
     if (!hotelId) return
@@ -319,6 +320,7 @@ function StaffPortal({ conversations, selectedConv, onSelectConv, session, hotel
 
   async function handleSend() {
     if (!details.trim() || sending) return
+    if (!selectedConv && !noGuest) return
     setSending(true)
     try {
       const endpoint = reqType === 'external' ? '/api/bookings' : '/api/tickets'
@@ -376,7 +378,7 @@ function StaffPortal({ conversations, selectedConv, onSelectConv, session, hotel
                 const room = cg.room || cg.guest_room
                 return (
                   <div key={conv.id}
-                    onClick={() => { onSelectConv(conv); setShowConvPicker(false) }}
+                    onClick={() => { onSelectConv(conv); setShowConvPicker(false); setNoGuest(false) }}
                     style={{ padding:'12px 14px', borderBottom:'1px solid #F3F4F6', display:'flex', alignItems:'center', gap:'10px', cursor:'pointer', background: selectedConv?.id===conv.id ? 'rgba(28,61,46,0.06)' : 'white' }}>
                     {/* Room badge — prominent */}
                     <div style={{ minWidth:'44px', height:'36px', borderRadius:'8px', background: room ? '#1C3D2E' : '#F3F4F6', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
@@ -398,22 +400,24 @@ function StaffPortal({ conversations, selectedConv, onSelectConv, session, hotel
             </div>
           )}
 
-          {/* Option to create without guest — always visible */}
-          <div style={{ marginTop:'8px' }}>
-            <button
-              onClick={() => { onSelectConv(null); setShowConvPicker(false) }}
-              style={{
-                width:'100%', padding:'10px 14px',
-                background: !selectedConv ? '#F0FDF4' : 'white',
-                border: `1px solid ${!selectedConv ? '#86EFAC' : '#E5E7EB'}`,
-                borderRadius:'10px', textAlign:'center', cursor:'pointer',
-                fontFamily:"'DM Sans', sans-serif",
-                fontSize:'12px', fontWeight: !selectedConv ? '600' : '400',
-                color: !selectedConv ? '#14532D' : '#9CA3AF',
-              }}>
-              {!selectedConv ? '✓ No guest — creating without guest' : 'Or create without a guest'}
-            </button>
-          </div>
+          {/* No guest option — hidden when conv selected, grey/green toggle otherwise */}
+          {!selectedConv && (
+            <div style={{ marginTop:'8px' }}>
+              <button
+                onClick={() => { setNoGuest(g => !g); setShowConvPicker(false) }}
+                style={{
+                  width:'100%', padding:'10px 14px',
+                  background: noGuest ? '#F0FDF4' : 'white',
+                  border: `1px solid ${noGuest ? '#86EFAC' : '#E5E7EB'}`,
+                  borderRadius:'10px', textAlign:'center', cursor:'pointer',
+                  fontFamily:"'DM Sans', sans-serif",
+                  fontSize:'12px', fontWeight: noGuest ? '600' : '400',
+                  color: noGuest ? '#14532D' : '#9CA3AF',
+                }}>
+                No guest — Ticket without a guest
+              </button>
+            </div>
+          )}
         </div>
 
         {/* ── Request type ── */}
@@ -495,13 +499,13 @@ function StaffPortal({ conversations, selectedConv, onSelectConv, session, hotel
 
         {/* ── Send button ── */}
         <button onClick={handleSend}
-          disabled={sending || !details.trim()}
+          disabled={sending || !details.trim() || (!selectedConv && !noGuest)}
           style={{
             width:'100%', padding:'14px',
-            background: sent ? '#16A34A' : !details.trim() ? '#E5E7EB' : '#1C3D2E',
+            background: sent ? '#16A34A' : (!details.trim() || (!selectedConv && !noGuest)) ? '#E5E7EB' : '#1C3D2E',
             border:'none', borderRadius:'12px', fontSize:'15px', fontWeight:'700',
-            color: !details.trim() ? '#9CA3AF' : 'white',
-            cursor: !details.trim() ? 'not-allowed' : 'pointer',
+            color: (!details.trim() || (!selectedConv && !noGuest)) ? '#9CA3AF' : 'white',
+            cursor: (!details.trim() || (!selectedConv && !noGuest)) ? 'not-allowed' : 'pointer',
             fontFamily:"'DM Sans', sans-serif",
           }}>
           {sent ? '✓ Created!' : sending ? 'Creating…' : reqType==='external' ? 'Send booking request' : 'Create ticket'}
