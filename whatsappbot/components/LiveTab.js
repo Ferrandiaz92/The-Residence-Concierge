@@ -131,6 +131,7 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
   const [priority, setPriority]           = useState('today')
   const [requestText, setRequestText]     = useState('')
   const [sent, setSent]                   = useState(false)
+  const [noGuest, setNoGuest]             = useState(false)
   const [partnerTypes, setPartnerTypes]   = useState([])
   const [departments, setDepartments]     = useState([])
   const chatEndRef = useRef(null)
@@ -321,7 +322,7 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
           ))}
           {selectedConv && (
             <div style={{ fontSize:'12px', color:'#9CA3AF', marginLeft:'8px' }}>
-              {selectedConv.guests?.name} · Room {selectedConv.guests?.room || selectedConv.guests?.guest_room || '?'}
+              {selectedConv.guests?.name || 'Guest'}{(selectedConv.guests?.room || selectedConv.guests?.guest_room) ? ` · Room ${selectedConv.guests?.room || selectedConv.guests?.guest_room}` : ''}
               {selectedConv.status === 'escalated' && <span style={{ color:'#DC2626', fontWeight:'700', marginLeft:'6px' }}>Needs reply</span>}
             </div>
           )}
