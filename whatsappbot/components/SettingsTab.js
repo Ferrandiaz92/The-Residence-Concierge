@@ -9,6 +9,129 @@ import { useState, useEffect } from 'react'
 import ShiftsManager   from './ShiftsManager'
 import ProductsManager from './ProductsManager'
 
+
+// ── PARTNER CAPABILITIES EDITOR ──────────────────────────────
+const TAXI_FEATURES = [
+  { key:'wheelchair',    label:'Wheelchair accessible' },
+  { key:'child_seat',    label:'Child seat' },
+  { key:'baby_seat',     label:'Baby seat' },
+  { key:'dog_friendly',  label:'Dogs allowed' },
+  { key:'large_luggage', label:'Large luggage' },
+  { key:'ski_equipment', label:'Ski equipment' },
+]
+const TAXI_VEHICLES  = ['standard','van','minivan','limousine','minibus']
+const TAXI_AREAS     = ['larnaca_airport','paphos_airport','limassol_port','nicosia','ayia_napa','protaras','troodos']
+const REST_FEATURES  = ['outdoor','private_room','vegan','vegetarian','halal','kosher','gluten_free','sea_view','live_music']
+const ACT_FEATURES   = ['wheelchair','family_friendly','minimum_age_18','group_discount','hotel_pickup']
+
+function PartnerCapabilitiesEditor({ partner, onChange }) {
+  const caps = partner?.capabilities || {}
+  const type = partner?.type || 'taxi'
+
+  function toggle(field, value) {
+    const current = caps[field] || []
+    const updated  = current.includes(value) ? current.filter(v => v !== value) : [...current, value]
+    onChange({ ...caps, [field]: updated })
+  }
+
+  function setNum(field, value) {
+    onChange({ ...caps, [field]: value ? parseInt(value) : undefined })
+  }
+
+  function setBool(field, value) {
+    onChange({ ...caps, [field]: value })
+  }
+
+  const pill = (label, active, onClick) => (
+    <button key={label} onClick={onClick} style={{
+      padding:'4px 10px', borderRadius:'20px', fontSize:'11px', fontWeight:'500',
+      border:`0.5px solid ${active ? 'var(--green-800)' : '#D1D5DB'}`,
+      background: active ? 'var(--green-800)' : 'white',
+      color: active ? 'white' : '#374151',
+      cursor:'pointer', fontFamily:'var(--font)', transition:'all .1s',
+    }}>{label}</button>
+  )
+
+  const numInp = (label, field, placeholder) => (
+    <div key={field}>
+      <label style={{ fontSize:'11px', fontWeight:'600', color:'#6B7280', display:'block', marginBottom:'4px' }}>{label}</label>
+      <input type="number" min="0" value={caps[field] || ''} onChange={e => setNum(field, e.target.value)}
+        placeholder={placeholder}
+        style={{ width:'80px', padding:'6px 8px', border:'0.5px solid #D1D5DB', borderRadius:'6px', fontSize:'12px', fontFamily:'var(--font)', outline:'none' }} />
+    </div>
+  )
+
+  return (
+    <div style={{ borderTop:'0.5px solid #F3F4F6', paddingTop:'12px', marginTop:'4px' }}>
+      <div style={{ fontSize:'12px', fontWeight:'700', color:'#374151', marginBottom:'10px' }}>Capabilities</div>
+
+      {type === 'taxi' && (
+        <div style={{ display:'flex', flexDirection:'column', gap:'10px' }}>
+          <div>
+            <div style={{ fontSize:'11px', fontWeight:'600', color:'#6B7280', marginBottom:'6px' }}>Vehicle types</div>
+            <div style={{ display:'flex', gap:'6px', flexWrap:'wrap' }}>
+              {TAXI_VEHICLES.map(v => pill(v, (caps.vehicle_types||[]).includes(v), () => toggle('vehicle_types', v)))}
+            </div>
+          </div>
+          <div style={{ display:'flex', gap:'16px', flexWrap:'wrap' }}>
+            {numInp('Max passengers', 'max_passengers', '4')}
+            {numInp('Max luggage bags', 'max_luggage', '3')}
+          </div>
+          <div>
+            <div style={{ fontSize:'11px', fontWeight:'600', color:'#6B7280', marginBottom:'6px' }}>Special features</div>
+            <div style={{ display:'flex', gap:'6px', flexWrap:'wrap' }}>
+              {TAXI_FEATURES.map(f => pill(f.label, (caps.features||[]).includes(f.key), () => toggle('features', f.key)))}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize:'11px', fontWeight:'600', color:'#6B7280', marginBottom:'6px' }}>Service areas</div>
+            <div style={{ display:'flex', gap:'6px', flexWrap:'wrap' }}>
+              {TAXI_AREAS.map(a => pill(a.replace(/_/g,' '), (caps.service_areas||[]).includes(a), () => toggle('service_areas', a)))}
+            </div>
+          </div>
+          <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
+            <input type="checkbox" id="avail24h" checked={caps.available_24h || false}
+              onChange={e => setBool('available_24h', e.target.checked)}
+              style={{ width:'14px', height:'14px' }} />
+            <label htmlFor="avail24h" style={{ fontSize:'12px', color:'#374151', cursor:'pointer' }}>Available 24 hours</label>
+          </div>
+        </div>
+      )}
+
+      {type === 'restaurant' && (
+        <div style={{ display:'flex', flexDirection:'column', gap:'10px' }}>
+          <div>
+            <div style={{ fontSize:'11px', fontWeight:'600', color:'#6B7280', marginBottom:'6px' }}>Features</div>
+            <div style={{ display:'flex', gap:'6px', flexWrap:'wrap' }}>
+              {REST_FEATURES.map(f => pill(f.replace(/_/g,' '), (caps.features||[]).includes(f), () => toggle('features', f)))}
+            </div>
+          </div>
+          {numInp('Max group size', 'max_group', '20')}
+        </div>
+      )}
+
+      {(type === 'activity' || type === 'boat' || type === 'tour') && (
+        <div style={{ display:'flex', flexDirection:'column', gap:'10px' }}>
+          <div>
+            <div style={{ fontSize:'11px', fontWeight:'600', color:'#6B7280', marginBottom:'6px' }}>Features</div>
+            <div style={{ display:'flex', gap:'6px', flexWrap:'wrap' }}>
+              {ACT_FEATURES.map(f => pill(f.replace(/_/g,' '), (caps.features||[]).includes(f), () => toggle('features', f)))}
+            </div>
+          </div>
+          <div style={{ display:'flex', gap:'16px', flexWrap:'wrap' }}>
+            {numInp('Min age', 'min_age', '0')}
+            {numInp('Max group', 'max_group', '10')}
+          </div>
+        </div>
+      )}
+
+      {!['taxi','restaurant','activity','boat','tour'].includes(type) && (
+        <div style={{ fontSize:'12px', color:'#9CA3AF' }}>No capabilities defined for this partner type yet.</div>
+      )}
+    </div>
+  )
+}
+
 export default function SettingsTab({ hotelId, session, isMobile = false }) {
   const role = session?.role || 'manager'
 
@@ -233,7 +356,11 @@ export default function SettingsTab({ hotelId, session, isMobile = false }) {
                           <div><label style={labelStyle}>WhatsApp phone</label>{inp(editingPartner.phone, v=>setEditingPartner(p=>({...p,phone:v})), '+357...')}</div>
                           <div><label style={labelStyle}>Commission %</label>{inp(editingPartner.commission_rate, v=>setEditingPartner(p=>({...p,commission_rate:v})), '10', 'number')}</div>
                         </div>
-                        <div style={{ display:'flex', gap:'8px', justifyContent:'flex-end' }}>
+                        <PartnerCapabilitiesEditor
+                          partner={editingPartner}
+                          onChange={caps => setEditingPartner(p => ({...p, capabilities: caps}))}
+                        />
+                        <div style={{ display:'flex', gap:'8px', justifyContent:'flex-end', marginTop:'12px' }}>
                           {cancelBtn(()=>setEditingPartner(null))}
                           {saveBtn(saved==='partner'?'✓ Saved':'Save changes', ()=>savePartner(editingPartner))}
                         </div>
@@ -259,7 +386,11 @@ export default function SettingsTab({ hotelId, session, isMobile = false }) {
                   <div><label style={labelStyle}>WhatsApp phone</label>{inp(newPartner.phone, v=>setNewPartner(p=>({...p,phone:v})), '+35799...')}</div>
                   <div><label style={labelStyle}>Commission %</label>{inp(newPartner.commission_rate, v=>setNewPartner(p=>({...p,commission_rate:v})), '10', 'number')}</div>
                 </div>
-                <div style={{ display:'flex', gap:'8px', justifyContent:'flex-end' }}>
+                <PartnerCapabilitiesEditor
+                  partner={newPartner}
+                  onChange={caps => setNewPartner(p => ({...p, capabilities: caps}))}
+                />
+                <div style={{ display:'flex', gap:'8px', justifyContent:'flex-end', marginTop:'12px' }}>
                   {cancelBtn(()=>setNewPartner(null))}
                   {saveBtn('Add partner', ()=>savePartner(newPartner))}
                 </div>
