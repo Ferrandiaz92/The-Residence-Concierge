@@ -185,9 +185,9 @@ export async function handleInboundWhatsApp(rawBody) {
     'electricity','power cut','noise','loud','smell','smoke','heating','too hot','too cold',
     'door','lock','key card','wifi','internet','no signal']
   const isMaintIssue = MAINT_KEYWORDS.some(k => msgLower.includes(k))
+  let autoTicketCreated = false
 
   if (isMaintIssue && guest.stay_status === 'active' && guest.room) {
-    // Check no open ticket for same room in last 2h
     const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
     const { data: existingTicket } = await supabase
       .from('internal_tickets')
@@ -217,8 +217,17 @@ export async function handleInboundWhatsApp(rawBody) {
         ticket_number: ticketNum,
       }).catch(() => {})
 
+      autoTicketCreated = true
       console.log(`Auto-ticket created for room ${guest.room}: ${message.slice(0, 50)}`)
     }
+  }
+
+  // Inject auto-ticket context into system prompt so bot responds correctly
+  if (autoTicketCreated) {
+    systemPrompt += `\n\n[MAINTENANCE TICKET CREATED] A maintenance ticket has been automatically logged for this guest's issue. ` +
+      `In your reply: (1) acknowledge their issue warmly, (2) tell them it has been logged and our maintenance team will attend shortly, ` +
+      `(3) give a realistic timeframe based on time of day (daytime: within 30 minutes, overnight: within 20 minutes as duty team alerted). ` +
+      `Do NOT ask further questions about the issue. Do NOT try to troubleshoot — a human will handle it.`
   }
 
   // 12. Handoff check
@@ -322,19 +331,171 @@ async function processFacilityRequest(facility, hotel, guest, convId) {
   } catch(e) { console.error('Facility request error:', e.message) }
 }
 
+// ── SMART PARTNER MATCHING ───────────────────────────────────
+// Scores each candidate partner on:
+//   1. Capability match  (40%) — vehicle type, features, passengers, luggage
+//   2. Confirmation rate (35%) — 90-day historical acceptance rate
+//   3. Service area      (25%) — does destination match partner's service areas
+// Minimum score to auto-select: 40 points out of 100
+// Below minimum: still selects best available but flags for reception review
+
+function scorePartner(partner, booking, stats) {
+  const caps     = partner.capabilities || partner.details || {}
+  const details  = booking.details || {}
+  let score      = 0
+  let reasons    = []
+
+  // ── 1. Capability match (max 40 pts) ──
+  if (booking.type === 'taxi') {
+    // Passengers
+    const pax = details.passengers || details.pax || 1
+    const maxPax = caps.max_passengers || 4
+    if (pax <= maxPax) { score += 15; reasons.push(`fits ${pax} pax`) }
+    else { reasons.push(`⚠ only fits ${maxPax} pax, need ${pax}`) }
+
+    // Required features
+    const required = details.requirements || []
+    const hasFeatures = caps.features || []
+    const matched = required.filter(r => hasFeatures.some(f => f.toLowerCase().includes(r.toLowerCase())))
+    const featureScore = required.length === 0 ? 15 : Math.round((matched.length / required.length) * 15)
+    score += featureScore
+    if (matched.length > 0) reasons.push(`features: ${matched.join(', ')}`)
+
+    // Luggage
+    const luggage = details.luggage || 0
+    const maxLuggage = caps.max_luggage || 4
+    if (luggage <= maxLuggage) { score += 10; reasons.push(`handles ${luggage} bags`) }
+
+    // 24h availability
+    const hour = new Date().getHours()
+    const isOvernightReq = details.time && (parseInt(details.time) >= 23 || parseInt(details.time) <= 6)
+    if (!isOvernightReq || caps.available_24h) { score += 0 } // no bonus, just not penalised
+    else { score -= 10; reasons.push('⚠ not 24h') }
+
+  } else {
+    // Non-taxi: simpler capability check
+    score += 40
+  }
+
+  // ── 2. Confirmation rate (max 35 pts) ──
+  const partnerStats = stats.find(s => s.partner_id === partner.id)
+  const rate         = partnerStats?.confirmation_rate_pct
+  const totalBkgs    = partnerStats?.total_bookings || 0
+
+  if (totalBkgs < 3) {
+    // Not enough history — neutral score, don't penalise new partners
+    score += 20
+    reasons.push('new partner (no history yet)')
+  } else if (rate >= 90) { score += 35; reasons.push(`${rate}% confirm rate`) }
+  else if (rate >= 75)   { score += 28; reasons.push(`${rate}% confirm rate`) }
+  else if (rate >= 60)   { score += 20; reasons.push(`${rate}% confirm rate`) }
+  else if (rate >= 40)   { score += 10; reasons.push(`⚠ ${rate}% confirm rate`) }
+  else                   { score += 0;  reasons.push(`⚠ low ${rate}% confirm rate`) }
+
+  // ── 3. Service area match (max 25 pts) ──
+  const destination  = (details.destination || '').toLowerCase()
+  const serviceAreas = (caps.service_areas || []).map(a => a.toLowerCase())
+
+  if (serviceAreas.length === 0) {
+    // No areas defined — assume covers everything, neutral score
+    score += 15
+  } else {
+    const areaMatch = serviceAreas.some(area =>
+      destination.includes(area) || area.includes(destination.split(' ')[0])
+    )
+    if (areaMatch) { score += 25; reasons.push('covers destination') }
+    else           { score += 5;  reasons.push('⚠ destination may be outside service area') }
+  }
+
+  return { score, reasons }
+}
+
 async function processBooking(booking, hotel, guest, partners, source = 'guest_request') {
-  const partner = partners.find(p =>
-    p.name.toLowerCase().includes((booking.partner||'').toLowerCase()) || p.type === booking.type)
-  if (!partner) return
+  // Filter partners by type
+  const candidates = partners.filter(p =>
+    p.type === booking.type || p.name.toLowerCase().includes((booking.partner||'').toLowerCase())
+  )
+  if (candidates.length === 0) {
+    console.warn(`No partners found for type: ${booking.type}`)
+    return
+  }
+
+  // ── FIX #12: Duplicate booking check ──
+  const tenMinsAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString()
+  const { data: recent } = await supabase
+    .from('bookings').select('id')
+    .eq('hotel_id', hotel.id).eq('guest_id', guest.id)
+    .eq('type', booking.type).eq('status', 'pending')
+    .gte('created_at', tenMinsAgo).limit(1)
+  if (recent && recent.length > 0) {
+    console.warn(`Duplicate booking detected — skipping`)
+    return
+  }
+
+  // Single partner — skip scoring
+  if (candidates.length === 1) {
+    return await _sendToPartner(candidates[0], booking, hotel, guest, source, false)
+  }
+
+  // Multiple partners — run smart matching
+  // Load 90-day stats for all candidates
+  const candidateIds = candidates.map(p => `"${p.id}"`).join(',')
+  const { data: stats } = await supabase
+    .from('v_partner_stats')
+    .select('*')
+    .in('partner_id', candidates.map(p => p.id))
+
+  // Score each partner
+  const scored = candidates.map(partner => {
+    const { score, reasons } = scorePartner(partner, booking, stats || [])
+    return { partner, score, reasons }
+  }).sort((a, b) => b.score - a.score)
+
+  const best        = scored[0]
+  const MIN_SCORE   = 40
+  const flagLowConf = best.score < MIN_SCORE
+
+  console.log(`Partner selection for ${booking.type}:`)
+  scored.forEach(s => console.log(`  ${s.partner.name}: ${s.score}/100 — ${s.reasons.join(', ')}`))
+  console.log(`Selected: ${best.partner.name} (score: ${best.score})${flagLowConf ? ' [LOW CONFIDENCE — flagged]' : ''}`)
+
+  return await _sendToPartner(best.partner, booking, hotel, guest, source, flagLowConf, best.reasons)
+}
+
+async function _sendToPartner(partner, booking, hotel, guest, source, lowConfidence = false, matchReasons = []) {
   const base = booking.details?.price || (partner.details?.price_per_person
-    ? partner.details.price_per_person * (booking.details?.passengers||1) : 0)
+    ? partner.details.price_per_person * (booking.details?.passengers || booking.details?.pax || 1) : 0)
   const comm = base > 0 ? +(base * partner.commission_rate / 100).toFixed(2) : 0
+
   const { data: saved } = await supabase.from('bookings').insert({
-    hotel_id: hotel.id, guest_id: guest.id, partner_id: partner.id,
-    type: booking.type, details: booking.details||{},
-    commission_amount: comm, status: 'pending', source,
+    hotel_id:          hotel.id,
+    guest_id:          guest.id,
+    partner_id:        partner.id,
+    type:              booking.type,
+    details: {
+      ...(booking.details || {}),
+      _match_score:    matchReasons.join(' | '),
+      _low_confidence: lowConfidence,
+    },
+    commission_amount: comm,
+    status:           'pending',
+    source,
   }).select().single()
+
   if (!saved) return
+
+  // If low confidence — also notify reception so they can manually verify
+  if (lowConfidence) {
+    await supabase.from('notifications').insert({
+      hotel_id:  hotel.id,
+      type:      'booking_low_confidence',
+      title:     `⚠ Low-confidence partner match — ${booking.type} for ${guest.name || 'Guest'}`,
+      body:      `Sent to ${partner.name} but match score was low. Please verify.`,
+      link_type: 'booking',
+      link_id:   saved.id,
+    }).catch(() => {})
+  }
+
   try {
     const msg = await sendWhatsApp(partner.phone, formatPartnerAlert(booking, guest, hotel))
     await supabase.from('bookings').update({ partner_alert_sid: msg.sid }).eq('id', saved.id)
