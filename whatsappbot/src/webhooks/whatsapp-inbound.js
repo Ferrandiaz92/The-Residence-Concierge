@@ -77,15 +77,22 @@ export async function handleInboundWhatsApp(rawBody) {
   // 4. Language detection — only switch after 2+ consecutive messages in new language
   const lang = detectLanguage(message)
   if (lang !== guest.language) {
-    // Check last message in history — if it was also a different language, switch
-    const lastGuestMsg = (conv?.messages || []).filter(m => m.role === 'user').slice(-1)[0]
-    const lastLang = lastGuestMsg ? detectLanguage(lastGuestMsg.content || '') : guest.language
+    // Check last message — only switch after 2 consecutive in new language
+    // Load last conversation message to check previous language
+    const { data: lastConvRow } = await supabase
+      .from('conversations')
+      .select('messages')
+      .eq('guest_id', guest.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single()
+    const lastMsgs     = lastConvRow?.messages || []
+    const lastGuestMsg = [...lastMsgs].reverse().find(m => m.role === 'user')
+    const lastLang     = lastGuestMsg ? detectLanguage(lastGuestMsg.content || '') : guest.language
     if (lastLang === lang) {
-      // Two consecutive messages in new language — safe to switch
       await updateGuest(guest.id, { language: lang })
       guest.language = lang
     }
-    // Otherwise keep existing language — single message may be a typo/greeting
   }
 
   // 5. Feedback reply check
