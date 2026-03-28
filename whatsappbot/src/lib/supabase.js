@@ -22,52 +22,16 @@ export async function getHotelByWhatsappNumber(number) {
 }
 
 // ── KEY CHANGE: new guests default to 'prospect' not 'stay' ──
-// ── FIX #3: Phone normalisation ──────────────────────────────
-// Normalises any phone format to E.164: +35799123456
-// Handles: +35799123456, 0035799123456, 35799123456
-export function normalisePhone(raw) {
-  if (!raw) return raw
-  // Strip whatsapp: prefix and all non-digit/+ chars
-  let digits = raw.replace('whatsapp:', '').replace(/[^\d+]/g, '')
-  // If starts with 00, replace with +
-  if (digits.startsWith('00')) digits = '+' + digits.slice(2)
-  // If no leading +, add it
-  if (!digits.startsWith('+')) digits = '+' + digits
-  return digits
-}
-
 export async function getOrCreateGuest(hotelId, phone) {
-  const clean = normalisePhone(phone)
+  const clean = phone.replace('whatsapp:', '')
 
   // Try to find existing guest by phone
-  // Also try common format variants in case old data is un-normalised
   const { data: existing } = await supabase
     .from('guests')
     .select('*')
     .eq('hotel_id', hotelId)
     .eq('phone', clean)
-    .maybeSingle()
-
-  // If not found with normalised, try the raw cleaned version as fallback
-  if (!existing) {
-    const rawClean = phone.replace('whatsapp:', '').trim()
-    if (rawClean !== clean) {
-      const { data: fallback } = await supabase
-        .from('guests')
-        .select('*')
-        .eq('hotel_id', hotelId)
-        .eq('phone', rawClean)
-        .maybeSingle()
-
-      if (fallback) {
-        // Found with un-normalised number — migrate it
-        await supabase.from('guests').update({ phone: clean }).eq('id', fallback.id)
-        return { ...fallback, phone: clean }
-      }
-    }
-  }
-
-  if (existing) return existing
+    .single()
 
   if (existing) return existing
 
@@ -174,5 +138,18 @@ export async function createBooking(hotelId, guestId, partnerId, type, details, 
     .select()
     .single()
   if (error) throw new Error(`Failed to create booking: ${error.message}`)
+  return data
+}
+
+export async function updateBookingStatus(bookingId, status) {
+  const updates = { status }
+  if (status === 'confirmed') updates.confirmed_at = new Date().toISOString()
+  const { data, error } = await supabase
+    .from('bookings')
+    .update(updates)
+    .eq('id', bookingId)
+    .select()
+    .single()
+  if (error) console.error('updateBookingStatus error:', error.message)
   return data
 }
