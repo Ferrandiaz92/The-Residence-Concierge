@@ -323,90 +323,70 @@ function StaffPortal({ conversations, selectedConv, onSelectConv, session, hotel
 
         {/* ── Guest selector ── */}
         <div>
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'8px' }}>
-            <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151' }}>
-              Guest {reqType === 'internal' && <span style={{ fontSize:'11px', fontWeight:'400', color:'#9CA3AF' }}>— optional for internal tickets</span>}
-            </div>
-            {selectedConv && (
-              <button onClick={() => { onSelectConv(null); setShowConvPicker(false) }}
-                style={{ fontSize:'11px', color:'#9CA3AF', background:'none', border:'none', cursor:'pointer', padding:0 }}>
-                Clear
-              </button>
-            )}
-          </div>
+          <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151', marginBottom:'8px' }}>Guest</div>
 
           {/* Selected guest chip */}
           {selectedConv ? (
-            <div style={{ display:'flex', alignItems:'center', gap:'10px', padding:'12px 14px', background:'#F0FDF4', borderRadius:'12px', border:'1px solid #BBF7D0' }}>
-              {/* Room badge — most important identifier */}
-              {(g.room || g.guest_room) && (
-                <div style={{ background:'#1C3D2E', color:'white', borderRadius:'8px', padding:'6px 10px', fontSize:'13px', fontWeight:'700', flexShrink:0 }}>
-                  Rm {g.room || g.guest_room}
-                </div>
-              )}
-              <div style={{ flex:1, minWidth:0 }}>
-                <div style={{ fontSize:'13px', fontWeight:'600', color:'#111827' }}>
-                  {g.name ? `${g.name} ${g.surname||''}`.trim() : 'Guest'}
-                </div>
-                <div style={{ fontSize:'11px', color:'#16A34A', fontWeight:'500' }}>✓ Selected</div>
+            <div style={{ display:'flex', alignItems:'center', gap:'10px', padding:'12px 14px', background:'white', borderRadius:'12px', border:'1px solid #E5E7EB' }}>
+              <div style={{ width:'34px', height:'34px', borderRadius:'50%', background:'#1C3D2E', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'13px', color:'#C9A84C', fontWeight:'700', flexShrink:0 }}>
+                {(g.name?.[0]||'?')}{(g.surname?.[0]||'')}
+              </div>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:'13px', fontWeight:'600', color:'#111827' }}>{g.name||'Guest'} {g.surname||''}</div>
+                <div style={{ fontSize:'12px', color:'#6B7280' }}>{(g.room||g.guest_room) ? `Room ${g.room||g.guest_room}` : 'No room assigned'}</div>
               </div>
               <button onClick={() => setShowConvPicker(s => !s)}
-                style={{ fontSize:'12px', padding:'5px 10px', borderRadius:'8px', border:'1px solid #D1D5DB', background:'white', color:'#374151', cursor:'pointer', fontFamily:"'DM Sans', sans-serif", flexShrink:0 }}>
+                style={{ fontSize:'12px', fontWeight:'600', padding:'5px 10px', borderRadius:'8px', border:'1px solid #D1D5DB', background:'white', color:'#374151', cursor:'pointer', fontFamily:"'DM Sans', sans-serif", flexShrink:0 }}>
                 Change
               </button>
             </div>
           ) : (
             <button onClick={() => setShowConvPicker(s => !s)}
-              style={{ width:'100%', padding:'12px 14px', background:'white', border:'1px dashed #D1D5DB', borderRadius:'12px', display:'flex', alignItems:'center', gap:'10px', cursor:'pointer' }}>
-              <div style={{ fontSize:'13px', color:'#9CA3AF', flex:1, textAlign:'left', fontFamily:"'DM Sans', sans-serif" }}>
-                {reqType === 'internal' ? 'Link to a guest conversation (optional)' : 'Select a guest conversation →'}
-              </div>
-              <span style={{ fontSize:'16px', color:'#D1D5DB' }}>›</span>
+              style={{ width:'100%', padding:'14px', background:'white', border:'1px dashed #D1D5DB', borderRadius:'12px', textAlign:'center', fontSize:'13px', color:'#9CA3AF', cursor:'pointer', fontFamily:"'DM Sans', sans-serif" }}>
+              Select a guest conversation →
             </button>
           )}
 
-          {/* Conv picker dropdown — redesigned with room number prominent */}
+          {/* Conv picker dropdown */}
           {showConvPicker && (
-            <div style={{ marginTop:'8px', background:'white', borderRadius:'12px', border:'1px solid #E5E7EB', overflow:'hidden', maxHeight:'240px', overflowY:'auto' }}>
-              {conversations.length === 0 ? (
+            <div style={{ marginTop:'8px', background:'white', borderRadius:'12px', border:'1px solid #E5E7EB', overflow:'hidden', maxHeight:'220px', overflowY:'auto' }}>
+              {conversations.length === 0 && (
                 <div style={{ padding:'16px', textAlign:'center', color:'#9CA3AF', fontSize:'13px' }}>No active conversations</div>
-              ) : (
-                <>
-                  <div style={{ padding:'8px 14px', fontSize:'11px', fontWeight:'600', color:'#9CA3AF', background:'#F9FAFB', borderBottom:'1px solid #F3F4F6' }}>
-                    SELECT GUEST
-                  </div>
-                  {conversations.map(conv => {
-                    const cg   = conv.guests || {}
-                    const room = cg.room || cg.guest_room
-                    const name = cg.name ? `${cg.name} ${cg.surname||''}`.trim() : null
-                    const isSelected = selectedConv?.id === conv.id
-                    return (
-                      <div key={conv.id}
-                        onClick={() => { onSelectConv(conv); setShowConvPicker(false) }}
-                        style={{ padding:'12px 14px', borderBottom:'1px solid #F3F4F6', display:'flex', alignItems:'center', gap:'12px', cursor:'pointer', background: isSelected ? '#F0FDF4' : 'white' }}>
-                        {/* Room number — big and prominent */}
-                        <div style={{ minWidth:'48px', height:'40px', borderRadius:'8px', background: room ? '#1C3D2E' : '#F3F4F6', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
-                          {room ? (
-                            <span style={{ fontSize:'12px', fontWeight:'700', color:'white' }}>Rm {room}</span>
-                          ) : (
-                            <span style={{ fontSize:'10px', color:'#9CA3AF' }}>?</span>
-                          )}
-                        </div>
-                        <div style={{ flex:1, minWidth:0 }}>
-                          <div style={{ fontSize:'13px', fontWeight:'600', color: isSelected ? '#14532D' : '#111827' }}>
-                            {name || 'Guest'}
-                          </div>
-                          <div style={{ fontSize:'11px', color:'#9CA3AF', marginTop:'1px' }}>
-                            {conv.status === 'escalated' ? '🔴 Needs reply' : '🟢 Active'}
-                            {cg.language ? ` · ${cg.language.toUpperCase()}` : ''}
-                          </div>
-                        </div>
-                        {isSelected && <span style={{ fontSize:'14px', color:'#16A34A' }}>✓</span>}
-                      </div>
-                    )
-                  })}
-                </>
               )}
+              {conversations.map(conv => {
+                const cg   = conv.guests || {}
+                const room = cg.room || cg.guest_room
+                return (
+                  <div key={conv.id}
+                    onClick={() => { onSelectConv(conv); setShowConvPicker(false) }}
+                    style={{ padding:'12px 14px', borderBottom:'1px solid #F3F4F6', display:'flex', alignItems:'center', gap:'10px', cursor:'pointer', background: selectedConv?.id===conv.id ? 'rgba(28,61,46,0.06)' : 'white' }}>
+                    {/* Room badge — prominent */}
+                    <div style={{ minWidth:'44px', height:'36px', borderRadius:'8px', background: room ? '#1C3D2E' : '#F3F4F6', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                      {room
+                        ? <span style={{ fontSize:'11px', fontWeight:'700', color:'white' }}>Rm {room}</span>
+                        : <span style={{ fontSize:'10px', color:'#9CA3AF' }}>—</span>
+                      }
+                    </div>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontSize:'13px', fontWeight:'600', color:'#111827' }}>{cg.name||'Guest'} {cg.surname||''}</div>
+                      <div style={{ fontSize:'11px', color: conv.status==='escalated'?'#DC2626':'#9CA3AF' }}>
+                        {conv.status === 'escalated' ? '🔴 Needs reply' : '🟢 Active'}
+                      </div>
+                    </div>
+                    {selectedConv?.id === conv.id && <span style={{ fontSize:'12px', color:'#C9A84C' }}>✓</span>}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {/* Option to create without guest — internal tickets only */}
+          {reqType === 'internal' && (
+            <div style={{ marginTop:'8px', textAlign:'center' }}>
+              <button onClick={() => { onSelectConv(null); setShowConvPicker(false) }}
+                style={{ fontSize:'12px', color:'#9CA3AF', background:'none', border:'none', cursor:'pointer', textDecoration:'underline', fontFamily:"'DM Sans', sans-serif" }}>
+                {selectedConv ? 'Remove guest — create ticket without guest' : 'Create ticket without a guest'}
+              </button>
             </div>
           )}
         </div>
@@ -561,24 +541,17 @@ function ExpandableBooking({ booking: b, guest: g, tc }) {
 }
 
 
-function TicketAlertRow({ ticket: t, session, hotelId, onUpdate }) {
-  const [depts, setDepts] = useState([])
-  const isSupervisorRole = session?.role === 'supervisor' || session?.role === 'manager'
-
-  useEffect(() => {
-    if (!isSupervisorRole || !hotelId) return
-    fetch(`/api/config?hotelId=${hotelId}`)
-      .then(r => r.json())
-      .then(d => setDepts(d.departments || []))
-      .catch(() => {})
-  }, [hotelId, isSupervisorRole])
+function TicketAlertRow({ ticket: t, depts = [], isPrivileged = false }) {
+  const [updating, setUpdating] = useState(false)
 
   async function reassign(newDept) {
-    await fetch('/api/tickets', {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ticketId: t.id, status: t.status, department: newDept }),
-    })
-    onUpdate?.()
+    setUpdating(true)
+    try {
+      await fetch('/api/tickets', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ticketId: t.id, status: t.status, department: newDept }),
+      })
+    } finally { setUpdating(false) }
   }
 
   return (
@@ -596,7 +569,7 @@ function TicketAlertRow({ ticket: t, session, hotelId, onUpdate }) {
         </div>
       </div>
       {/* Reassign — supervisor + manager only */}
-      {isSupervisorRole && depts.length > 0 && (
+      {isPrivileged && depts.length > 0 && (
         <select onChange={e => { if (e.target.value) { reassign(e.target.value); e.target.value = '' } }}
           style={{ width:'100%', marginTop:'10px', padding:'8px 10px', border:'0.5px solid #E5E7EB', borderRadius:'8px', fontSize:'12px', color:'#6B7280', background:'white', cursor:'pointer', fontFamily:"'DM Sans', sans-serif" }}>
           <option value=''>↩ Reassign to department…</option>
@@ -611,13 +584,23 @@ function TicketAlertRow({ ticket: t, session, hotelId, onUpdate }) {
   )
 }
 
-function IssuesPanel({ tickets, bookings, conversations = [], onOpenThread }) {
+function IssuesPanel({ tickets, bookings, conversations = [], onOpenThread, session, hotelId }) {
   const escalatedChats = conversations.filter(c => c.status === 'escalated')
   const issues         = tickets.filter(t => !['resolved','cancelled'].includes(t.status))
   const upcoming       = bookings.filter(b => ['confirmed','pending'].includes(b.status))
   const done           = bookings.filter(b => ['completed','resolved'].includes(b.status))
   const typeColors     = { taxi:{bg:'#DCFCE7',color:'#14532D',l:'T'}, restaurant:{bg:'#DBEAFE',color:'#1E3A5F',l:'R'}, activity:{bg:'#FEF3C7',color:'#78350F',l:'A'} }
   const totalAlerts    = escalatedChats.length + issues.length
+  const [depts, setDepts] = useState([])
+  const isSupervisorOrManager = ['supervisor','manager','admin'].includes(session?.role)
+
+  useEffect(() => {
+    if (!isSupervisorOrManager || !hotelId) return
+    fetch(`/api/config?hotelId=${hotelId}`)
+      .then(r => r.json())
+      .then(d => setDepts(d.departments || []))
+      .catch(() => {})
+  }, [hotelId])
 
   return (
     <div style={{ flex:1, overflowY:'auto', background:'#F9FAFB' }}>
@@ -654,7 +637,7 @@ function IssuesPanel({ tickets, bookings, conversations = [], onOpenThread }) {
       {issues.length === 0
         ? <EmptyRow text="All clear ✓" />
         : issues.map(t => (
-          <TicketAlertRow key={t.id} ticket={t} session={session} hotelId={hotelId} onUpdate={()=>{}} />
+          <TicketAlertRow key={t.id} ticket={t} depts={depts} isPrivileged={isSupervisorOrManager} />
         ))
       }
 
@@ -997,7 +980,7 @@ function ReceptionView({ hotelId, session }) {
         />
       )}
       {!threadOpen && subtab === 'issues' && (
-        <IssuesPanel tickets={tickets} bookings={bookings} conversations={conversations} onOpenThread={openThread} />
+        <IssuesPanel tickets={tickets} bookings={bookings} conversations={conversations} onOpenThread={openThread} session={session} hotelId={hotelId} />
       )}
 
       {/* Thread — slides over as full-screen overlay within this panel */}
