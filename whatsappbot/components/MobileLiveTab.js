@@ -102,13 +102,26 @@ function ConversationsList({ conversations, selectedConvId, onOpenThread }) {
         const time    = mins === 0 ? 'now' : mins < 60 ? `${mins}m` : `${Math.floor(mins/60)}h`
         const room    = g.room || g.guest_room || '?'
 
+        // Stay status color coding
+        const stayStatus  = g.stay_status || 'prospect'
+        const statusBorder = isEsc       ? '3px solid #DC2626'
+          : isActive                     ? '3px solid #C9A84C'
+          : stayStatus === 'active'      ? '3px solid #16A34A'
+          : stayStatus === 'checked_out' ? '3px solid #D1D5DB'
+          : stayStatus === 'pre_arrival' ? '3px solid #60A5FA'
+          : '3px solid transparent'  // prospect
+        const statusBg = isActive ? 'rgba(28,61,46,0.04)'
+          : isEsc                        ? 'rgba(220,38,38,0.02)'
+          : stayStatus === 'checked_out' ? '#FAFAFA'
+          : 'white'
+
         return (
           <div key={conv.id}
             onClick={() => onOpenThread(conv)}
             style={{
-              padding:'14px 16px', background: isActive ? 'rgba(28,61,46,0.04)' : 'white',
+              padding:'14px 16px', background: statusBg,
               borderBottom:'1px solid #F3F4F6',
-              borderLeft: isEsc ? '3px solid #DC2626' : isActive ? '3px solid #C9A84C' : '3px solid transparent',
+              borderLeft: statusBorder,
               cursor:'pointer', display:'flex', gap:'12px', alignItems:'flex-start',
             }}>
             <div style={{ width:'40px', height:'40px', borderRadius:'50%', background:'#1C3D2E', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'14px', color:'#C9A84C', fontWeight:'700', flexShrink:0 }}>
@@ -119,7 +132,12 @@ function ConversationsList({ conversations, selectedConvId, onOpenThread }) {
                 <span style={{ fontSize:'14px', fontWeight:'600', color:'#111827' }}>{g.name||'Guest'} {g.surname||''}</span>
                 <span style={{ fontSize:'11px', color:'#9CA3AF', flexShrink:0, marginLeft:'8px' }}>{time}</span>
               </div>
-              <div style={{ fontSize:'12px', color:'#6B7280', marginBottom:'4px' }}>Room {room}</div>
+              <div style={{ fontSize:'12px', color:'#6B7280', marginBottom:'4px', display:'flex', alignItems:'center', gap:'6px' }}>
+                {room !== '?' && room ? `Room ${room}` : stayStatus === 'prospect' ? 'New visitor' : '—'}
+                {stayStatus === 'active'      && <span style={{ fontSize:'9px', fontWeight:'700', padding:'1px 5px', borderRadius:'3px', background:'#DCFCE7', color:'#14532D' }}>IN HOUSE</span>}
+                {stayStatus === 'pre_arrival' && <span style={{ fontSize:'9px', fontWeight:'700', padding:'1px 5px', borderRadius:'3px', background:'#DBEAFE', color:'#1E3A5F' }}>ARRIVING</span>}
+                {stayStatus === 'checked_out' && <span style={{ fontSize:'9px', fontWeight:'700', padding:'1px 5px', borderRadius:'3px', background:'#F3F4F6', color:'#6B7280' }}>CHECKED OUT</span>}
+              </div>
               <div style={{ fontSize:'12px', color: isEsc ? '#DC2626' : '#9CA3AF', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', fontWeight: isEsc ? '600' : '400' }}>
                 {isEsc ? '↩ Reply needed' : (last?.content || 'No messages')}
               </div>

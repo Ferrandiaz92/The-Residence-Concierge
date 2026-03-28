@@ -204,13 +204,14 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
   }
 
   async function handleSendRequest() {
-    if (!requestText.trim() || !selectedConv) return
+    if (!requestText.trim()) return
+    if (requestType === 'external' && !selectedConv) return
     setSending(true)
     try {
       const endpoint = requestType === 'external' ? '/api/bookings' : '/api/tickets'
       const body = requestType === 'external'
         ? { hotelId, guestId: selectedConv.guests?.id, type: category, details: { description: requestText }, createdBy: `staff:${session?.name||''}` }
-        : { hotelId, guestId: selectedConv.guests?.id, department, category: deptCategory || department, description: requestText, room: selectedConv.guests?.room || selectedConv.guests?.guest_room, priority, createdBy: `staff:${session?.name||''}` }
+        : { hotelId, guestId: selectedConv?.guests?.id || null, department, category: deptCategory || department, description: requestText, room: selectedConv?.guests?.room || selectedConv?.guests?.guest_room || null, priority, createdBy: `staff:${session?.name||''}` }
       await fetch(endpoint, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) })
       setSent(true); setRequestText('')
       setTimeout(() => setSent(false), 3000)
@@ -247,18 +248,29 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
             const last       = msgs[msgs.length - 1]
             const lang       = guest.language || 'en'
             const lc         = LANG_COLORS[lang] || LANG_COLORS.en
-            const isActive   = selectedConv?.id === conv.id
-            const isEsc      = conv.status === 'escalated'
-            const minsAgo    = Math.floor((Date.now() - new Date(conv.last_message_at)) / 60000)
-            const timeLabel  = minsAgo === 0 ? 'now' : minsAgo < 60 ? `${minsAgo}m` : `${Math.floor(minsAgo/60)}h`
-            // Room number — check multiple fields
-            const roomNum    = guest.room || guest.guest_room || guest.guest_room_number || '?'
+            const isActive    = selectedConv?.id === conv.id
+            const isEsc       = conv.status === 'escalated'
+            const minsAgo     = Math.floor((Date.now() - new Date(conv.last_message_at)) / 60000)
+            const timeLabel   = minsAgo === 0 ? 'now' : minsAgo < 60 ? `${minsAgo}m` : `${Math.floor(minsAgo/60)}h`
+            const roomNum     = guest.room || guest.guest_room || guest.guest_room_number
+            const stayStatus  = guest.stay_status || 'prospect'
+            const leftBorder  = isActive       ? '3px solid #C9A84C'
+              : isEsc                          ? '3px solid #DC2626'
+              : stayStatus === 'active'        ? '3px solid #16A34A'
+              : stayStatus === 'pre_arrival'   ? '3px solid #60A5FA'
+              : stayStatus === 'checked_out'   ? '3px solid #D1D5DB'
+              : '3px solid transparent'
+            const rowBg       = isActive ? 'rgba(201,168,76,0.06)'
+              : isEsc                          ? 'rgba(220,38,38,0.03)'
+              : stayStatus === 'checked_out'   ? '#FAFAFA'
+              : 'white'
+            const rowBgHover  = stayStatus === 'checked_out' ? '#F5F5F5' : '#F9FAFB'
 
             return (
               <div key={conv.id} onClick={() => { setSelectedConv(conv); setCentreMode('chat') }}
-                style={{ padding:'11px 14px', borderBottom:'0.5px solid var(--border)', borderLeft:isActive?'3px solid #C9A84C':isEsc?'3px solid #DC2626':conv.guests?.guest_type && TYPE_BORDERS[conv.guests?.guest_type]?`3px solid ${TYPE_BORDERS[conv.guests?.guest_type]}`:'3px solid transparent', background:isActive?'rgba(201,168,76,0.06)':isEsc?'rgba(220,38,38,0.03)':'white', cursor:'pointer' }}
-                onMouseEnter={e=>{ if(!isActive) e.currentTarget.style.background='#F9FAFB' }}
-                onMouseLeave={e=>{ if(!isActive) e.currentTarget.style.background=isEsc?'rgba(220,38,38,0.03)':'white' }}
+                style={{ padding:'11px 14px', borderBottom:'0.5px solid var(--border)', borderLeft: leftBorder, background: rowBg, cursor:'pointer' }}
+                onMouseEnter={e=>{ if(!isActive) e.currentTarget.style.background=rowBgHover }}
+                onMouseLeave={e=>{ if(!isActive) e.currentTarget.style.background=rowBg }}
               >
                 <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'3px' }}>
                   <div style={{ fontSize:'13px', fontWeight:'600', color:'#111827' }}>
@@ -269,8 +281,11 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
                     <div style={{ fontSize:'11px', color:'#9CA3AF' }}>{timeLabel}</div>
                   </div>
                 </div>
-                <div style={{ fontSize:'12px', fontWeight:'500', color:'#6B7280', marginBottom:'5px' }}>
-                  Room {roomNum}
+                <div style={{ fontSize:'12px', fontWeight:'500', color:'#6B7280', marginBottom:'5px', display:'flex', alignItems:'center', gap:'5px' }}>
+                  {roomNum ? `Room ${roomNum}` : stayStatus === 'prospect' ? 'New visitor' : '—'}
+                  {stayStatus === 'active'      && <span style={{ fontSize:'9px', fontWeight:'700', padding:'1px 5px', borderRadius:'3px', background:'#DCFCE7', color:'#14532D' }}>IN HOUSE</span>}
+                  {stayStatus === 'pre_arrival' && <span style={{ fontSize:'9px', fontWeight:'700', padding:'1px 5px', borderRadius:'3px', background:'#DBEAFE', color:'#1E3A5F' }}>ARRIVING</span>}
+                  {stayStatus === 'checked_out' && <span style={{ fontSize:'9px', fontWeight:'700', padding:'1px 5px', borderRadius:'3px', background:'#F3F4F6', color:'#6B7280' }}>CHECKED OUT</span>}
                 </div>
                 <div style={{ fontSize:'11px', color:'#9CA3AF', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:'200px' }}>
                   {isEsc
@@ -465,9 +480,16 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
             </div>
 
             {/* CTA */}
-            <button onClick={handleSendRequest} disabled={sending||!requestText.trim()||!selectedConv}
-              style={{ width:'100%', padding:'11px', background:sent?'#16A34A':(!requestText.trim()||!selectedConv)?'#E5E7EB':'var(--green-800)', border:'none', borderRadius:'10px', fontSize:'13px', fontWeight:'700', color:(!requestText.trim()||!selectedConv)?'#9CA3AF':'white', cursor:(!requestText.trim()||!selectedConv)?'not-allowed':'pointer', fontFamily:'var(--font)', transition:'background 0.2s', letterSpacing:'0.2px' }}>
-              {sent?'✓ Sent successfully':sending?'Sending...':requestType==='external'?'Send request':'Create internal ticket'}
+            {/* Note for internal tickets */}
+            {requestType === 'internal' && !selectedConv && (
+              <div style={{ fontSize:'11px', color:'#9CA3AF', textAlign:'center', marginBottom:'6px' }}>
+                No guest linked — creating ticket for department only
+              </div>
+            )}
+            <button onClick={handleSendRequest}
+              disabled={sending || !requestText.trim() || (requestType === 'external' && !selectedConv)}
+              style={{ width:'100%', padding:'11px', background: sent?'#16A34A': (!requestText.trim()||(requestType==='external'&&!selectedConv)) ?'#E5E7EB':'var(--green-800)', border:'none', borderRadius:'10px', fontSize:'13px', fontWeight:'700', color:(!requestText.trim()||(requestType==='external'&&!selectedConv))?'#9CA3AF':'white', cursor:(!requestText.trim()||(requestType==='external'&&!selectedConv))?'not-allowed':'pointer', fontFamily:'var(--font)', transition:'background 0.2s', letterSpacing:'0.2px' }}>
+              {sent?'✓ Created':sending?'Creating...':requestType==='external'?'Send request':'Create internal ticket'}
             </button>
           </div>
         )}
