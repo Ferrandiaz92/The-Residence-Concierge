@@ -16,11 +16,9 @@ import { notifyReceptionEscalation, notifyReceptionMessage } from '../lib/push.j
 import { getAvailableProducts, formatProductsForPrompt, parseProductOrder, createGuestOrder } from '../lib/stripe.js'
 
 export async function handleInboundWhatsApp(rawBody) {
-  const { from, to, message, profileName, mediaUrls } = parseIncomingMessage(rawBody)
-  console.log(`Inbound: ${from} → ${to}: "${message.slice(0, 80)}" media:${mediaUrls?.length || 0}`)
-
-  // Allow through if there's an image even with no text
-  if (!message.trim() && (!mediaUrls || mediaUrls.length === 0)) return
+  const { from, to, message, profileName } = parseIncomingMessage(rawBody)
+  console.log(`Inbound: ${from} → ${to}: "${message.slice(0, 80)}"`)
+  if (!message.trim()) return
 
   // 1. Ticket reply check
   const isTicketReply = await handleTicketReply(from, message)
@@ -39,9 +37,19 @@ export async function handleInboundWhatsApp(rawBody) {
     guest.name = parts[0]||null; guest.surname = parts.slice(1).join(' ')||null
   }
 
-  // 4. Language detection
+  // 4. Language detection — only switch after 2+ consecutive messages in new language
   const lang = detectLanguage(message)
-  if (lang !== guest.language) { await updateGuest(guest.id, { language: lang }); guest.language = lang }
+  if (lang !== guest.language) {
+    // Check last message in history — if it was also a different language, switch
+    const lastGuestMsg = (conv?.messages || []).filter(m => m.role === 'user').slice(-1)[0]
+    const lastLang = lastGuestMsg ? detectLanguage(lastGuestMsg.content || '') : guest.language
+    if (lastLang === lang) {
+      // Two consecutive messages in new language — safe to switch
+      await updateGuest(guest.id, { language: lang })
+      guest.language = lang
+    }
+    // Otherwise keep existing language — single message may be a typo/greeting
+  }
 
   // 5. Feedback reply check
   const isFeedback = await handleFeedbackReply(from, message, hotel.id)
@@ -65,9 +73,10 @@ export async function handleInboundWhatsApp(rawBody) {
       .select().single()
     conv = newConv
   }
-  if (conv.status === 'escalated') {
-    await supabase.from('conversations').update({ status: 'active' }).eq('id', conv.id)
-  }
+  // FIX #3: Never reset escalated → active automatically
+  // Only reception can de-escalate by manually marking resolved
+  // Bot keeps responding but conversation stays escalated so it shows in Alerts
+  const wasEscalated = conv.status === 'escalated'
 
   const history = (conv.messages || []).slice(-20)
 
@@ -95,6 +104,19 @@ export async function handleInboundWhatsApp(rawBody) {
       `Check-out: ${guest.check_out}. Provide full concierge service.`
   }
 
+  // FIX #2: Frustration detector — count recent unresolved guest messages
+  const recentMsgs     = (conv.messages || []).slice(-8)
+  const recentGuest    = recentMsgs.filter(m => m.role === 'user')
+  const recentBot      = recentMsgs.filter(m => m.role === 'assistant')
+  const hadBooking     = recentBot.some(m => (m.content||'').includes('[BOOKING]') || (m.content||'').includes('confirmed'))
+  const hadTicket      = recentBot.some(m => (m.content||'').toLowerCase().includes('ticket') || (m.content||'').toLowerCase().includes('team'))
+  const repeatingGuest = recentGuest.length >= 3 && !hadBooking && !hadTicket
+  if (repeatingGuest) {
+    systemPrompt += `\n\n[FRUSTRATION ALERT] This guest has sent ${recentGuest.length} messages without resolution. ` +
+      `If you cannot resolve their request in this reply, you MUST use [HANDOFF] to escalate to reception. ` +
+      `Do not keep asking clarifying questions — act or escalate.`
+  }`
+
   // Add facilities
   const facilityText = formatFacilitiesForPrompt(facilities)
   if (facilityText) systemPrompt += `\n\n${facilityText}`
@@ -108,24 +130,6 @@ export async function handleInboundWhatsApp(rawBody) {
   const productText = formatProductsForPrompt(products, guest.language || 'en')
   if (productText) systemPrompt += productText
 
-  // ── IMAGE HANDLING INSTRUCTIONS ──────────────────────────────
-  // Tell Claude how to handle images and when to proactively ask for one
-  systemPrompt += `\n\nIMAGE HANDLING:
-You can see images sent by guests. When a guest sends a photo:
-- Describe what you see and use it to help them directly
-- For maintenance issues: identify the problem from the photo, create an urgent ticket, tell the guest what you see and what you're doing about it
-- For location/taxi problems: read visible street signs, shop names, landmarks and relay the exact location to the driver
-- For device confusion (remote controls, panels, buttons): describe exactly which button to press using position and any symbols you can see
-- For restaurant/place photos: identify the establishment if visible and offer to book or provide info
-
-PROACTIVELY ASK FOR A PHOTO when it would solve the problem faster:
-- Guest reports taxi can't find them → "Can you send me a quick photo of where you are? A shop front or street sign would help 📸"
-- Guest reports a maintenance problem → "Could you send a photo of the issue? It helps me send the right person 📸"  
-- Guest describes a lost item → "Do you have a photo of it? It'll help housekeeping find it much faster 📸"
-- Guest asks about a place they can see → "Feel free to send a photo — I can identify it for you 📸"
-
-Always phrase the photo request naturally and explain why it helps.`
-
   // 9. Detect upsell context
   const lastBotMsg = [...(conv.messages||[])].reverse().find(m => m.role === 'assistant')
   const isRespondingToUpsell = lastBotMsg?.sent_by === 'scheduled' &&
@@ -138,26 +142,18 @@ Always phrase the photo request naturally and explain why it helps.`
   }
 
   // 10. Save user message + notification
-  // If the guest sent photos, append a visible indicator so reception
-  // can see in the dashboard that an image was involved.
-  const hasMedia      = mediaUrls && mediaUrls.length > 0
-  const mediaLabel    = hasMedia
-    ? `📷 [Guest sent ${mediaUrls.length} photo${mediaUrls.length > 1 ? 's' : ''}]`
-    : ''
-  const savedMessage  = [message.trim(), mediaLabel].filter(Boolean).join('\n')
-
-  await appendMessage(conv.id, 'user', savedMessage)
+  await appendMessage(conv.id, 'user', message)
   await createNotification(hotel.id, {
     type:      'guest_message',
-    title:     `${guest.name || 'Guest'} · Room ${guest.room || '?'}${hasMedia ? ' · 📷 Photo' : ''}`,
-    body:      savedMessage.slice(0, 100),
+    title:     `${guest.name || 'Guest'} · Room ${guest.room || '?'}`,
+    body:      message.slice(0, 100),
     link_type: 'conversation',
     link_id:   conv.id,
   })
 
-  // 11. Claude — pass images if present
+  // 11. Claude
   let aiResponse
-  try { aiResponse = await callClaude(systemPrompt, history, message, mediaUrls || []) }
+  try { aiResponse = await callClaude(systemPrompt, history, message) }
   catch {
     const fb = {
       en:'I\'m having a brief issue. Please try again.',
@@ -179,6 +175,50 @@ Always phrase the photo request naturally and explain why it helps.`
       ca:'Un moment. Torna-ho a intentar.',
     }
     await sendWhatsApp(from, fb[guest.language]||fb.en); return
+  }
+
+  // 12a. Auto-ticket for maintenance/facility issues
+  const msgLower = message.toLowerCase()
+  const MAINT_KEYWORDS = ['tv','television','remote control','air conditioning','air-conditioning',
+    ' ac ',' ac,','broken','not working',"doesn't work",'doesnt work','out of order',
+    'leak','leaking','flood','shower','toilet','flush','light ','lights','lamp','bulb',
+    'electricity','power cut','noise','loud','smell','smoke','heating','too hot','too cold',
+    'door','lock','key card','wifi','internet','no signal']
+  const isMaintIssue = MAINT_KEYWORDS.some(k => msgLower.includes(k))
+
+  if (isMaintIssue && guest.stay_status === 'active' && guest.room) {
+    // Check no open ticket for same room in last 2h
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
+    const { data: existingTicket } = await supabase
+      .from('internal_tickets')
+      .select('id')
+      .eq('hotel_id', hotel.id)
+      .eq('room', guest.room)
+      .eq('department', 'maintenance')
+      .not('status', 'in', '("resolved","cancelled")')
+      .gte('created_at', twoHoursAgo)
+      .limit(1)
+
+    if (!existingTicket || existingTicket.length === 0) {
+      const { count } = await supabase.from('internal_tickets')
+        .select('*', { count:'exact', head:true }).eq('hotel_id', hotel.id)
+      const ticketNum = (count || 0) + 1
+
+      await supabase.from('internal_tickets').insert({
+        hotel_id:    hotel.id,
+        guest_id:    guest.id,
+        department:  'maintenance',
+        category:    'room_issue',
+        description: `[AUTO] Guest report: "${message.slice(0, 200)}"`,
+        room:        guest.room,
+        priority:    'normal',
+        status:      'pending',
+        created_by:  'bot',
+        ticket_number: ticketNum,
+      }).catch(() => {})
+
+      console.log(`Auto-ticket created for room ${guest.room}: ${message.slice(0, 50)}`)
+    }
   }
 
   // 12. Handoff check
