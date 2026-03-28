@@ -138,17 +138,18 @@ export async function checkInbound(phone, message, hotelId, guest, lang = 'en') 
   const msgCount = (rateRow?.message_count || 0) + 1
 
   // Upsert rate counter
-  await supabase.from('message_rate').upsert({
-    hotel_id:      hotelId,
-    phone:         clean,
-    window_start:  windowStart.toISOString(),
-    message_count: msgCount,
-  }, { onConflict: 'hotel_id,phone,window_start' }).catch(() => {})
+  try {
+    await supabase.from('message_rate').upsert({
+      hotel_id:      hotelId,
+      phone:         clean,
+      window_start:  windowStart.toISOString(),
+      message_count: msgCount,
+    }, { onConflict: 'hotel_id,phone,window_start' })
+  } catch {}
 
   // Clean old rate entries (keep only last hour)
   const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString()
-  await supabase.from('message_rate')
-    .delete().lt('window_start', oneHourAgo).catch(() => {})
+  try { await supabase.from('message_rate').delete().lt('window_start', oneHourAgo) } catch {}
 
   if (msgCount >= RATE_LIMIT_BLOCK && !guest?.stay_status === 'active') {
     await logAbuse(supabase, hotelId, clean, guest?.id, 'spam', 'high', message, true)
@@ -227,7 +228,7 @@ export async function checkInbound(phone, message, hotelId, guest, lang = 'en') 
   // Low severity — log only, continue normally
   for (const pattern of LOW_PATTERNS) {
     if (pattern.test(message)) {
-      await logAbuse(supabase, hotelId, clean, guest?.id, 'off_topic', 'low', message, false).catch(() => {})
+      try { await logAbuse(supabase, hotelId, clean, guest?.id, 'off_topic', 'low', message, false) } catch {}
       break
     }
   }
@@ -253,7 +254,7 @@ async function logAbuse(supabase, hotelId, phone, guestId, type, severity, messa
     severity,
     message:      message.slice(0, 500),
     auto_blocked: autoBlocked,
-  }).catch(() => {})
+  })
 }
 
 async function autoBlock(supabase, hotelId, phone, reason, guest) {
@@ -265,26 +266,26 @@ async function autoBlock(supabase, hotelId, phone, reason, guest) {
     severity:       'high',
     is_known_guest: isKnown,
     blocked_by:     'bot',
-  }, { onConflict: 'hotel_id,phone' }).catch(() => {})
+  }, { onConflict: 'hotel_id,phone' })
 
   // Notify reception of auto-block
-  await supabase.from('notifications').insert({
+  try { await supabase.from('notifications').insert({
     hotel_id:  hotelId,
     type:      'abuse_auto_block',
     title:     `⛔ Phone auto-blocked — ${reason}`,
     body:      `${phone}${guest?.name ? ` (${guest.name})` : ''} was automatically blocked. Review in Security tab.`,
     link_type: 'security',
-  }).catch(() => {})
+  }) } catch {}
 }
 
 async function notifyReceptionAbuse(supabase, hotelId, guest, message, severity) {
-  await supabase.from('notifications').insert({
+  try { await supabase.from('notifications').insert({
     hotel_id:  hotelId,
     type:      'abuse_known_guest',
     title:     `⚠ Abuse alert — ${guest.name || 'Guest'} · Room ${guest.room || '?'}`,
     body:      `"${message.slice(0, 100)}" — severity: ${severity}. Guest is active — not blocked.`,
     link_type: 'conversation',
-  }).catch(() => {})
+  }) } catch {}
 }
 
 // ── UNBLOCK (called from dashboard API) ──────────────────────
