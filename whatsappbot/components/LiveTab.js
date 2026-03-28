@@ -205,12 +205,11 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
 
   async function handleSendRequest() {
     if (!requestText.trim()) return
-    if (requestType === 'external' && !selectedConv) return
     setSending(true)
     try {
       const endpoint = requestType === 'external' ? '/api/bookings' : '/api/tickets'
       const body = requestType === 'external'
-        ? { hotelId, guestId: selectedConv.guests?.id, type: category, details: { description: requestText }, createdBy: `staff:${session?.name||''}` }
+        ? { hotelId, guestId: selectedConv?.guests?.id || null, type: category, details: { description: requestText }, createdBy: `staff:${session?.name||''}` }
         : { hotelId, guestId: selectedConv?.guests?.id || null, department, category: deptCategory || department, description: requestText, room: selectedConv?.guests?.room || selectedConv?.guests?.guest_room || null, priority, createdBy: `staff:${session?.name||''}` }
       await fetch(endpoint, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) })
       setSent(true); setRequestText('')
@@ -480,15 +479,15 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
             </div>
 
             {/* CTA */}
-            {/* Note for internal tickets */}
-            {requestType === 'internal' && !selectedConv && (
+            {/* No guest note */}
+            {!selectedConv && (
               <div style={{ fontSize:'11px', color:'#9CA3AF', textAlign:'center', marginBottom:'6px' }}>
-                No guest linked — creating ticket for department only
+                No guest linked — will create without guest
               </div>
             )}
             <button onClick={handleSendRequest}
-              disabled={sending || !requestText.trim() || (requestType === 'external' && !selectedConv)}
-              style={{ width:'100%', padding:'11px', background: sent?'#16A34A': (!requestText.trim()||(requestType==='external'&&!selectedConv)) ?'#E5E7EB':'var(--green-800)', border:'none', borderRadius:'10px', fontSize:'13px', fontWeight:'700', color:(!requestText.trim()||(requestType==='external'&&!selectedConv))?'#9CA3AF':'white', cursor:(!requestText.trim()||(requestType==='external'&&!selectedConv))?'not-allowed':'pointer', fontFamily:'var(--font)', transition:'background 0.2s', letterSpacing:'0.2px' }}>
+              disabled={sending || !requestText.trim()}
+              style={{ width:'100%', padding:'11px', background: sent?'#16A34A':!requestText.trim()?'#E5E7EB':'var(--green-800)', border:'none', borderRadius:'10px', fontSize:'13px', fontWeight:'700', color:!requestText.trim()?'#9CA3AF':'white', cursor:!requestText.trim()?'not-allowed':'pointer', fontFamily:'var(--font)', transition:'background 0.2s', letterSpacing:'0.2px' }}>
               {sent?'✓ Created':sending?'Creating...':requestType==='external'?'Send request':'Create internal ticket'}
             </button>
           </div>

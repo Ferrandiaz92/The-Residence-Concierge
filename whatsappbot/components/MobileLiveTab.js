@@ -319,8 +319,6 @@ function StaffPortal({ conversations, selectedConv, onSelectConv, session, hotel
 
   async function handleSend() {
     if (!details.trim() || sending) return
-    // Guest is optional for internal tickets (manager/supervisor can create without conversation)
-    if (reqType === 'external' && !selectedConv) return
     setSending(true)
     try {
       const endpoint = reqType === 'external' ? '/api/bookings' : '/api/tickets'
@@ -346,12 +344,14 @@ function StaffPortal({ conversations, selectedConv, onSelectConv, session, hotel
           {/* Selected guest chip */}
           {selectedConv ? (
             <div style={{ display:'flex', alignItems:'center', gap:'10px', padding:'12px 14px', background:'white', borderRadius:'12px', border:'1px solid #E5E7EB' }}>
-              <div style={{ width:'34px', height:'34px', borderRadius:'50%', background:'#1C3D2E', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'13px', color:'#C9A84C', fontWeight:'700', flexShrink:0 }}>
-                {(g.name?.[0]||'?')}{(g.surname?.[0]||'')}
+              <div style={{ width:'40px', height:'40px', borderRadius:'50%', background:'#1C3D2E', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'14px', color:'#C9A84C', fontWeight:'700', flexShrink:0 }}>
+                {(g.name?.[0]||'?').toUpperCase()}{(g.surname?.[0]||'').toUpperCase()}
               </div>
-              <div style={{ flex:1 }}>
+              <div style={{ flex:1, minWidth:0 }}>
                 <div style={{ fontSize:'13px', fontWeight:'600', color:'#111827' }}>{g.name||'Guest'} {g.surname||''}</div>
-                <div style={{ fontSize:'12px', color:'#6B7280' }}>{(g.room||g.guest_room) ? `Room ${g.room||g.guest_room}` : 'No room assigned'}</div>
+                <div style={{ fontSize:'12px', color:'#6B7280' }}>
+                  {(g.room||g.guest_room) ? `Room ${g.room||g.guest_room}` : 'No room assigned'}
+                </div>
               </div>
               <button onClick={() => setShowConvPicker(s => !s)}
                 style={{ fontSize:'12px', fontWeight:'600', padding:'5px 10px', borderRadius:'8px', border:'1px solid #D1D5DB', background:'white', color:'#374151', cursor:'pointer', fontFamily:"'DM Sans', sans-serif", flexShrink:0 }}>
@@ -398,15 +398,22 @@ function StaffPortal({ conversations, selectedConv, onSelectConv, session, hotel
             </div>
           )}
 
-          {/* Option to create without guest — internal tickets only */}
-          {reqType === 'internal' && (
-            <div style={{ marginTop:'8px', textAlign:'center' }}>
-              <button onClick={() => { onSelectConv(null); setShowConvPicker(false) }}
-                style={{ fontSize:'12px', color:'#9CA3AF', background:'none', border:'none', cursor:'pointer', textDecoration:'underline', fontFamily:"'DM Sans', sans-serif" }}>
-                {selectedConv ? 'Remove guest — create ticket without guest' : 'Create ticket without a guest'}
-              </button>
-            </div>
-          )}
+          {/* Option to create without guest — always visible */}
+          <div style={{ marginTop:'8px' }}>
+            <button
+              onClick={() => { onSelectConv(null); setShowConvPicker(false) }}
+              style={{
+                width:'100%', padding:'10px 14px',
+                background: !selectedConv ? '#F0FDF4' : 'white',
+                border: `1px solid ${!selectedConv ? '#86EFAC' : '#E5E7EB'}`,
+                borderRadius:'10px', textAlign:'center', cursor:'pointer',
+                fontFamily:"'DM Sans', sans-serif",
+                fontSize:'12px', fontWeight: !selectedConv ? '600' : '400',
+                color: !selectedConv ? '#14532D' : '#9CA3AF',
+              }}>
+              {!selectedConv ? '✓ No guest — creating without guest' : 'Or create without a guest'}
+            </button>
+          </div>
         </div>
 
         {/* ── Request type ── */}
@@ -488,13 +495,13 @@ function StaffPortal({ conversations, selectedConv, onSelectConv, session, hotel
 
         {/* ── Send button ── */}
         <button onClick={handleSend}
-          disabled={sending || !details.trim() || (reqType === 'external' && !selectedConv)}
+          disabled={sending || !details.trim()}
           style={{
             width:'100%', padding:'14px',
-            background: sent ? '#16A34A' : (!details.trim() || (reqType==='external' && !selectedConv)) ? '#E5E7EB' : '#1C3D2E',
+            background: sent ? '#16A34A' : !details.trim() ? '#E5E7EB' : '#1C3D2E',
             border:'none', borderRadius:'12px', fontSize:'15px', fontWeight:'700',
-            color: (!details.trim() || (reqType==='external' && !selectedConv)) ? '#9CA3AF' : 'white',
-            cursor: (!details.trim() || (reqType==='external' && !selectedConv)) ? 'not-allowed' : 'pointer',
+            color: !details.trim() ? '#9CA3AF' : 'white',
+            cursor: !details.trim() ? 'not-allowed' : 'pointer',
             fontFamily:"'DM Sans', sans-serif",
           }}>
           {sent ? '✓ Created!' : sending ? 'Creating…' : reqType==='external' ? 'Send booking request' : 'Create ticket'}
