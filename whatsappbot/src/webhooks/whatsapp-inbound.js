@@ -236,16 +236,18 @@ export async function handleInboundWhatsApp(rawBody) {
     await sendWhatsApp(from, fb[guest.language]||fb.en); return
   }
 
-  // 11b. Flight status check — if guest mentions a flight number in any message
-  const allFlights    = extractAllFlightNumbers(message)
+  // 11b. Flight status check — parallel, non-blocking, 3s timeout
+  const allFlights      = extractAllFlightNumbers(message)
   const mentionedFlight = allFlights[0] || null
   if (mentionedFlight && !autoTicketCreated) {
-    // Try each flight number until we find data (handles codeshares like EK0109/QF8109)
-    let flightData = null
-    for (const fn of allFlights) {
-      flightData = await getFlightStatus(fn).catch(() => null)
-      if (flightData) break
-    }
+    // Fetch all flights in parallel with 3s timeout — never block the bot
+    const flightTimeout = (fn) => Promise.race([
+      getFlightStatus(fn),
+      new Promise(resolve => setTimeout(() => resolve(null), 3000))
+    ]).catch(() => null)
+
+    const allResults  = await Promise.all(allFlights.slice(0, 2).map(flightTimeout))
+    const flightData  = allResults.find(f => f !== null) || null
     if (flightData) {
       const statusSummary = formatFlightStatus(flightData, guest.language || 'en')
       systemPrompt += `\n\n[FLIGHT DATA - REAL TIME] Guest mentioned flight ${mentionedFlight}. ` +
@@ -552,11 +554,12 @@ async function _sendToPartner(partner, booking, hotel, guest, source, lowConfide
   if (details.flight) {
     const allFlightNums = extractAllFlightNumbers(details.flight)
     if (allFlightNums.length > 0) {
-      let flightData = null
-      for (const fn of allFlightNums) {
-        flightData = await getFlightStatus(fn).catch(() => null)
-        if (flightData) break
-      }
+      const flightTimeout = (fn) => Promise.race([
+        getFlightStatus(fn),
+        new Promise(resolve => setTimeout(() => resolve(null), 3000))
+      ]).catch(() => null)
+      const results  = await Promise.all(allFlightNums.slice(0,2).map(flightTimeout))
+      let flightData = results.find(f => f !== null) || null
       if (flightData) {
         const direction = (details.destination || '').toLowerCase().includes('airport') ? 'arrival'
           : (details.pickup || '').toLowerCase().includes('airport') ? 'departure'
