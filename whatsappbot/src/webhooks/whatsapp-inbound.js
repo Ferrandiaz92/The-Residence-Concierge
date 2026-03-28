@@ -40,7 +40,13 @@ export async function handleInboundWhatsApp(rawBody) {
   }
 
   // 3b. Abuse / security check — before doing anything else
-  const abuseCheck = await checkInbound(from, message, hotel.id, guest, guest.language || 'en')
+  let abuseCheck = { action: 'allow' }
+  try {
+    abuseCheck = await checkInbound(from, message, hotel.id, guest, guest.language || 'en')
+  } catch (abuseErr) {
+    console.warn('Abuse check failed (tables may not exist yet):', abuseErr.message)
+    // Fall through — allow message to proceed
+  }
 
   if (abuseCheck.action === 'block') {
     console.log(`Blocked message from ${from}`)
@@ -122,7 +128,10 @@ export async function handleInboundWhatsApp(rawBody) {
   // Bot keeps responding but conversation stays escalated so it shows in Alerts
   const wasEscalated = conv.status === 'escalated'
 
-  const history = (conv.messages || []).slice(-20)
+  // Filter out empty messages — Claude rejects them with 400
+  const history = (conv.messages || [])
+    .filter(m => m.content && m.content.trim().length > 0)
+    .slice(-20)
 
   // 7. Load guest memory (previous stays + preferences)
   const memory = await loadGuestMemory(guest.id)
@@ -203,7 +212,8 @@ export async function handleInboundWhatsApp(rawBody) {
   // 11. Claude
   let aiResponse
   try { aiResponse = await callClaude(systemPrompt, history, message) }
-  catch {
+  catch (claudeErr) {
+    console.error('Claude API failed:', claudeErr.message)
     const fb = {
       en:'I\'m having a brief issue. Please try again.',
       ru:'Временная ошибка.',
