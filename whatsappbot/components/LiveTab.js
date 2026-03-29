@@ -160,6 +160,9 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
   const [noGuest, setNoGuest]             = useState(false)
   const [partnerTypes, setPartnerTypes]   = useState([])
   const [departments, setDepartments]     = useState([])
+  const [partners,    setPartners]        = useState([])
+  const [facilities,  setFacilities]      = useState([])
+  const [requestType, setRequestType]     = useState('external')
   const chatEndRef = useRef(null)
 
   useEffect(() => {
@@ -184,6 +187,20 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
       setDepartments(data.departments || [])
       if (data.partnerTypes?.[0]) setCategory(data.partnerTypes[0].name.toLowerCase())
       if (data.departments?.[0]) setDepartment(data.departments[0].key)
+
+      // Load partners for manual picker
+      try {
+        const pRes  = await fetch('/api/partners?hotelId=' + hotelId)
+        const pData = await pRes.json()
+        setPartners(pData.partners || [])
+      } catch {}
+
+      // Load facilities for facility booking form
+      try {
+        const fRes  = await fetch('/api/facilities?hotelId=' + hotelId)
+        const fData = await fRes.json()
+        setFacilities(fData.facilities || [])
+      } catch {}
     } catch {}
   }
 
@@ -431,22 +448,71 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
               )}
             </div>
 
-            {/* Request type — big centered buttons */}
+            {/* Request type — 3-way split */}
             <div>
               <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151', marginBottom:'8px' }}>Request type</div>
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'8px' }}>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'7px' }}>
                 {[
-                  { key:'external', label:'External booking', sub:'Taxi, restaurant, activity...' },
-                  { key:'internal', label:'Internal request',  sub:'Housekeeping, maintenance...' },
+                  { key:'external', label:'External booking', sub:'Taxi, restaurant…' },
+                  { key:'internal', label:'Internal ticket',  sub:'Maintenance, HK…' },
+                  { key:'facility', label:'Facility booking', sub:'Courts, spa, gym…' },
                 ].map(t => (
                   <button key={t.key} onClick={() => setRequestType(t.key)}
-                    style={{ padding:'12px', borderRadius:'10px', border:'0.5px solid', textAlign:'center', cursor:'pointer', fontFamily:'var(--font)', transition:'all .15s', borderColor:requestType===t.key?'var(--green-800)':'#D1D5DB', background:requestType===t.key?'var(--green-800)':'white' }}>
-                    <div style={{ fontSize:'13px', fontWeight:'700', color:requestType===t.key?'white':'#111827', marginBottom:'3px' }}>{t.label}</div>
-                    <div style={{ fontSize:'11px', color:requestType===t.key?'rgba(255,255,255,0.7)':'#9CA3AF' }}>{t.sub}</div>
+                    style={{ padding:'10px 6px', borderRadius:'10px', border:'0.5px solid', textAlign:'center', cursor:'pointer', fontFamily:'var(--font)', transition:'all .15s', borderColor:requestType===t.key?'var(--green-800)':'#D1D5DB', background:requestType===t.key?'var(--green-800)':'white' }}>
+                    <div style={{ fontSize:'12px', fontWeight:'700', color:requestType===t.key?'white':'#111827', marginBottom:'2px' }}>{t.label}</div>
+                    <div style={{ fontSize:'10px', color:requestType===t.key?'rgba(255,255,255,0.65)':'#9CA3AF' }}>{t.sub}</div>
                   </button>
                 ))}
               </div>
             </div>
+
+            {/* Partner picker — External only */}
+            {requestType === 'external' && partners.length > 0 && (() => {
+              const filtered = partners.filter(p => p.type === category && p.active !== false)
+              if (filtered.length === 0) return null
+              const [selectedPartner, setSelectedPartner] = React.useState('')
+              return (
+                <div>
+                  <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151', marginBottom:'6px' }}>Partner <span style={{ fontWeight:'400', color:'#9CA3AF' }}>(optional — leave blank for auto-match)</span></div>
+                  <select value={selectedPartner} onChange={e => setSelectedPartner(e.target.value)}
+                    style={{ width:'100%', padding:'9px 12px', border:'0.5px solid #D1D5DB', borderRadius:'9px', fontSize:'13px', color:'#111827', background:'white', cursor:'pointer', fontFamily:'var(--font)', outline:'none' }}>
+                    <option value=''>Auto-select best partner</option>
+                    {filtered.map(p => (
+                      <option key={p.id} value={p.id}>{p.name}{p.details?.car ? ' — ' + p.details.car : ''}</option>
+                    ))}
+                  </select>
+                </div>
+              )
+            })()}
+
+            {/* Facility picker — Facility booking only */}
+            {requestType === 'facility' && (
+              <div style={{ display:'flex', flexDirection:'column', gap:'10px' }}>
+                <div>
+                  <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151', marginBottom:'6px' }}>Facility</div>
+                  <select style={{ width:'100%', padding:'9px 12px', border:'0.5px solid #D1D5DB', borderRadius:'9px', fontSize:'13px', color:'#111827', background:'white', fontFamily:'var(--font)', outline:'none' }}>
+                    <option value=''>Select facility…</option>
+                    {facilities.map(f => (
+                      <option key={f.id} value={f.id}>{f.name}{f.department ? ' — ' + f.department : ''}</option>
+                    ))}
+                  </select>
+                </div>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'8px' }}>
+                  <div>
+                    <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151', marginBottom:'5px' }}>Date</div>
+                    <input type='date' style={{ width:'100%', padding:'9px 12px', border:'0.5px solid #D1D5DB', borderRadius:'9px', fontSize:'13px', fontFamily:'var(--font)', outline:'none', boxSizing:'border-box' }} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151', marginBottom:'5px' }}>Time</div>
+                    <input type='time' style={{ width:'100%', padding:'9px 12px', border:'0.5px solid #D1D5DB', borderRadius:'9px', fontSize:'13px', fontFamily:'var(--font)', outline:'none', boxSizing:'border-box' }} />
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151', marginBottom:'5px' }}>Number of guests</div>
+                  <input type='number' min='1' defaultValue='1' style={{ width:'100%', padding:'9px 12px', border:'0.5px solid #D1D5DB', borderRadius:'9px', fontSize:'13px', fontFamily:'var(--font)', outline:'none', boxSizing:'border-box' }} />
+                </div>
+              </div>
+            )}
 
             {/* External categories — from API */}
             {requestType === 'external' && partnerTypes.length > 0 && (
