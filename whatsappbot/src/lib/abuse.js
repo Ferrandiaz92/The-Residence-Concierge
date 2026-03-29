@@ -10,6 +10,19 @@
 //   { action: 'warn',   severity, type, warnMsg }
 //   { action: 'restrict' }   — call Claude but with restricted prompt
 //   { action: 'block'   }   — do not respond at all
+//
+// ─────────────────────────────────────────────────────────────
+// FIX #3: Rate limit operator bug
+//
+// BROKEN: !guest?.stay_status === 'active'
+//   JS evaluates as: (!guest?.stay_status) === 'active'
+//   !('active') → false, then false === 'active' → always false
+//   Result: the active-guest protection NEVER worked.
+//   Active checked-in guests could be silently auto-blocked.
+//
+// FIXED: guest?.stay_status !== 'active'
+//   Correctly checks: "is the guest NOT an active stay?"
+//   Active guests are now exempt from rate-limit blocking and warnings.
 // ============================================================
 
 import { createClient } from '@supabase/supabase-js'
@@ -151,13 +164,19 @@ export async function checkInbound(phone, message, hotelId, guest, lang = 'en') 
   const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString()
   try { await supabase.from('message_rate').delete().lt('window_start', oneHourAgo) } catch {}
 
-  if (msgCount >= RATE_LIMIT_BLOCK && !guest?.stay_status === 'active') {
+  // FIX #3: was `!guest?.stay_status === 'active'` — always evaluated to false
+  // due to operator precedence (!string → false, false === 'active' → false).
+  // Active checked-in guests were NOT protected and could be auto-blocked.
+  // Fixed to: guest?.stay_status !== 'active'
+  if (msgCount >= RATE_LIMIT_BLOCK && guest?.stay_status !== 'active') {
     await logAbuse(supabase, hotelId, clean, guest?.id, 'spam', 'high', message, true)
     await autoBlock(supabase, hotelId, clean, 'spam', guest)
     return { action: 'block' }
   }
 
-  if (msgCount >= RATE_LIMIT_WARN) {
+  // Also exempt active guests from rate-limit warnings —
+  // a distressed guest at 2am should never hit a rate-limit wall.
+  if (msgCount >= RATE_LIMIT_WARN && guest?.stay_status !== 'active') {
     await logAbuse(supabase, hotelId, clean, guest?.id, 'spam', 'low', message, false)
     return {
       action: 'warn',

@@ -1,6 +1,26 @@
-// src/lib/supabase.js — updated getOrCreateGuest
-// New unknown numbers default to 'prospect' type
-// Only changes: getOrCreateGuest function
+// src/lib/supabase.js
+// ─────────────────────────────────────────────────────────────
+// FIX #5: Messages stored in a proper table instead of JSONB blob
+//
+// BEFORE: appendMessage read the entire conversations.messages JSONB
+//   array, appended one item, and wrote the entire array back.
+//   Problems:
+//   - Full read+write on every message (gets slower as history grows)
+//   - Race condition: two rapid messages → last write wins, one lost
+//   - No search/filter possible on message content
+//   - Row grows unbounded; long-staying guests hit Postgres TOAST limits
+//
+// AFTER: appendMessage inserts a single row into the messages table.
+//   - O(1) write regardless of history length
+//   - Race-condition safe (each message is its own atomic insert)
+//   - Full SQL query capability on message content
+//   - getConversationHistory fetches only the last N rows needed
+//
+// MIGRATION REQUIRED before deploying this file:
+//   Run supabase/migration_messages_table.sql in your Supabase SQL editor.
+//   The migration is non-destructive — it keeps the old JSONB column
+//   until you've verified everything works, then you can drop it.
+// ─────────────────────────────────────────────────────────────
 
 import { createClient } from '@supabase/supabase-js'
 
@@ -41,10 +61,10 @@ export async function getOrCreateGuest(hotelId, phone) {
     .insert({
       hotel_id:         hotelId,
       phone:            clean,
-      guest_type:       'prospect',    // ← was 'stay', now 'prospect'
+      guest_type:       'prospect',
       prospect_status:  'new',
       first_contact_at: new Date().toISOString(),
-      language:         'en',          // will be updated on first message
+      language:         'en',
     })
     .select()
     .single()
@@ -78,7 +98,7 @@ export async function getOrCreateConversation(guestId, hotelId) {
 
   const { data: created, error } = await supabase
     .from('conversations')
-    .insert({ guest_id: guestId, hotel_id: hotelId, messages: [], status: 'active' })
+    .insert({ guest_id: guestId, hotel_id: hotelId, status: 'active' })
     .select()
     .single()
 
@@ -86,30 +106,60 @@ export async function getOrCreateConversation(guestId, hotelId) {
   return created
 }
 
+// ── FIX #5: appendMessage — single INSERT, no read needed ────
+// Each message is its own row. Safe under concurrent requests.
+// The old JSONB approach required read-modify-write which could
+// lose messages if two arrived within the same millisecond.
 export async function appendMessage(convId, role, content, meta = {}) {
-  const { data: conv } = await supabase
-    .from('conversations')
-    .select('messages')
-    .eq('id', convId)
-    .single()
+  // Insert the message as a proper row
+  const { error } = await supabase.from('messages').insert({
+    conversation_id: convId,
+    role,
+    content,
+    sent_by: meta.sent_by || null,
+  })
 
-  const messages = [...(conv?.messages || []), {
-    role, content, ts: new Date().toISOString(), ...meta
-  }]
+  if (error) {
+    // Graceful fallback: log but don't crash the bot
+    console.error('[supabase] appendMessage failed:', error.message)
+    return
+  }
 
+  // Keep last_message_at in sync for sorting/display in dashboard
   await supabase
     .from('conversations')
-    .update({ messages, last_message_at: new Date().toISOString() })
+    .update({ last_message_at: new Date().toISOString() })
     .eq('id', convId)
 }
 
-export async function getConversationHistory(convId) {
-  const { data } = await supabase
-    .from('conversations')
-    .select('messages')
-    .eq('id', convId)
-    .single()
-  return data?.messages || []
+// ── FIX #5: getConversationHistory — fetches only last N rows ─
+// Previously fetched the entire JSONB blob and sliced in JS.
+// Now we let Postgres do the pagination — only the rows needed
+// for Claude's context window are transferred.
+export async function getConversationHistory(convId, limit = 20) {
+  const { data, error } = await supabase
+    .from('messages')
+    .select('role, content, sent_by, created_at')
+    .eq('conversation_id', convId)
+    .not('content', 'is', null)
+    .neq('content', '')
+    .order('created_at', { ascending: false })
+    .limit(limit)
+
+  if (error) {
+    console.error('[supabase] getConversationHistory failed:', error.message)
+    return []
+  }
+
+  // Reverse so oldest-first for Claude (it expects chronological order)
+  return (data || []).reverse()
+}
+
+// Kept for backward compatibility with any dashboard code that
+// reads conv.messages directly — returns empty array now that
+// the column is no longer written. Remove after verifying dashboard.
+export async function getConversationMessages(convId) {
+  return getConversationHistory(convId)
 }
 
 export async function getPartners(hotelId) {
