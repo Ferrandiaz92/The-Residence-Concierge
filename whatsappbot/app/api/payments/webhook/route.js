@@ -3,6 +3,18 @@
 // Add this URL in Stripe Dashboard → Webhooks:
 //   https://your-domain.vercel.app/api/payments/webhook
 // Events to listen for: checkout.session.completed, checkout.session.expired
+//
+// ─────────────────────────────────────────────────────────────
+// FIX #2: Idempotency guard on checkout.session.completed
+//
+// Stripe retries webhooks on timeout or 5xx — up to 4 times over 72h.
+// Vercel cold starts + Supabase latency spikes mean timeouts happen.
+// Without this guard, each retry creates a duplicate order and sends
+// another payment link to the guest.
+//
+// The fix: check if the order is already 'paid' before fulfilling.
+// Return 200 (not 4xx) so Stripe stops retrying.
+// ─────────────────────────────────────────────────────────────
 
 export const dynamic = 'force-dynamic'
 
@@ -97,6 +109,22 @@ export async function POST(request) {
 
       if (!orderId) return new Response('ok', { status: 200 })
 
+      // ── FIX #2: Idempotency guard ─────────────────────────
+      // Stripe retries on timeout/5xx. Check if already fulfilled
+      // before doing anything — return 200 to stop the retry cycle.
+      const { data: alreadyPaid } = await supabase
+        .from('guest_orders')
+        .select('id, status')
+        .eq('id', orderId)
+        .eq('status', 'paid')
+        .single()
+
+      if (alreadyPaid) {
+        console.log(`[stripe] Retry ignored — order ${orderId} already paid`)
+        return new Response('already processed', { status: 200 })
+      }
+      // ─────────────────────────────────────────────────────
+
       // Mark order paid — pull full product logistics in one query
       const { data: order } = await supabase
         .from('guest_orders')
@@ -104,8 +132,10 @@ export async function POST(request) {
           status:                'paid',
           paid_at:               new Date().toISOString(),
           stripe_payment_intent: session.payment_intent,
+          stripe_session_id:     session.id,
         })
         .eq('id', orderId)
+        .neq('status', 'paid')   // extra safety: only update if not already paid
         .select(`
           *,
           partner_products (
@@ -176,7 +206,7 @@ export async function POST(request) {
         })).catch(e => console.error('Partner notify error:', e.message))
       }
 
-      console.log(`Order ${orderId} confirmed — €${total}`)
+      console.log(`[stripe] Order ${orderId} confirmed — €${total}`)
     }
 
     // ── PAYMENT LINK EXPIRED ─────────────────────────────────
@@ -188,7 +218,6 @@ export async function POST(request) {
       if (orderId) {
         await supabase.from('guest_orders').update({ status: 'cancelled' }).eq('id', orderId)
 
-        // Notify guest — they're not left wondering what happened
         if (guestId) {
           const { data: guest } = await supabase
             .from('guests').select('phone, language, name').eq('id', guestId).single()
