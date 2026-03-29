@@ -32,40 +32,60 @@ export function detectLanguage(text) {
   if (!text || text.length < 2) return 'en'
   const cleaned = text.trim()
 
-  // Non-Latin scripts first
+  // ── Step 1: Non-Latin scripts — single character is definitive ──
+  // Cannot be accidental. Russian, Hebrew, Arabic, Chinese, Greek.
   for (const { code, pattern } of LANG_PATTERNS) {
     if (pattern.test(cleaned)) {
-      if (code === 'ru') {
-        if (/[іїєґІЇЄҐ]/.test(cleaned)) return 'uk'
-      }
+      if (code === 'ru' && /[іїєґІЇЄҐ]/.test(cleaned)) return 'uk'
       return code
     }
   }
 
-  // Latin scripts — score by word matches
-  const words  = cleaned.toLowerCase().split(/[\s,.!?;:]+/).filter(Boolean)
+  // ── Step 2: Latin language detection ─────────────────────────
+  // Words that appear in multiple languages — excluded from scoring
+  // because they cannot reliably identify a language
+  const AMBIGUOUS = new Set([
+    'a','e','i','o','u',
+    'is','it','be','me','he','we','my','by','or','if','as',
+    'no','so','to','do','go','ok','hi',
+    'la','el','de','en','an','at','on','in',
+    'le','al','il','da','di','les','des',
+    'et','es','est','una','un','y','que',
+  ])
+
+  const words = cleaned.toLowerCase()
+    .split(/[\s,.!?;:()\[\]"'\/\\-]+/)
+    .filter(w => w.length > 1 && !AMBIGUOUS.has(w))
+
+  if (words.length === 0) return 'en'
+
   const scores = {}
-
   for (const { code, words: patterns } of LATIN_WORD_PATTERNS) {
-    const matches = words.filter(w => patterns.includes(w)).length
-    if (matches > 0) scores[code] = (scores[code] || 0) + matches
+    const distinct = new Set(words.filter(w => patterns.includes(w))).size
+    if (distinct > 0) scores[code] = distinct
   }
 
-  // Catalan vs Spanish disambiguation:
-  // Catalan-specific markers that never appear in Spanish
-  const catalanOnly = ['gràcies','estic','tinc','quan','molt','vull','català','benvingut','bon','nit','habitació']
-  const catalanScore = words.filter(w => catalanOnly.includes(w)).length
-  if (catalanScore >= 1) scores['ca'] = (scores['ca'] || 0) + catalanScore * 2
-
-  // Portuguese vs Spanish disambiguation:
-  // Portuguese-specific markers
-  const ptOnly = ['obrigado','obrigada','você','estou','tenho','quarto','português','bom','tarde']
-  const ptScore = words.filter(w => ptOnly.includes(w)).length
-  if (ptScore >= 1) scores['pt'] = (scores['pt'] || 0) + ptScore * 2
-
-  if (Object.keys(scores).length > 0) {
-    return Object.entries(scores).sort((a,b) => b[1]-a[1])[0][0]
+  // Boost unambiguous language-specific markers
+  const MARKERS = {
+    pt: ['obrigado','obrigada','você','estou','tenho','português','olá','também'],
+    ca: ['gràcies','estic','tinc','vull','català','benvingut','habitació'],
+    de: ['bitte','danke','guten','morgen','abend','nicht','können','möchte','zimmer'],
+    fr: ['bonjour','merci','bonsoir','voudrais','chambre','pouvez','très','puis'],
+    es: ['hola','gracias','buenos','días','noches','habitación','quisiera','cuándo'],
+    ru: ['пожалуйста','спасибо','добрый','привет','можете','хотел'],
   }
+  for (const [code, markers] of Object.entries(MARKERS)) {
+    const markerHits = new Set(words.filter(w => markers.includes(w))).size
+    if (markerHits > 0) scores[code] = (scores[code] || 0) + markerHits * 2
+  }
+
+  if (Object.keys(scores).length === 0) return 'en'
+
+  const [bestLang, bestScore] = Object.entries(scores).sort((a,b) => b[1]-a[1])[0]
+
+  // Require minimum 2 strong signals to declare a Latin language
+  // A genuine speaker will use multiple language-specific words naturally
+  if (bestScore >= 2) return bestLang
 
   return 'en'
 }
@@ -141,18 +161,7 @@ ${partnerList || 'No partners configured yet.'}
 
 MAKING A BOOKING:
 When confirming a booking, output at the END of your message (hidden from guest):
-[BOOKING]{"type":"taxi","partner":"Partner Name","details":{"destination":"Larnaca Airport","pickup":"Hotel entrance","date":"2026-03-29","time":"18:00","passengers":2,"luggage":3,"requirements":["child_seat","large_luggage"],"flight":"LCA247","notes":"Guest needs help with bags"}}
-
-IMPORTANT for taxi bookings — always extract and include in details:
-- destination: exact destination name
-- pickup: where the guest will be picked up (hotel name/address if from hotel)
-- date: specific date (YYYY-MM-DD format)
-- time: exact pickup time (HH:MM format)
-- passengers: number of people
-- luggage: number of bags/suitcases if mentioned
-- requirements: array of special needs e.g. ["wheelchair","child_seat","van","dog_friendly","large_luggage"]
-- flight: flight number if mentioned (for airport pickups)
-If any of these are unclear, ASK the guest before confirming.
+[BOOKING]{"type":"taxi","partner":"Partner Name","details":{"destination":"Airport","time":"18:00","passengers":2},"price":45}
 
 ESCALATION:
 If you cannot help or the guest is unhappy:
@@ -175,17 +184,13 @@ export function formatPartnerAlert(booking, guest, hotel) {
     `👤 Guest: ${guestName} · Room ${room}`,
     `📋 Service: ${booking.type}`,
   ]
-  if (details.destination)                    lines.push(`📍 Destination: ${details.destination}`)
-  if (details.pickup)                         lines.push(`📍 Pickup: ${details.pickup}`)
-  if (details.date)                           lines.push(`📅 Date: ${details.date}`)
-  if (details.time)                           lines.push(`🕐 Time: ${details.time}`)
-  if (details.passengers || details.pax)      lines.push(`👥 Passengers: ${details.passengers || details.pax}`)
-  if (details.luggage)                        lines.push(`🧳 Luggage: ${details.luggage} bags`)
-  if (details.requirements?.length > 0)       lines.push(`⚙️ Requirements: ${details.requirements.join(', ')}`)
-  if (details.flight)                         lines.push(`✈️ Flight: ${details.flight}`)
-  if (details.people)                         lines.push(`👥 People: ${details.people}`)
-  if (details.description)                    lines.push(`📝 Notes: ${details.description}`)
-  if (details.price)                          lines.push(`💶 Amount: €${details.price}`)
+  if (details.destination) lines.push(`📍 Destination: ${details.destination}`)
+  if (details.time)        lines.push(`🕐 Time: ${details.time}`)
+  if (details.date)        lines.push(`📅 Date: ${details.date}`)
+  if (details.passengers)  lines.push(`👥 Passengers: ${details.passengers}`)
+  if (details.people)      lines.push(`👥 People: ${details.people}`)
+  if (details.description) lines.push(`📝 Notes: ${details.description}`)
+  if (details.price)       lines.push(`💶 Amount: €${details.price}`)
   lines.push('', 'Reply ✅ to confirm or ❌ to decline')
   return lines.join('\n')
 }
