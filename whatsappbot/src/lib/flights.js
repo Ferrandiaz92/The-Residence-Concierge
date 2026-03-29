@@ -71,23 +71,30 @@ export async function getFlightStatus(flightIata) {
       signal: AbortSignal.timeout(4000),
     })
 
+    console.log(`AeroDataBox ${flightIata} ${today}: status=${res.status}`)
+
     if (res.status === 404) {
-      // Try yesterday and tomorrow too (flight might be overnight)
+      console.log(`AeroDataBox: trying yesterday/tomorrow for ${flightIata}`)
       const results = await Promise.all([
         fetchAeroDataBox(key, flightIata, getDateOffset(-1)),
         fetchAeroDataBox(key, flightIata, getDateOffset(1)),
       ])
       const found = results.find(r => r !== null)
+      console.log(`AeroDataBox fallback result:`, found ? 'found' : 'not found')
       return found || null
     }
 
     if (!res.ok) {
-      console.error(`AeroDataBox error: ${res.status}`)
+      const errText = await res.text().catch(() => '')
+      console.error(`AeroDataBox error: ${res.status} — ${errText.slice(0,200)}`)
       return null
     }
 
     const data = await res.json()
-    return parseAeroDataBox(flightIata, data)
+    console.log(`AeroDataBox raw data:`, JSON.stringify(data).slice(0, 300))
+    const parsed = parseAeroDataBox(flightIata, data)
+    console.log(`AeroDataBox parsed:`, JSON.stringify(parsed).slice(0, 200))
+    return parsed
 
   } catch (err) {
     console.error('AeroDataBox fetch failed:', err.message)
