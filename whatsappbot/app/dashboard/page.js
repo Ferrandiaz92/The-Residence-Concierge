@@ -54,16 +54,16 @@ function getMobileTabs(role) {
     { key:'settings',  label:'Setup',     icon:IconSettings },
   ]
   if (isManager(role)) return [
-    { key:'live',       label:'Live',        icon:IconLive       },
-    { key:'guests',     label:'Guests',      icon:IconGuests     },
-    { key:'facilities', label:'Facilities',  icon:IconFacilities },
-    { key:'settings',   label:'Setup',       icon:IconSettings   },
+    { key:'live',       label:'Live',      icon:IconLive       },
+    { key:'guests',     label:'Guests',    icon:IconGuests     },
+    { key:'facilities', label:'Facility',  icon:IconFacilities },
+    { key:'settings',   label:'Setup',     icon:IconSettings   },
   ]
   // Reception: Live + Guests + Facilities
   if (isReception(role)) return [
-    { key:'live',       label:'Live',       icon:IconLive       },
-    { key:'guests',     label:'Guests',     icon:IconGuests     },
-    { key:'facilities', label:'Facilities', icon:IconFacilities },
+    { key:'live',       label:'Live',      icon:IconLive       },
+    { key:'guests',     label:'Guests',    icon:IconGuests     },
+    { key:'facilities', label:'Facility',  icon:IconFacilities },
   ]
   return [] // dept: no bottom nav
 }
