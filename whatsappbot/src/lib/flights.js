@@ -13,7 +13,7 @@
 // API docs: https://aviationstack.com/documentation
 // ============================================================
 
-const BASE_URL = 'https://api.aviationstack.com/v1'
+// AeroDataBox via RapidAPI — real-time flight data
 
 // ── FLIGHT NUMBER PATTERN ─────────────────────────────────────
 // Matches: LCA247, LH401, BA 123, EK 007, CY 301
@@ -48,55 +48,113 @@ export function extractAllFlightNumbers(text) {
   return matches
 }
 
-// ── FETCH FLIGHT STATUS ───────────────────────────────────────
+// ── FETCH FLIGHT STATUS via AeroDataBox (RapidAPI) ───────────
+// Free tier: 500 requests/month, real-time data
+// Docs: rapidapi.com/aedbx-aedbx/api/aerodatabox
 export async function getFlightStatus(flightIata) {
-  const key = process.env.AVIATIONSTACK_KEY
+  const key = process.env.RAPIDAPI_KEY
   if (!key) {
-    console.warn('AVIATIONSTACK_KEY not configured')
+    console.warn('RAPIDAPI_KEY not configured')
     return null
   }
 
   try {
-    const url = `${BASE_URL}/flights?access_key=${key}&flight_iata=${encodeURIComponent(flightIata)}&limit=1`
-    const res  = await fetch(url, { signal: AbortSignal.timeout(5000) })
+    // AeroDataBox needs today's date for active flights
+    const today = new Date().toISOString().split('T')[0]  // YYYY-MM-DD
+    const url   = `https://aerodatabox.p.rapidapi.com/flights/number/${encodeURIComponent(flightIata)}/${today}`
+
+    const res = await fetch(url, {
+      headers: {
+        'X-RapidAPI-Key':  key,
+        'X-RapidAPI-Host': 'aerodatabox.p.rapidapi.com',
+      },
+      signal: AbortSignal.timeout(4000),
+    })
+
+    if (res.status === 404) {
+      // Try yesterday and tomorrow too (flight might be overnight)
+      const results = await Promise.all([
+        fetchAeroDataBox(key, flightIata, getDateOffset(-1)),
+        fetchAeroDataBox(key, flightIata, getDateOffset(1)),
+      ])
+      const found = results.find(r => r !== null)
+      return found || null
+    }
+
     if (!res.ok) {
-      console.error(`AviationStack error: ${res.status}`)
+      console.error(`AeroDataBox error: ${res.status}`)
       return null
     }
 
     const data = await res.json()
-    if (data.error || !data.data || data.data.length === 0) {
-      console.warn(`Flight ${flightIata} not found`)
-      return null
-    }
+    return parseAeroDataBox(flightIata, data)
 
-    const flight = data.data[0]
-
-    return {
-      iata:              flight.flight?.iata,
-      status:            flight.flight_status,          // scheduled | active | landed | cancelled | diverted
-      airline:           flight.airline?.name,
-      origin:            flight.departure?.airport,
-      originIata:        flight.departure?.iata,
-      destination:       flight.arrival?.airport,
-      destinationIata:   flight.arrival?.iata,
-      // Departure
-      scheduledDepart:   flight.departure?.scheduled,
-      estimatedDepart:   flight.departure?.estimated,
-      actualDepart:      flight.departure?.actual,
-      departDelay:       flight.departure?.delay || 0,  // minutes
-      departTerminal:    flight.departure?.terminal,
-      // Arrival
-      scheduledArrive:   flight.arrival?.scheduled,
-      estimatedArrive:   flight.arrival?.estimated,
-      actualArrive:      flight.arrival?.actual,
-      arriveDelay:       flight.arrival?.delay || 0,    // minutes
-      arriveTerminal:    flight.arrival?.terminal,
-      gate:              flight.arrival?.gate,
-    }
   } catch (err) {
-    console.error('AviationStack fetch failed:', err.message)
+    console.error('AeroDataBox fetch failed:', err.message)
     return null
+  }
+}
+
+function getDateOffset(days) {
+  const d = new Date()
+  d.setDate(d.getDate() + days)
+  return d.toISOString().split('T')[0]
+}
+
+async function fetchAeroDataBox(key, flightIata, date) {
+  try {
+    const url = `https://aerodatabox.p.rapidapi.com/flights/number/${encodeURIComponent(flightIata)}/${date}`
+    const res = await fetch(url, {
+      headers: {
+        'X-RapidAPI-Key':  key,
+        'X-RapidAPI-Host': 'aerodatabox.p.rapidapi.com',
+      },
+      signal: AbortSignal.timeout(4000),
+    })
+    if (!res.ok) return null
+    const data = await res.json()
+    return parseAeroDataBox(flightIata, data)
+  } catch {
+    return null
+  }
+}
+
+function parseAeroDataBox(flightIata, data) {
+  // AeroDataBox returns an array of flight legs
+  const flight = Array.isArray(data) ? data[0] : data
+  if (!flight) return null
+
+  const dep = flight.departure || {}
+  const arr = flight.arrival   || {}
+
+  // Determine status
+  const status = flight.status?.toLowerCase() || 'scheduled'
+
+  const depDelay = dep.delay || 0
+  const arrDelay = arr.delay || 0
+
+  return {
+    iata:            flightIata,
+    status,
+    airline:         flight.airline?.name || flight.airline?.iata,
+    origin:          dep.airport?.name,
+    originIata:      dep.airport?.iata,
+    destination:     arr.airport?.name,
+    destinationIata: arr.airport?.iata,
+    // Departure
+    scheduledDepart: dep.scheduledTime?.utc || dep.scheduledTime?.local,
+    estimatedDepart: dep.revisedTime?.utc   || dep.revisedTime?.local || dep.scheduledTime?.utc,
+    actualDepart:    dep.actualTime?.utc    || dep.actualTime?.local,
+    departDelay:     depDelay,
+    departTerminal:  dep.terminal,
+    departGate:      dep.gate,
+    // Arrival
+    scheduledArrive: arr.scheduledTime?.utc || arr.scheduledTime?.local,
+    estimatedArrive: arr.revisedTime?.utc   || arr.revisedTime?.local || arr.scheduledTime?.utc,
+    actualArrive:    arr.actualTime?.utc    || arr.actualTime?.local,
+    arriveDelay:     arrDelay,
+    arriveTerminal:  arr.terminal,
+    gate:            arr.gate,
   }
 }
 
