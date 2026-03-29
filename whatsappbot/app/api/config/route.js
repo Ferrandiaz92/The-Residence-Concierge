@@ -19,14 +19,16 @@ export async function GET(request) {
     if (!hotelId) return Response.json({ error: 'hotelId required' }, { status: 400 })
 
     const supabase = getSupabase()
-    const [typesRes, deptsRes] = await Promise.all([
+    const [typesRes, deptsRes, facsRes] = await Promise.all([
       supabase.from('partner_types').select('*').eq('hotel_id', hotelId).eq('active', true).order('sort_order'),
       supabase.from('departments').select('*').eq('hotel_id', hotelId).eq('active', true).order('sort_order'),
+      supabase.from('facilities').select('id,name,department,category,contact_phone,contact_name,max_capacity,price_per_hour').eq('hotel_id', hotelId).eq('active', true).order('department').order('name'),
     ])
 
     return Response.json({
       partnerTypes: typesRes.data || [],
       departments:  deptsRes.data || [],
+      facilities:   facsRes.data  || [],
     })
   } catch (err) {
     return Response.json({ error: err.message }, { status: 500 })
