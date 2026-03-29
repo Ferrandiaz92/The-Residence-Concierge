@@ -161,7 +161,8 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
   const [partnerTypes, setPartnerTypes]   = useState([])
   const [departments, setDepartments]     = useState([])
   const [partners,    setPartners]        = useState([])
-  const [facilities,  setFacilities]      = useState([])
+  const [facilities,     setFacilities]     = useState([])
+  const [selectedPartner, setSelectedPartner] = useState('')
   const chatEndRef = useRef(null)
 
   useEffect(() => {
@@ -466,23 +467,18 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
             </div>
 
             {/* Partner picker — External only */}
-            {requestType === 'external' && partners.length > 0 && (() => {
-              const filtered = partners.filter(p => p.type === category && p.active !== false)
-              if (filtered.length === 0) return null
-              const [selectedPartner, setSelectedPartner] = React.useState('')
-              return (
-                <div>
-                  <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151', marginBottom:'6px' }}>Partner <span style={{ fontWeight:'400', color:'#9CA3AF' }}>(optional — leave blank for auto-match)</span></div>
-                  <select value={selectedPartner} onChange={e => setSelectedPartner(e.target.value)}
-                    style={{ width:'100%', padding:'9px 12px', border:'0.5px solid #D1D5DB', borderRadius:'9px', fontSize:'13px', color:'#111827', background:'white', cursor:'pointer', fontFamily:'var(--font)', outline:'none' }}>
-                    <option value=''>Auto-select best partner</option>
-                    {filtered.map(p => (
-                      <option key={p.id} value={p.id}>{p.name}{p.details?.car ? ' — ' + p.details.car : ''}</option>
-                    ))}
-                  </select>
-                </div>
-              )
-            })()}
+            {requestType === 'external' && partners.filter(p => p.type === category && p.active !== false).length > 0 && (
+              <div>
+                <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151', marginBottom:'6px' }}>Partner <span style={{ fontWeight:'400', color:'#9CA3AF' }}>(optional — leave blank for auto-match)</span></div>
+                <select value={selectedPartner} onChange={e => setSelectedPartner(e.target.value)}
+                  style={{ width:'100%', padding:'9px 12px', border:'0.5px solid #D1D5DB', borderRadius:'9px', fontSize:'13px', color:'#111827', background:'white', cursor:'pointer', fontFamily:'var(--font)', outline:'none' }}>
+                  <option value=''>Auto-select best partner</option>
+                  {partners.filter(p => p.type === category && p.active !== false).map(p => (
+                    <option key={p.id} value={p.id}>{p.name}{p.details?.car ? ' — ' + p.details.car : ''}</option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             {/* Facility picker — Facility booking only */}
             {requestType === 'facility' && (

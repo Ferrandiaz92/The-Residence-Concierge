@@ -313,10 +313,11 @@ function StaffPortal({ conversations, selectedConv, onSelectConv, session, hotel
   const [details,      setDetails]      = useState('')
   const [sending,      setSending]      = useState(false)
   const [sent,         setSent]         = useState(false)
-  const [partnerTypes, setPartnerTypes] = useState([])
-  const [departments,  setDepartments]  = useState([])
-  const [partners,     setPartners]     = useState([])
-  const [facilities,   setFacilities]   = useState([])
+  const [partnerTypes,    setPartnerTypes]    = useState([])
+  const [departments,     setDepartments]     = useState([])
+  const [partners,        setPartners]        = useState([])
+  const [facilities,      setFacilities]      = useState([])
+  const [selectedPartner, setSelectedPartner] = useState('')
   const [showConvPicker, setShowConvPicker] = useState(false)
   const [noGuest,        setNoGuest]        = useState(false)
 
@@ -462,21 +463,18 @@ function StaffPortal({ conversations, selectedConv, onSelectConv, session, hotel
         </div>
 
         {/* ── Partner picker — External only ── */}
-        {reqType === 'external' && (() => {
-          const filtered = partners.filter(p => p.type === category && p.active !== false)
-          if (filtered.length === 0) return null
-          return (
-            <div>
-              <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151', marginBottom:'8px' }}>Partner <span style={{ fontWeight:'400', color:'#9CA3AF' }}>(optional)</span></div>
-              <select style={{ width:'100%', padding:'12px 14px', background:'white', border:'1px solid #E5E7EB', borderRadius:'12px', fontSize:'16px', color:'#111827', fontFamily:"'DM Sans', sans-serif", outline:'none', WebkitAppearance:'none' }}>
-                <option value=''>Auto-select best partner</option>
-                {filtered.map(p => (
-                  <option key={p.id} value={p.id}>{p.name}{p.details?.car ? ' — ' + p.details.car : ''}</option>
-                ))}
-              </select>
-            </div>
-          )
-        })()}
+        {reqType === 'external' && partners.filter(p => p.type === category && p.active !== false).length > 0 && (
+          <div>
+            <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151', marginBottom:'8px' }}>Partner <span style={{ fontWeight:'400', color:'#9CA3AF' }}>(optional)</span></div>
+            <select value={selectedPartner} onChange={e => setSelectedPartner(e.target.value)}
+              style={{ width:'100%', padding:'12px 14px', background:'white', border:'1px solid #E5E7EB', borderRadius:'12px', fontSize:'16px', color:'#111827', fontFamily:"'DM Sans', sans-serif", outline:'none', WebkitAppearance:'none' }}>
+              <option value=''>Auto-select best partner</option>
+              {partners.filter(p => p.type === category && p.active !== false).map(p => (
+                <option key={p.id} value={p.id}>{p.name}{p.details?.car ? ' — ' + p.details.car : ''}</option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* ── Facility form — Facility booking only ── */}
         {reqType === 'facility' && (
