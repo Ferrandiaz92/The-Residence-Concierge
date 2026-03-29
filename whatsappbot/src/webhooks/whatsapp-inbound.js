@@ -15,7 +15,68 @@ import { loadGuestMemory, formatMemoryForPrompt, updateGuestPreferences } from '
 import { notifyReceptionEscalation, notifyReceptionMessage } from '../lib/push.js'
 import { getAvailableProducts, formatProductsForPrompt, parseProductOrder, createGuestOrder } from '../lib/stripe.js'
 import { checkInbound, RESTRICTED_PROMPT } from '../lib/abuse.js'
-import { getFlightStatus, extractFlightNumber, extractAllFlightNumbers, calculateTaxiTime, formatFlightStatus } from '../lib/flights.js'
+// Flight functions inlined for safety - no external import that can crash
+
+// ── SAFE FLIGHT HELPERS (inlined to prevent import crashes) ─────
+function extractAllFlightNumbers(text) {
+  try {
+    const re = /([A-Z][A-Z0-9]|[A-Z]{3})\s*(\d{1,4}[A-Z]?)/g
+    const bad = new Set(['TV','AC','OK','NO','MY','TO','GO','DO','SO','IT','BE','AM'])
+    const out = []
+    let m
+    while ((m = re.exec(text.toUpperCase())) !== null) {
+      if (!bad.has(m[1])) out.push(m[1] + m[2])
+    }
+    return out
+  } catch { return [] }
+}
+
+async function safeGetFlight(flightCode) {
+  const key = process.env.RAPIDAPI_KEY
+  if (!key) return null
+  try {
+    const today = new Date().toISOString().split('T')[0]
+    const dates = [today,
+      new Date(Date.now() - 86400000).toISOString().split('T')[0],
+      new Date(Date.now() + 86400000).toISOString().split('T')[0]
+    ]
+    for (const date of dates) {
+      try {
+        const res = await fetch(
+          `https://aerodatabox.p.rapidapi.com/flights/number/${encodeURIComponent(flightCode)}/${date}`,
+          { headers: { 'X-RapidAPI-Key': key, 'X-RapidAPI-Host': 'aerodatabox.p.rapidapi.com' },
+            signal: AbortSignal.timeout(3000) }
+        )
+        if (!res.ok) continue
+        const data = await res.json()
+        const f    = Array.isArray(data) ? data[0] : data
+        if (!f) continue
+        const dep  = f.departure || {}
+        const arr  = f.arrival   || {}
+        const arrTime = arr.revisedTime?.utc || arr.scheduledTime?.utc
+        const depTime = dep.revisedTime?.utc || dep.scheduledTime?.utc
+        console.log(`Flight ${flightCode} ${date}: arr=${arrTime} dep=${depTime}`)
+        return {
+          iata: flightCode, status: f.status || 'scheduled',
+          airline: f.airline?.name || f.airline?.iata,
+          origin: dep.airport?.name, originIata: dep.airport?.iata,
+          destination: arr.airport?.name, destinationIata: arr.airport?.iata,
+          scheduledArrive: arr.scheduledTime?.utc,
+          estimatedArrive: arrTime,
+          scheduledDepart: dep.scheduledTime?.utc,
+          estimatedDepart: depTime,
+          arriveDelay: arr.delay || 0,
+          departDelay: dep.delay || 0,
+          arriveTerminal: arr.terminal, gate: arr.gate,
+        }
+      } catch { continue }
+    }
+    return null
+  } catch (e) {
+    console.warn('safeGetFlight error:', e.message)
+    return null
+  }
+}
 
 export async function handleInboundWhatsApp(rawBody) {
   const { from, to, message, profileName } = parseIncomingMessage(rawBody)
@@ -240,16 +301,10 @@ export async function handleInboundWhatsApp(rawBody) {
   const allFlights      = extractAllFlightNumbers(message)
   const mentionedFlight = allFlights[0] || null
   if (mentionedFlight && !autoTicketCreated) {
-    // Fetch all flights in parallel with 3s timeout — never block the bot
-    const flightTimeout = (fn) => Promise.race([
-      getFlightStatus(fn),
-      new Promise(resolve => setTimeout(() => resolve(null), 3000))
-    ]).catch(() => null)
-
-    const allResults  = await Promise.all(allFlights.slice(0, 2).map(flightTimeout))
+    const allResults  = await Promise.all(allFlights.slice(0,2).map(fn => safeGetFlight(fn)))
     const flightData  = allResults.find(f => f !== null) || null
     if (flightData) {
-      const statusSummary = formatFlightStatus(flightData, guest.language || 'en')
+      // statusSummary not needed - data injected into prompt directly
       systemPrompt += `\n\n[FLIGHT DATA - REAL TIME] Guest mentioned flight ${mentionedFlight}. ` +
         `Current status: ${flightData.status}. ` +
         `${flightData.arriveDelay > 0 ? `Arrival delayed ${flightData.arriveDelay} minutes.` : 'On time.'} ` +
@@ -554,11 +609,7 @@ async function _sendToPartner(partner, booking, hotel, guest, source, lowConfide
   if (details.flight) {
     const allFlightNums = extractAllFlightNumbers(details.flight)
     if (allFlightNums.length > 0) {
-      const flightTimeout = (fn) => Promise.race([
-        getFlightStatus(fn),
-        new Promise(resolve => setTimeout(() => resolve(null), 3000))
-      ]).catch(() => null)
-      const results  = await Promise.all(allFlightNums.slice(0,2).map(flightTimeout))
+      const results  = await Promise.all(allFlightNums.slice(0,2).map(fn => safeGetFlight(fn)))
       let flightData = results.find(f => f !== null) || null
       if (flightData) {
         const direction = (details.destination || '').toLowerCase().includes('airport') ? 'arrival'
