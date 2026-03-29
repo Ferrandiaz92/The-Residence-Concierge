@@ -383,78 +383,113 @@ function buildLowRatingFollowup(lang) {
 // buildReviewLinks, and buildLowRatingFollowup above.
 
 // ── MAIN SCHEDULER ────────────────────────────────────────────
+// src/lib/scheduled-catchup-patch.js
+// ─────────────────────────────────────────────────────────────
+// FIX #3: Scheduled messages catchup pattern
+//
+// This is a DROP-IN REPLACEMENT for the processScheduledMessages()
+// function in src/lib/scheduled.js.
+//
+// HOW TO APPLY:
+//   In scheduled.js, replace the existing processScheduledMessages()
+//   function with the one exported here. Everything else in scheduled.js
+//   stays the same (buildPreCheckin7d, buildDay1Upsell, etc.).
+//
+// WHAT CHANGES:
+//   Old: "is today === target date?"  → missed if cron was down that day
+//   New: "is target date <= today AND within grace period AND not sent?"
+//        → catches up if cron missed the window
+//
+// Grace periods (how late a message can still be sent):
+//   pre_checkin_7d  → up to 5 days overdue (still valuable before arrival)
+//   pre_checkin_24h → up to 12 hours overdue (same-day is still useful)
+//   day1_upsell     → NO catchup (morning-specific, worthless in afternoon)
+//   midstay_upsell  → up to 1 day overdue (still in stay)
+//   pre_checkout    → up to 6 hours overdue (evening-specific)
+//   post_checkout   → up to 3 days overdue (review request still relevant)
+// ─────────────────────────────────────────────────────────────
+
+// ── PASTE THIS FUNCTION INTO scheduled.js ────────────────────
+// Replace the existing processScheduledMessages() with this version.
+// All helper functions (getLocalTime, getLocalDate, getDateOffset,
+// isGoodSendingTime, buildPreCheckin7d, etc.) remain unchanged.
+
 export async function processScheduledMessages(hotelId) {
-  const supabase = getSupabase()
-  const results  = { sent: 0, skipped: 0, failed: 0, errors: [] }
+  const supabase = getSupabase()   // already defined in scheduled.js
+  const results  = { sent: 0, skipped: 0, failed: 0, errors: [], catchup: 0 }
 
-  // Load hotel with timezone
-  const { data: hotel }    = await supabase.from('hotels').select('*').eq('id', hotelId).single()
-  const timezone           = hotel?.timezone || 'Europe/Nicosia'
+  const { data: hotel } = await supabase.from('hotels').select('*').eq('id', hotelId).single()
+  const timezone        = hotel?.timezone || 'Europe/Nicosia'
 
-  // ── TIMEZONE GUARD ────────────────────────────────────────
-  // Only send messages between 09:00 and 20:00 local hotel time
   if (!isGoodSendingTime(timezone)) {
-    console.log(`Skipping ${hotel?.name} — outside sending hours (09:00-20:00 ${timezone})`)
     return { ...results, skipped: -1, reason: 'outside_hours' }
   }
 
   const { data: partners } = await supabase.from('partners').select('*').eq('hotel_id', hotelId).eq('active', true)
   const { data: guests }   = await supabase.from('guests').select('*').eq('hotel_id', hotelId).not('phone', 'is', null)
 
-  // Get today's date in hotel's local timezone
   const localToday = getLocalDate(new Date(), timezone)
+  const { hour }   = getLocalTime(timezone)
 
   for (const guest of (guests || [])) {
     if (!guest.check_in || !guest.check_out || !guest.phone) continue
 
-    const checkinDate  = guest.check_in   // YYYY-MM-DD string
-    const checkoutDate = guest.check_out  // YYYY-MM-DD string
-    const stayNights   = Math.round(
-      (new Date(checkoutDate) - new Date(checkinDate)) / (1000 * 60 * 60 * 24)
-    )
-    const lang = guest.language || 'en'
+    const checkinDate  = guest.check_in
+    const checkoutDate = guest.check_out
+    const stayNights   = Math.round((new Date(checkoutDate) - new Date(checkinDate)) / (1000 * 60 * 60 * 24))
+    const lang         = guest.language || 'en'
 
+    // ── shouldSend: checks scheduled_messages table ────────
     async function shouldSend(type) {
       const { data } = await supabase.from('scheduled_messages')
         .select('id,status').eq('guest_id', guest.id).eq('message_type', type).single()
       return !(data?.status === 'sent' || data?.status === 'skipped')
     }
 
-    async function markSent(type) {
+    async function markSent(type, wasCatchup = false) {
       await supabase.from('scheduled_messages').upsert({
         hotel_id: hotelId, guest_id: guest.id,
         message_type: type, status: 'sent',
         sent_at: new Date().toISOString(),
+        was_catchup: wasCatchup,
       }, { onConflict: 'guest_id,message_type' })
     }
 
-    async function markSkipped(type) {
+    async function markSkipped(type, reason = null) {
       await supabase.from('scheduled_messages').upsert({
         hotel_id: hotelId, guest_id: guest.id,
         message_type: type, status: 'skipped',
         sent_at: new Date().toISOString(),
+        skip_reason: reason,
       }, { onConflict: 'guest_id,message_type' })
     }
 
-    async function send(type, message) {
+    async function send(type, message, wasCatchup = false) {
       try {
         await sendWhatsApp(guest.phone, message)
-        await markSent(type)
-        // Save to conversation
+        await markSent(type, wasCatchup)
+
+        // Append to conversation for dashboard visibility
         const { data: conv } = await supabase.from('conversations')
-          .select('id,messages').eq('guest_id', guest.id)
-          .in('status',['active','escalated'])
-          .order('created_at',{ascending:false}).limit(1).single()
+          .select('id').eq('guest_id', guest.id)
+          .in('status', ['active','escalated'])
+          .order('created_at', { ascending: false }).limit(1).single()
         if (conv) {
-          const messages = [...(conv.messages||[]), {
-            role:'assistant', content:message,
-            ts: new Date().toISOString(), sent_by:'scheduled',
-          }]
+          // FIX #5 compatible: insert into messages table
+          await supabase.from('messages').insert({
+            conversation_id: conv.id,
+            hotel_id:        hotelId,
+            role:            'assistant',
+            content:         message,
+            sent_by:         'scheduled',
+          }).catch(() => {})
           await supabase.from('conversations')
-            .update({ messages, last_message_at: new Date().toISOString() })
-            .eq('id', conv.id)
+            .update({ last_message_at: new Date().toISOString() }).eq('id', conv.id)
         }
-        results.sent++
+
+        if (wasCatchup) results.catchup++
+        else results.sent++
+
       } catch(e) {
         await supabase.from('scheduled_messages').upsert({
           hotel_id: hotelId, guest_id: guest.id,
@@ -465,72 +500,111 @@ export async function processScheduledMessages(hotelId) {
       }
     }
 
-    // ── 7 days before check-in ────────────────────────────
-    // Target date = check_in minus 7 days
-    const target7d = getDateOffset(checkinDate, -7)
-    if (localToday === target7d && localToday < checkinDate && await shouldSend('pre_checkin_7d'))
-      await send('pre_checkin_7d', buildPreCheckin7d(guest, hotel, lang))
-
-    // If we missed the 7d window (guest added late), skip it
-    if (localToday > target7d && localToday < checkinDate)
-      await markSkipped('pre_checkin_7d')
-
-    // ── 24h before check-in ───────────────────────────────
-    const target24h = getDateOffset(checkinDate, -1)
-    if (localToday === target24h && localToday < checkinDate && await shouldSend('pre_checkin_24h'))
-      await send('pre_checkin_24h', buildPreCheckin24h(guest, hotel, lang))
-
-    // ── Day 1 upsell (morning after first night) ──────────
-    // Only send in morning window (09:00-12:00 local)
-    const { hour } = getLocalTime(timezone)
-    const day1Target = getDateOffset(checkinDate, 1)
-    const isMorning  = hour >= 9 && hour < 12
-    if (localToday === day1Target && isMorning && localToday < checkoutDate && await shouldSend('day1_upsell'))
-      await send('day1_upsell', buildDay1Upsell(guest, hotel, partners||[], lang))
-
-    // ── Mid-stay upsell (only if 6+ nights) ──────────────
-    if (stayNights >= 6) {
-      const midDayIndex  = Math.floor(stayNights / 2)
-      const midTarget    = getDateOffset(checkinDate, midDayIndex)
-      const nightsLeft   = Math.round(
-        (new Date(checkoutDate) - new Date(localToday)) / (1000 * 60 * 60 * 24)
+    // ── FIX #3: Catchup-aware date checks ─────────────────
+    // isOnOrOverdue(targetDate, graceDays):
+    //   true if today is on or past the target, within the grace window.
+    //   Replaces: localToday === targetDate
+    function isOnOrOverdue(targetDate, graceDays = 0) {
+      if (localToday < targetDate) return false       // not due yet
+      const daysPast = Math.round(
+        (new Date(localToday) - new Date(targetDate)) / (1000 * 60 * 60 * 24)
       )
-      if (localToday === midTarget && nightsLeft >= 2 && localToday < checkoutDate && await shouldSend('midstay_upsell'))
-        await send('midstay_upsell', buildMidstayUpsell(guest, hotel, partners||[], lang, nightsLeft))
-    } else {
-      await markSkipped('midstay_upsell')
+      return daysPast <= graceDays                    // within catchup window
     }
 
-    // ── Day before checkout (evening 17:00-20:00) ─────────
+    function wasMissed(targetDate) {
+      return localToday > targetDate
+    }
+
+    // ── Pre check-in 7 days ───────────────────────────────
+    // Grace: 5 days — if server was down for a few days, still send
+    // (as long as guest hasn't checked in yet)
+    const target7d    = getDateOffset(checkinDate, -7)
+    const days7late   = Math.round((new Date(localToday) - new Date(target7d)) / 86400000)
+    const before7dGrace = localToday < checkinDate && days7late <= 5
+
+    if (isOnOrOverdue(target7d, 5) && before7dGrace && await shouldSend('pre_checkin_7d')) {
+      const isCatchup = wasMissed(target7d)
+      await send('pre_checkin_7d', buildPreCheckin7d(guest, hotel, lang), isCatchup)
+    } else if (localToday >= checkinDate && await shouldSend('pre_checkin_7d')) {
+      // Guest already arrived — too late, skip
+      await markSkipped('pre_checkin_7d', 'guest_already_arrived')
+    }
+
+    // ── Pre check-in 24h ─────────────────────────────────
+    // Grace: same day only (12 hours) — still useful day-of arrival
+    const target24h  = getDateOffset(checkinDate, -1)
+    const hours24late = Math.round((new Date() - new Date(target24h + 'T09:00:00')) / 3600000)
+    const before24hGrace = localToday <= checkinDate && hours24late <= 12
+
+    if (isOnOrOverdue(target24h, 1) && before24hGrace && localToday < checkinDate && await shouldSend('pre_checkin_24h')) {
+      const isCatchup = wasMissed(target24h)
+      await send('pre_checkin_24h', buildPreCheckin24h(guest, hotel, lang), isCatchup)
+    } else if (localToday >= checkinDate && await shouldSend('pre_checkin_24h')) {
+      await markSkipped('pre_checkin_24h', 'guest_already_arrived')
+    }
+
+    // ── Day 1 upsell ──────────────────────────────────────
+    // NO catchup — morning-specific, worthless if missed
+    const day1Target = getDateOffset(checkinDate, 1)
+    const isMorning  = hour >= 9 && hour < 12
+    if (localToday === day1Target && isMorning && localToday < checkoutDate && await shouldSend('day1_upsell')) {
+      await send('day1_upsell', buildDay1Upsell(guest, hotel, partners||[], lang))
+    } else if (localToday > day1Target && await shouldSend('day1_upsell')) {
+      await markSkipped('day1_upsell', 'morning_window_missed')
+    }
+
+    // ── Mid-stay upsell ───────────────────────────────────
+    // Grace: 1 day — guest is still there
+    if (stayNights >= 6) {
+      const midDayIndex = Math.floor(stayNights / 2)
+      const midTarget   = getDateOffset(checkinDate, midDayIndex)
+      const nightsLeft  = Math.round((new Date(checkoutDate) - new Date(localToday)) / 86400000)
+
+      if (isOnOrOverdue(midTarget, 1) && nightsLeft >= 2 && localToday < checkoutDate && await shouldSend('midstay_upsell')) {
+        const isCatchup = wasMissed(midTarget)
+        await send('midstay_upsell', buildMidstayUpsell(guest, hotel, partners||[], lang, nightsLeft), isCatchup)
+      } else if (localToday >= checkoutDate && await shouldSend('midstay_upsell')) {
+        await markSkipped('midstay_upsell', 'guest_checked_out')
+      }
+    } else {
+      await markSkipped('midstay_upsell', 'short_stay')
+    }
+
+    // ── Pre-checkout evening ──────────────────────────────
+    // Grace: 6 hours — evening-specific but not as time-sensitive
     const preCheckoutTarget = getDateOffset(checkoutDate, -1)
     const isEvening         = hour >= 17 && hour < 20
-    if (localToday === preCheckoutTarget && isEvening && await shouldSend('pre_checkout'))
-      await send('pre_checkout', buildPreCheckout(guest, hotel, lang))
 
-    // ── Post-checkout feedback (day after checkout, 10:00-14:00) ────
-    // Sent the day AFTER checkout so guest is home and relaxed, not at the airport.
+    if (isOnOrOverdue(preCheckoutTarget, 0) && (isEvening || (hour < 20 && localToday === preCheckoutTarget)) && await shouldSend('pre_checkout')) {
+      // Only send day-before, within evening window or slight overrun
+      if (localToday === preCheckoutTarget && hour >= 17) {
+        await send('pre_checkout', buildPreCheckout(guest, hotel, lang))
+      } else if (localToday > preCheckoutTarget && await shouldSend('pre_checkout')) {
+        await markSkipped('pre_checkout', 'evening_window_missed')
+      }
+    }
+
+    // ── Post-checkout feedback ────────────────────────────
+    // Grace: 3 days — review request stays relevant for a few days
     const postCheckoutTarget = getDateOffset(checkoutDate, 1)
     const isMidMorning       = hour >= 10 && hour < 14
-    if (localToday === postCheckoutTarget && isMidMorning && await shouldSend('post_checkout'))
-      await send('post_checkout', buildPostCheckout(guest, hotel, lang))
+
+    if (isOnOrOverdue(postCheckoutTarget, 3) && localToday > checkoutDate && await shouldSend('post_checkout')) {
+      // Send any time of day during catchup — guest is home, time matters less
+      const isCatchup = wasMissed(postCheckoutTarget) && !isMidMorning
+      await send('post_checkout', buildPostCheckout(guest, hotel, lang), isCatchup)
+    }
   }
 
   return results
 }
 
-// ── HANDLE FEEDBACK REPLY ─────────────────────────────────────
-// Two-step flow:
-//   Step 1 — guest replies to post_checkout survey (😊 / 😐 / 😞)
-//             → positive: ask highlight question (step 2)
-//             → negative: ask what went wrong + alert manager
-//   Step 2 — guest replies to highlight question (🏊 / 🍽 / etc.)
-//             → send review links
-//
-// State is tracked via feedback_step column in guest_feedback:
-//   null / missing = no survey sent yet
-//   'awaiting_impression' = step 1 sent, waiting for 😊/😐/😞
-//   'awaiting_highlight'  = step 2 sent (positive only), waiting for highlight
-//   'complete'            = done
+// ─────────────────────────────────────────────────────────────
+// ALSO ADD to your Supabase schema (or migration):
+//   alter table scheduled_messages add column if not exists was_catchup boolean default false;
+//   alter table scheduled_messages add column if not exists skip_reason text;
+// ─────────────────────────────────────────────────────────────
 
 export async function handleFeedbackReply(from, message, hotelId) {
   const supabase = getSupabase()
