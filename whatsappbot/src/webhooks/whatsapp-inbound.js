@@ -33,49 +33,83 @@ function extractAllFlightNumbers(text) {
 
 async function safeGetFlight(flightCode) {
   const key = process.env.RAPIDAPI_KEY
-  if (!key) return null
-  try {
-    const today = new Date().toISOString().split('T')[0]
-    const dates = [today,
-      new Date(Date.now() - 86400000).toISOString().split('T')[0],
-      new Date(Date.now() + 86400000).toISOString().split('T')[0]
-    ]
-    for (const date of dates) {
-      try {
-        const res = await fetch(
-          `https://aerodatabox.p.rapidapi.com/flights/number/${encodeURIComponent(flightCode)}/${date}`,
-          { headers: { 'X-RapidAPI-Key': key, 'X-RapidAPI-Host': 'aerodatabox.p.rapidapi.com' },
-            signal: AbortSignal.timeout(3000) }
+  if (!key) { console.warn('RAPIDAPI_KEY not set'); return null }
+  const today = new Date().toISOString().split('T')[0]
+  const dates = [
+    today,
+    new Date(Date.now() - 86400000).toISOString().split('T')[0],
+    new Date(Date.now() + 86400000).toISOString().split('T')[0],
+  ]
+  for (const date of dates) {
+    try {
+      const res = await fetch(
+        `https://aerodatabox.p.rapidapi.com/flights/number/${encodeURIComponent(flightCode)}/${date}`,
+        { headers: { 'X-RapidAPI-Key': key, 'X-RapidAPI-Host': 'aerodatabox.p.rapidapi.com' },
+          signal: AbortSignal.timeout(4000) }
+      )
+      if (!res.ok) { console.log(`AeroDataBox ${flightCode} ${date}: ${res.status}`); continue }
+      const data = await res.json()
+      const f    = Array.isArray(data) ? data[0] : data
+      if (!f) continue
+
+      const dep = f.departure || {}
+      const arr = f.arrival   || {}
+
+      // Use local time for display (more useful for guests)
+      // predictedTime is most accurate when available, then revisedTime, then scheduledTime
+      const arrLocal = arr.predictedTime?.local || arr.revisedTime?.local || arr.scheduledTime?.local
+      const depLocal = dep.revisedTime?.local   || dep.scheduledTime?.local
+      const arrUtc   = arr.predictedTime?.utc   || arr.revisedTime?.utc   || arr.scheduledTime?.utc
+      const depUtc   = dep.revisedTime?.utc     || dep.scheduledTime?.utc
+
+      // Calculate delay in minutes
+      let arrDelay = 0
+      if (arr.scheduledTime?.utc && arr.revisedTime?.utc) {
+        arrDelay = Math.round(
+          (new Date(arr.revisedTime.utc) - new Date(arr.scheduledTime.utc)) / 60000
         )
-        if (!res.ok) continue
-        const data = await res.json()
-        const f    = Array.isArray(data) ? data[0] : data
-        if (!f) continue
-        const dep  = f.departure || {}
-        const arr  = f.arrival   || {}
-        const arrTime = arr.revisedTime?.utc || arr.scheduledTime?.utc
-        const depTime = dep.revisedTime?.utc || dep.scheduledTime?.utc
-        console.log(`Flight ${flightCode} ${date}: arr=${arrTime} dep=${depTime}`)
-        return {
-          iata: flightCode, status: f.status || 'scheduled',
-          airline: f.airline?.name || f.airline?.iata,
-          origin: dep.airport?.name, originIata: dep.airport?.iata,
-          destination: arr.airport?.name, destinationIata: arr.airport?.iata,
-          scheduledArrive: arr.scheduledTime?.utc,
-          estimatedArrive: arrTime,
-          scheduledDepart: dep.scheduledTime?.utc,
-          estimatedDepart: depTime,
-          arriveDelay: arr.delay || 0,
-          departDelay: dep.delay || 0,
-          arriveTerminal: arr.terminal, gate: arr.gate,
-        }
-      } catch { continue }
+      }
+
+      // Format local time as HH:MM
+      const fmtLocal = (localStr) => {
+        if (!localStr) return null
+        const m = localStr.match(/(\d{2}:\d{2})/)
+        return m ? m[1] : null
+      }
+
+      const result = {
+        iata:            f.number?.replace(' ','') || flightCode,
+        status:          f.status || 'Expected',
+        airline:         f.airline?.name,
+        origin:          dep.airport?.name,
+        originIata:      dep.airport?.iata,
+        destination:     arr.airport?.name,
+        destinationIata: arr.airport?.iata,
+        // Local times (what guests care about)
+        arrivalTimeLocal:   fmtLocal(arrLocal),
+        departureTimeLocal: fmtLocal(depLocal),
+        // UTC for calculations
+        scheduledArrive: arr.scheduledTime?.utc,
+        estimatedArrive: arrUtc,
+        scheduledDepart: dep.scheduledTime?.utc,
+        estimatedDepart: depUtc,
+        arriveDelay:     arrDelay,
+        departDelay:     0,
+        arriveTerminal:  arr.terminal,
+        departTerminal:  dep.terminal,
+        gate:            arr.gate || dep.gate,
+        aircraft:        f.aircraft?.model,
+      }
+
+      console.log(`Flight ${flightCode}: ${result.status}, arr=${result.arrivalTimeLocal}, dep=${result.departureTimeLocal}, delay=${result.arriveDelay}min`)
+      return result
+
+    } catch (e) {
+      console.warn(`safeGetFlight ${flightCode} ${date}:`, e.message)
+      continue
     }
-    return null
-  } catch (e) {
-    console.warn('safeGetFlight error:', e.message)
-    return null
   }
+  return null
 }
 
 export async function handleInboundWhatsApp(rawBody) {
