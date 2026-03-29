@@ -1,14 +1,60 @@
+// app/api/webhook/route.js
+// ─────────────────────────────────────────────────────────────
+// FIX #1: Twilio webhook signature validation
+//
+// Every message Twilio sends is signed with HMAC-SHA1 using your
+// auth token. We now validate that signature before doing anything.
+// An invalid or missing signature returns 403 immediately.
+//
+// Required env var (add to .env.local and Vercel):
+//   WEBHOOK_FULL_URL=https://yourapp.vercel.app/api/webhook
+// ─────────────────────────────────────────────────────────────
+
+import twilio from 'twilio'
+
 export async function POST(request) {
   const text = await request.text()
-  const body = Object.fromEntries(new URLSearchParams(text))
-  
+
+  // ── FIX #1: Validate Twilio signature ────────────────────
+  const twilioSignature = request.headers.get('x-twilio-signature')
+
+  if (!twilioSignature) {
+    console.warn('[webhook] Rejected — no x-twilio-signature header')
+    return new Response('Forbidden', { status: 403 })
+  }
+
+  const webhookUrl = process.env.WEBHOOK_FULL_URL
+  if (!webhookUrl) {
+    // Fail loudly in dev so you notice immediately
+    console.error('[webhook] WEBHOOK_FULL_URL env var is not set!')
+    return new Response('Server misconfiguration', { status: 500 })
+  }
+
+  // Signature is computed over the sorted key=value pairs
+  // so we must parse BEFORE validating — order matters here
+  const params  = new URLSearchParams(text)
+  const rawBody = Object.fromEntries(params)
+
+  const isValid = twilio.validateRequest(
+    process.env.TWILIO_AUTH_TOKEN,
+    twilioSignature,
+    webhookUrl,
+    rawBody
+  )
+
+  if (!isValid) {
+    console.warn(`[webhook] Invalid Twilio signature — From: ${rawBody.From || 'unknown'}`)
+    return new Response('Forbidden', { status: 403 })
+  }
+  // ─────────────────────────────────────────────────────────
+
   console.log('=== WEBHOOK HIT ===')
-  console.log('From:', body.From)
-  console.log('To:', body.To)
-  console.log('Body:', body.Body)
+  console.log('From:', rawBody.From)
+  console.log('To:',   rawBody.To)
+  console.log('Body:', rawBody.Body)
 
   try {
-    const from = body.From?.replace('whatsapp:', '')
+    const from = rawBody.From?.replace('whatsapp:', '')
 
     console.log('Step 1: importing modules...')
     const { handleInboundWhatsApp } = await import('../../../src/webhooks/whatsapp-inbound.js')
@@ -22,9 +68,9 @@ export async function POST(request) {
     console.log('Step 5: isPartner =', isPartner)
 
     if (isPartner) {
-      await handlePartnerReply(body)
+      await handlePartnerReply(rawBody)
     } else {
-      await handleInboundWhatsApp(body)
+      await handleInboundWhatsApp(rawBody)
     }
     console.log('Step 6: handler completed successfully')
 
