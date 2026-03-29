@@ -162,7 +162,6 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
   const [departments, setDepartments]     = useState([])
   const [partners,    setPartners]        = useState([])
   const [facilities,  setFacilities]      = useState([])
-  const [requestType, setRequestType]     = useState('external')
   const chatEndRef = useRef(null)
 
   useEffect(() => {
