@@ -7,6 +7,7 @@
 
 'use client'
 import { useState, useEffect, useRef } from 'react'
+import CancellationAlerts from './CancellationAlerts'
 
 const LANG_COLORS = {
   en:{bg:'#DCFCE7',color:'#14532D',name:'English'},
@@ -649,6 +650,9 @@ function IssuesPanel({ tickets, bookings, conversations = [], onOpenThread, sess
 
   return (
     <div style={{ flex:1, overflowY:'auto', background:'#F9FAFB' }}>
+
+      {/* Cancellation alerts */}
+      <CancellationAlerts hotelId={hotelId} session={session} isMobile={true} />
 
       {/* Escalated conversations */}
       <SectionHeader title="Conversations needing reply" badge={escalatedChats.length} badgeBg="#FEE2E2" badgeColor="#DC2626" />

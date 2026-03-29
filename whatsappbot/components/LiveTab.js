@@ -10,6 +10,7 @@
 'use client'
 import React, { useState, useEffect, useRef } from 'react'
 import DepartmentQueue from './DepartmentQueue'
+import CancellationAlerts from './CancellationAlerts'
 
 const LANG_COLORS = {
   en: { bg:'#DCFCE7', color:'#14532D',  name:'English'    },
@@ -531,6 +532,9 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
       {/* ── RIGHT: Issues · Upcoming · Completed ── */}
       <div style={{ borderLeft:'0.5px solid var(--border)', display:'flex', flexDirection:'column', background:'white', overflow:'hidden' }}>
         <div className="scrollable">
+
+          {/* Cancellation alerts */}
+          <CancellationAlerts hotelId={hotelId} session={session} isMobile={false} />
 
           {/* Escalated conversations */}
           <div style={{ borderBottom:'0.5px solid var(--border)' }}>
