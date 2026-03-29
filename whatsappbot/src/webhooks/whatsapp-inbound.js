@@ -291,21 +291,15 @@ export async function handleInboundWhatsApp(rawBody) {
   }
 
   // Cancellation instructions for Claude
-  systemPrompt += \`
-
-CANCELLATION HANDLING:
-When a guest wants to cancel something, use these tags:
-
-For facility bookings (tennis, spa, conference room, pool):
-[CANCEL_FACILITY]{"type":"tennis","time":"15:00"}
-
-For partner bookings (taxi, restaurant, activity):
-[CANCEL_BOOKING]{"type":"taxi","reason":"plans changed"}
-
-For room/stay cancellations — NEVER cancel, always escalate:
-[CANCEL_ROOM]
-
-Place the tag at the END of your response. Only use ONE cancellation tag per response.\`
+  systemPrompt += '\n\nCANCELLATION HANDLING:\n' +
+    'When a guest wants to cancel something, use these tags:\n\n' +
+    'For facility bookings (tennis, spa, conference room, pool):\n' +
+    '[CANCEL_FACILITY]{\"type\":\"tennis\",\"time\":\"15:00\"}\n\n' +
+    'For partner bookings (taxi, restaurant, activity):\n' +
+    '[CANCEL_BOOKING]{\"type\":\"taxi\",\"reason\":\"plans changed\"}\n\n' +
+    'For room/stay cancellations — NEVER cancel, always escalate:\n' +
+    '[CANCEL_ROOM]\n\n' +
+    'Place the tag at the END of your response. Only use ONE cancellation tag per response.'
 
   // 9. Save user message + notification
   await appendMessage(conv.id, 'user', message)
