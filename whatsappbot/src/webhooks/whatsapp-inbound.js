@@ -34,6 +34,7 @@ import { notifyReceptionEscalation } from '../lib/push.js'
 import { getAvailableProducts, formatProductsForPrompt, parseProductOrder, createGuestOrder } from '../lib/stripe.js'
 import { checkInbound, RESTRICTED_PROMPT } from '../lib/abuse.js'
 import log, { hotelCtx, guestCtx, bookingCtx } from '../../lib/logger.js'
+import { queuePartnerAlert, markRetrySucceeded } from '../lib/partner-retries.js'
 
 // ── SAFE FLIGHT HELPERS ────────────────────────────────────────
 function extractAllFlightNumbers(text) {
@@ -539,12 +540,23 @@ async function _sendToPartner(partner, booking, hotel, guest, source, lowConfide
   }
 
   try {
-    const msg = await sendWhatsApp(partner.phone, formatPartnerAlert(booking, guest, hotel))
+    const alertMsg = formatPartnerAlert(booking, guest, hotel)
+    const msg = await sendWhatsApp(partner.phone, alertMsg)
     await supabase.from('bookings').update({ partner_alert_sid: msg.sid }).eq('id', saved.id)
+    await markRetrySucceeded(saved.id)  // cancel any queued retries for this booking
     log.info('Partner alerted', { partnerId: partner.id, bookingId: saved.id })
   } catch(e) {
-    // IMPROVEMENT 3: Sentry critical — booking saved but partner never notified
-    await log.critical('Partner alert FAILED — booking created but partner not notified', e, {
+    // FIX #1: Queue for retry instead of just logging and giving up
+    // Cron retries: 2min → 10min → 30min. After 3 failures → reception notified.
+    const alertMsg = formatPartnerAlert(booking, guest, hotel)
+    await queuePartnerAlert({
+      hotelId:   hotel.id,
+      bookingId: saved.id,
+      partner,
+      message:   alertMsg,
+      lastError: e.message,
+    })
+    await log.critical('Partner alert FAILED — queued for retry', e, {
       ...hotelCtx(hotel), ...guestCtx(guest),
       partnerId: partner.id, partnerName: partner.name,
       bookingId: saved.id, bookingType: booking.type,
