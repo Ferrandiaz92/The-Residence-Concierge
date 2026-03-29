@@ -48,60 +48,6 @@ export function extractAllFlightNumbers(text) {
   return matches
 }
 
-// ── FETCH FLIGHT STATUS via AeroDataBox (RapidAPI) ───────────
-// Free tier: 500 requests/month, real-time data
-// Docs: rapidapi.com/aedbx-aedbx/api/aerodatabox
-export async function getFlightStatus(flightIata) {
-  const key = process.env.RAPIDAPI_KEY
-  if (!key) {
-    console.warn('RAPIDAPI_KEY not configured')
-    return null
-  }
-
-  try {
-    // AeroDataBox needs today's date for active flights
-    const today = new Date().toISOString().split('T')[0]  // YYYY-MM-DD
-    const url   = `https://aerodatabox.p.rapidapi.com/flights/number/${encodeURIComponent(flightIata)}/${today}`
-
-    const res = await fetch(url, {
-      headers: {
-        'X-RapidAPI-Key':  key,
-        'X-RapidAPI-Host': 'aerodatabox.p.rapidapi.com',
-      },
-      signal: AbortSignal.timeout(4000),
-    })
-
-    console.log(`AeroDataBox ${flightIata} ${today}: status=${res.status}`)
-
-    if (res.status === 404) {
-      console.log(`AeroDataBox: trying yesterday/tomorrow for ${flightIata}`)
-      const results = await Promise.all([
-        fetchAeroDataBox(key, flightIata, getDateOffset(-1)),
-        fetchAeroDataBox(key, flightIata, getDateOffset(1)),
-      ])
-      const found = results.find(r => r !== null)
-      console.log(`AeroDataBox fallback result:`, found ? 'found' : 'not found')
-      return found || null
-    }
-
-    if (!res.ok) {
-      const errText = await res.text().catch(() => '')
-      console.error(`AeroDataBox error: ${res.status} — ${errText.slice(0,200)}`)
-      return null
-    }
-
-    const data = await res.json()
-    console.log(`AeroDataBox raw data:`, JSON.stringify(data).slice(0, 300))
-    const parsed = parseAeroDataBox(flightIata, data)
-    console.log(`AeroDataBox parsed:`, JSON.stringify(parsed).slice(0, 200))
-    return parsed
-
-  } catch (err) {
-    console.error('AeroDataBox fetch failed:', err.message)
-    return null
-  }
-}
-
 function getDateOffset(days) {
   const d = new Date()
   d.setDate(d.getDate() + days)
@@ -164,6 +110,63 @@ function parseAeroDataBox(flightIata, data) {
     gate:            arr.gate,
   }
 }
+
+// ── FETCH FLIGHT STATUS via AeroDataBox (RapidAPI) ───────────
+// Free tier: 500 requests/month, real-time data
+// Docs: rapidapi.com/aedbx-aedbx/api/aerodatabox
+export async function getFlightStatus(flightIata) {
+  const key = process.env.RAPIDAPI_KEY
+  if (!key) {
+    console.warn('RAPIDAPI_KEY not configured')
+    return null
+  }
+
+  try {
+    // AeroDataBox needs today's date for active flights
+    const today = new Date().toISOString().split('T')[0]  // YYYY-MM-DD
+    const url   = `https://aerodatabox.p.rapidapi.com/flights/number/${encodeURIComponent(flightIata)}/${today}`
+
+    const res = await fetch(url, {
+      headers: {
+        'X-RapidAPI-Key':  key,
+        'X-RapidAPI-Host': 'aerodatabox.p.rapidapi.com',
+      },
+      signal: AbortSignal.timeout(4000),
+    })
+
+    console.log(`AeroDataBox ${flightIata} ${today}: status=${res.status}`)
+
+    if (res.status === 404) {
+      console.log(`AeroDataBox: trying yesterday/tomorrow for ${flightIata}`)
+      const results = await Promise.all([
+        fetchAeroDataBox(key, flightIata, getDateOffset(-1)),
+        fetchAeroDataBox(key, flightIata, getDateOffset(1)),
+      ])
+      const found = results.find(r => r !== null)
+      console.log(`AeroDataBox fallback result:`, found ? 'found' : 'not found')
+      return found || null
+    }
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '')
+      console.error(`AeroDataBox error: ${res.status} — ${errText.slice(0,200)}`)
+      return null
+    }
+
+    const data = await res.json()
+    console.log(`AeroDataBox raw data:`, JSON.stringify(data).slice(0, 300))
+    const parsed = parseAeroDataBox(flightIata, data)
+    console.log(`AeroDataBox parsed:`, JSON.stringify(parsed).slice(0, 200))
+    return parsed
+
+  } catch (err) {
+    console.error('AeroDataBox fetch failed:', err.message)
+    return null
+  }
+}
+
+
+
 
 // ── CALCULATE CORRECT TAXI TIME ───────────────────────────────
 // Given a flight and direction (arrival/departure), returns
