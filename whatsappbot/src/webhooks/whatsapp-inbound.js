@@ -141,24 +141,52 @@ export async function handleInboundWhatsApp(rawBody) {
   // action === 'restrict' — continue but add restriction to system prompt later
   const isRestricted = abuseCheck.action === 'restrict'
 
-  // 4. Language detection — only switch after 2+ consecutive messages in new language
-  const lang = detectLanguage(message)
-  if (lang !== guest.language) {
-    // Check last message — only switch after 2 consecutive in new language
-    // Load last conversation message to check previous language
-    const { data: lastConvRow } = await supabase
-      .from('conversations')
-      .select('messages')
-      .eq('guest_id', guest.id)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single()
-    const lastMsgs     = lastConvRow?.messages || []
-    const lastGuestMsg = [...lastMsgs].reverse().find(m => m.role === 'user')
-    const lastLang     = lastGuestMsg ? detectLanguage(lastGuestMsg.content || '') : guest.language
-    if (lastLang === lang) {
-      await updateGuest(guest.id, { language: lang })
-      guest.language = lang
+  // 4. Language detection — smart switching rules
+  const detectedLang = detectLanguage(message)
+
+  if (detectedLang !== guest.language) {
+    const NON_LATIN = ['ru','he','ar','zh','el','uk']
+    const isNonLatin = NON_LATIN.includes(detectedLang)
+    const hasEstablishedLang = guest.language && guest.language !== 'en'
+
+    if (isNonLatin) {
+      // Non-Latin script — switch immediately, unambiguous
+      await updateGuest(guest.id, { language: detectedLang })
+      guest.language = detectedLang
+
+    } else if (!guest.language || guest.language === 'en') {
+      // Guest has no established language yet (default English)
+      // Only switch if detected with high confidence (score ≥ 2 already ensured by detectLanguage)
+      // AND it's not the very first message from a brand new guest replying to sandbox join
+      const msgWordCount = message.trim().split(/\s+/).length
+      if (msgWordCount >= 3) {
+        await updateGuest(guest.id, { language: detectedLang })
+        guest.language = detectedLang
+      }
+      // Short messages (< 3 words) like "Hola" or "ok" — don't switch yet
+
+    } else {
+      // Guest has an established non-English language
+      // Only switch if last 2 guest messages are ALSO in the new language
+      // (prevents accidental switch when quoting English words)
+      try {
+        const { data: lastConvRow } = await supabase
+          .from('conversations')
+          .select('messages')
+          .eq('guest_id', guest.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single()
+        const lastMsgs = (lastConvRow?.messages || [])
+          .filter(m => m.role === 'user')
+          .slice(-2)
+        const allNewLang = lastMsgs.length >= 2 &&
+          lastMsgs.every(m => detectLanguage(m.content || '') === detectedLang)
+        if (allNewLang) {
+          await updateGuest(guest.id, { language: detectedLang })
+          guest.language = detectedLang
+        }
+      } catch {}
     }
   }
 
