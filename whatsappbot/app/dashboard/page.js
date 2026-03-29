@@ -32,6 +32,7 @@ function getDesktopTabs(role) {
     { key:'analytics', label:'Analytics',       roles:['manager','admin'] },
     { key:'scheduled', label:'Messaging',       roles:['manager','admin'] },
     { key:'settings',  label:'Concierge Setup', roles:['manager','admin'] },
+    { key:'facilities', label:'Facilities', icon:'🎾', roles:['manager','receptionist','supervisor','concierge','communications'] },
     { key:'live',      label:'Conversations',   roles:['supervisor'] },
     { key:'settings',  label:'Concierge Setup', roles:['supervisor'] },
     { key:'scheduled', label:'Messaging',       roles:['communications'] },
@@ -53,14 +54,16 @@ function getMobileTabs(role) {
     { key:'settings',  label:'Setup',     icon:IconSettings },
   ]
   if (isManager(role)) return [
-    { key:'live',     label:'Live',   icon:IconLive     },
-    { key:'guests',   label:'Guests', icon:IconGuests   },
-    { key:'settings', label:'Setup',  icon:IconSettings },
+    { key:'live',       label:'Live',        icon:IconLive       },
+    { key:'guests',     label:'Guests',      icon:IconGuests     },
+    { key:'facilities', label:'Facilities',  icon:IconFacilities },
+    { key:'settings',   label:'Setup',       icon:IconSettings   },
   ]
-  // Reception: Live + Guests only (no Visitors)
+  // Reception: Live + Guests + Facilities
   if (isReception(role)) return [
-    { key:'live',   label:'Live',   icon:IconLive   },
-    { key:'guests', label:'Guests', icon:IconGuests },
+    { key:'live',       label:'Live',       icon:IconLive       },
+    { key:'guests',     label:'Guests',     icon:IconGuests     },
+    { key:'facilities', label:'Facilities', icon:IconFacilities },
   ]
   return [] // dept: no bottom nav
 }
@@ -85,6 +88,9 @@ function IconVisitors({ size=22, color='currentColor' }) {
 function IconSettings({ size=22, color='currentColor' }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke={color} strokeWidth="1.5"/><path d="M12 2v2M12 20v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M2 12h2M20 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" stroke={color} strokeWidth="1.5" strokeLinecap="round"/></svg>
 }
+function IconFacilities({ size=22, color='currentColor' }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none"><path d="M3 17l4-8 4 4 4-6 4 6" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><rect x="2" y="19" width="20" height="2" rx="1" fill={color} opacity="0.3"/></svg>
+}
 function IconLogout({ size=18, color='currentColor' }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" stroke={color} strokeWidth="2" strokeLinecap="round"/><path d="M16 17l5-5-5-5M21 12H9" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
 }
@@ -105,7 +111,8 @@ function TabContent({ tab, hotelId, session, selectedGuest, onSelectGuest, isMob
     case 'visitors':  return <VisitorsTab  hotelId={hotelId} />
     case 'analytics': return <AnalyticsTab hotelId={hotelId} />
     case 'scheduled': return <ScheduledTab hotelId={hotelId} />
-    case 'settings':  return <SettingsTab  hotelId={hotelId} session={session} isMobile={isMobile} />
+    case 'settings':  return <SettingsTab    hotelId={hotelId} session={session} isMobile={isMobile} />
+    case 'facilities': return <FacilitiesTab  hotelId={hotelId} session={session} isMobile={isMobile} />
     default:          return null
   }
 }
@@ -152,7 +159,7 @@ function DesktopDashboard({ session, tabs, activeTab, setActiveTab, searchQuery,
                     <div style={{ flex:1 }}>
                       <div style={{ fontSize:'14px', fontWeight:'600', color:'#111827' }}>{guest.name} {guest.surname}</div>
                       <div style={{ fontSize:'12px', color:'#6B7280', marginTop:'1px' }}>
-                        {guest.guest_type === 'day_visitor' ? '🌟 Day visitor' : `Room ${guest.room}`} · {guest.phone}
+                        {guest.guest_type === 'day_visitor' ? '🌟 Day visitor' : guest.stay_status === 'prospect' || !guest.room ? '🔍 Prospect' : `Room ${guest.room}`} · {guest.phone}
                       </div>
                     </div>
                     <div style={{ fontSize:'11px', fontWeight:'700', padding:'3px 8px', borderRadius:'5px', background:lc.bg, color:lc.color }}>
@@ -298,7 +305,7 @@ function MobileTopbar({ session, badge, handleLogout, tabLabel, showSearch, onSe
               <div style={{ flex:1, minWidth:0 }}>
                 <div style={{ fontSize:'14px', fontWeight:'600', color:'#111827' }}>{guest.name} {guest.surname}</div>
                 <div style={{ fontSize:'12px', color:'#6B7280', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
-                  {guest.guest_type==='day_visitor'?'🌟 Day visitor':`Room ${guest.room}`} · {guest.phone}
+                  {guest.guest_type==='day_visitor'?'🌟 Day visitor':guest.stay_status==='prospect'||!guest.room?'🔍 Prospect':`Room ${guest.room}`} · {guest.phone}
                 </div>
               </div>
             </div>
