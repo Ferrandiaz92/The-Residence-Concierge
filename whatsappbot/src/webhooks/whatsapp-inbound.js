@@ -35,6 +35,13 @@ import { getAvailableProducts, formatProductsForPrompt, parseProductOrder, creat
 import { checkInbound, RESTRICTED_PROMPT } from '../lib/abuse.js'
 import log, { hotelCtx, guestCtx, bookingCtx } from '../../lib/logger.js'
 import { queuePartnerAlert, markRetrySucceeded } from '../lib/partner-retries.js'
+import { parseCancelFacility, parseCancelBooking, parseCancelRoom,
+         cancelFacility, cancelPartnerBooking, escalateRoomCancellation,
+         CANCEL_CONFIRM, trackProspectConversion } from '../lib/cancellations.js'
+import { parseSendImage, processImageRequest, buildImagePromptSection } from '../lib/images.js'
+import { detectProspectInterests, updateProspectStage,
+         buildProspectPromptSection } from '../lib/prospect-nurture.js'
+import { handleFallback } from '../lib/fallback.js'
 
 // ── SAFE FLIGHT HELPERS ────────────────────────────────────────
 function extractAllFlightNumbers(text) {
@@ -270,6 +277,36 @@ export async function handleInboundWhatsApp(rawBody) {
     systemPrompt += '\n\nCONTEXT: Guest is responding to your activity suggestions. If they show interest, book immediately.'
   }
 
+  // Feature #5: Image sending
+  const imagePromptSection = buildImagePromptSection(hotel)
+  if (imagePromptSection) systemPrompt += imagePromptSection
+
+  // Feature #7: Prospect context
+  if (guest.guest_type === 'prospect' || guest.stay_status === 'prospect') {
+    systemPrompt += buildProspectPromptSection(guest, hotel)
+    const interests = detectProspectInterests(message)
+    if (interests.length > 0) {
+      await updateProspectStage(guest.id, 'interested', interests)
+    }
+  }
+
+  // Cancellation instructions for Claude
+  systemPrompt += \`
+
+CANCELLATION HANDLING:
+When a guest wants to cancel something, use these tags:
+
+For facility bookings (tennis, spa, conference room, pool):
+[CANCEL_FACILITY]{"type":"tennis","time":"15:00"}
+
+For partner bookings (taxi, restaurant, activity):
+[CANCEL_BOOKING]{"type":"taxi","reason":"plans changed"}
+
+For room/stay cancellations — NEVER cancel, always escalate:
+[CANCEL_ROOM]
+
+Place the tag at the END of your response. Only use ONE cancellation tag per response.\`
+
   // 9. Save user message + notification
   await appendMessage(conv.id, 'user', message)
   await createNotification(hotel.id, {
@@ -358,16 +395,13 @@ export async function handleInboundWhatsApp(rawBody) {
     log.info('Claude responded', { ...hCtx, ...gCtx, chars: aiResponse.length })
   } catch (err) {
     endClaude()
-    // IMPROVEMENT 3: Claude failures → Sentry critical alert
-    await log.critical('Claude API failed — guest left without response', err, { ...hCtx, ...gCtx })
-    const fb = {
-      en:"I'm having a brief issue. Please try again.",ru:'Временная ошибка.',he:'שגיאה זמנית.',
-      es:'Un momento, por favor.',de:'Kurzer Fehler. Bitte versuchen.',fr:'Un instant. Réessayez.',
-      it:'Un momento. Riprova.',pt:'Um momento. Tente novamente.',zh:'请稍候，请重试。',
-      ar:'خطأ مؤقت.',nl:'Even een fout. Probeer opnieuw.',pl:'Chwilowy błąd.',
-      sv:'Kortvarigt fel.',fi:'Lyhyt virhe.',uk:'Тимчасова помилка.',el:'Σφάλμα.',ca:'Un moment.',
-    }
-    await sendWhatsApp(from, fb[guest.language]||fb.en)
+    await log.critical('Claude API failed — using rule-based fallback', err, { ...hCtx, ...gCtx })
+    // Feature #12: Rule-based fallback instead of dead-end error message
+    const { reply: fallbackReply } = await handleFallback(
+      message, hotel, guest, conv, 'claude_error'
+    )
+    await sendWhatsApp(from, fallbackReply)
+    await appendMessage(conv.id, 'assistant', fallbackReply, { sent_by: 'fallback' })
     return
   }
 
@@ -404,6 +438,58 @@ export async function handleInboundWhatsApp(rawBody) {
     await appendMessage(conv.id, 'assistant', ackMsg)
   }
 
+  // Feature #2: Room cancellation — escalate immediately
+  if (parseCancelRoom(aiResponse)) {
+    await escalateRoomCancellation(hotel, guest, conv.id)
+    const roomMsg = CANCEL_CONFIRM.room[guest.language] || CANCEL_CONFIRM.room.en
+    await sendWhatsApp(from, roomMsg)
+    await appendMessage(conv.id, 'assistant', roomMsg)
+    return
+  }
+
+  // Feature #2: Facility cancellation (Flow A)
+  const { hasCancelFacility, facilityCancel, cleanResponse: afterFacilityCancel } = parseCancelFacility(aiResponse)
+  if (hasCancelFacility && facilityCancel) {
+    const result = await cancelFacility(facilityCancel, hotel, guest, conv.id)
+    const lang   = guest.language || 'en'
+    const reply  = afterFacilityCancel ||
+      (CANCEL_CONFIRM.facility[lang] || CANCEL_CONFIRM.facility.en)(facilityCancel.type)
+    await sendWhatsApp(from, reply)
+    await appendMessage(conv.id, 'assistant', reply)
+    return
+  }
+
+  // Feature #2: Partner booking cancellation (Flow B)
+  const { hasCancelBooking, bookingCancel, cleanResponse: afterBookingCancel } = parseCancelBooking(aiResponse)
+  if (hasCancelBooking && bookingCancel) {
+    const result  = await cancelPartnerBooking(bookingCancel, hotel, guest, conv.id)
+    const lang    = guest.language || 'en'
+    const reply   = afterBookingCancel ||
+      (CANCEL_CONFIRM.partner[lang] || CANCEL_CONFIRM.partner.en)(bookingCancel.type, result.partner?.name)
+    await sendWhatsApp(from, reply)
+    await appendMessage(conv.id, 'assistant', reply)
+    return
+  }
+
+  // Feature #5: Image sending
+  const { hasSendImage, imageRequest, cleanResponse: afterImageTag } = parseSendImage(aiResponse)
+  if (hasSendImage && imageRequest) {
+    const textPart = afterImageTag || ''
+    if (textPart.trim()) {
+      await sendWhatsApp(from, textPart)
+      await appendMessage(conv.id, 'assistant', textPart)
+    }
+    const imageSent = await processImageRequest(
+      imageRequest, hotel, guest, from, conv.id, appendMessage
+    )
+    if (!imageSent && !textPart.trim()) {
+      const fallbackText = `I'll have that information for you shortly! 😊`
+      await sendWhatsApp(from, fallbackText)
+      await appendMessage(conv.id, 'assistant', fallbackText)
+    }
+    return
+  }
+
   // 14. Facility request
   const { hasFacility, facility, cleanResponse: facilityClean } = parseFacilityRequest(aiResponse)
   if (hasFacility && facility) {
@@ -426,6 +512,12 @@ export async function handleInboundWhatsApp(rawBody) {
       .catch(e => log.error('processBooking failed', e, { ...hCtx, ...gCtx }))
     const partner = partners.find(p => p.type === booking.type)
     if (partner || booking.type) await updateGuestPreferences(guest.id, booking.type, partner?.name)
+
+    // Feature #7: Track prospect conversion
+    if (guest.guest_type === 'prospect' || guest.stay_status === 'prospect') {
+      await trackProspectConversion(guest.id, null)
+        .catch(e => log.warn('trackProspectConversion failed', { error: e.message }))
+    }
   }
 
   if (hasOrder && productOrder) {
@@ -540,23 +632,12 @@ async function _sendToPartner(partner, booking, hotel, guest, source, lowConfide
   }
 
   try {
-    const alertMsg = formatPartnerAlert(booking, guest, hotel)
-    const msg = await sendWhatsApp(partner.phone, alertMsg)
+    const msg = await sendWhatsApp(partner.phone, formatPartnerAlert(booking, guest, hotel))
     await supabase.from('bookings').update({ partner_alert_sid: msg.sid }).eq('id', saved.id)
-    await markRetrySucceeded(saved.id)  // cancel any queued retries for this booking
     log.info('Partner alerted', { partnerId: partner.id, bookingId: saved.id })
   } catch(e) {
-    // FIX #1: Queue for retry instead of just logging and giving up
-    // Cron retries: 2min → 10min → 30min. After 3 failures → reception notified.
-    const alertMsg = formatPartnerAlert(booking, guest, hotel)
-    await queuePartnerAlert({
-      hotelId:   hotel.id,
-      bookingId: saved.id,
-      partner,
-      message:   alertMsg,
-      lastError: e.message,
-    })
-    await log.critical('Partner alert FAILED — queued for retry', e, {
+    // IMPROVEMENT 3: Sentry critical — booking saved but partner never notified
+    await log.critical('Partner alert FAILED — booking created but partner not notified', e, {
       ...hotelCtx(hotel), ...guestCtx(guest),
       partnerId: partner.id, partnerName: partner.name,
       bookingId: saved.id, bookingType: booking.type,
