@@ -332,6 +332,47 @@ export async function handleInboundWhatsApp(rawBody) {
     link_id:   conv.id,
   })
 
+  // 11a. Flight status check — MUST be before Claude so it can use the data
+  const allFlights      = extractAllFlightNumbers(message)
+  const mentionedFlight = allFlights[0] || null
+  if (mentionedFlight) {
+    const allResults = await Promise.all(allFlights.slice(0,2).map(fn => safeGetFlight(fn)))
+    const flightData = allResults.find(f => f !== null) || null
+
+    if (flightData) {
+      const arrStr  = flightData.arrivalTimeLocal
+      const depStr  = flightData.departureTimeLocal
+      const delay   = flightData.arriveDelay || 0
+      let taxiStr   = null
+      if (arrStr) {
+        const [h,m] = arrStr.split(':').map(Number)
+        const total = h * 60 + m + 30
+        taxiStr = `${String(Math.floor(total/60)%24).padStart(2,'0')}:${String(total%60).padStart(2,'0')}`
+      }
+
+      systemPrompt +=
+        `\n\n[FLIGHT DATA — REAL TIME — USE THIS NOW]` +
+        `\nFlight: ${flightData.iata} (${flightData.airline || ''})` +
+        `\nRoute: ${flightData.origin || '?'} → ${flightData.destination || '?'}` +
+        `\nStatus: ${flightData.status}` +
+        (arrStr ? `\nArrives: ${arrStr} local time${delay > 15 ? ` — DELAYED ${delay} min` : ' — on time'}` : '') +
+        (depStr ? `\nDeparts: ${depStr} local time` : '') +
+        (taxiStr ? `\nTaxi pickup time: ${taxiStr} (30 min after landing)` : '') +
+        `\n\nCRITICAL: You have the real flight data above. DO NOT say you cannot check flights.` +
+        `\nDO NOT ask for date or time — you already have it.` +
+        `\nTell the guest: "I can see flight ${flightData.iata} ${arrStr ? `arrives at ${arrStr}` : `departs at ${depStr}`}` +
+        `${taxiStr ? ` — I'll arrange your taxi for ${taxiStr}` : ''}."` +
+        `\nThen ask ONLY: passengers count and any special needs (van, child seat, wheelchair etc).`
+
+    } else {
+      // No data found — ask concisely
+      systemPrompt +=
+        `\n\n[FLIGHT LOOKUP] No real-time data found for flight(s) ${allFlights.join(', ')}.` +
+        `\nBe concise: ask only (1) arrival or departure? (2) what time? (3) how many passengers?` +
+        `\nDo NOT say you lack flight access — just ask for the details you need.`
+    }
+  }
+
   // 11. Claude
   let aiResponse
   try { aiResponse = await callClaude(systemPrompt, history, message) }
@@ -359,23 +400,7 @@ export async function handleInboundWhatsApp(rawBody) {
     await sendWhatsApp(from, fb[guest.language]||fb.en); return
   }
 
-  // 11b. Flight status check — parallel, non-blocking, 3s timeout
-  const allFlights      = extractAllFlightNumbers(message)
-  const mentionedFlight = allFlights[0] || null
-  if (mentionedFlight && !autoTicketCreated) {
-    const allResults  = await Promise.all(allFlights.slice(0,2).map(fn => safeGetFlight(fn)))
-    const flightData  = allResults.find(f => f !== null) || null
-    if (flightData) {
-      // statusSummary not needed - data injected into prompt directly
-      systemPrompt += `\n\n[FLIGHT DATA - REAL TIME] Guest mentioned flight ${mentionedFlight}. ` +
-        `Current status: ${flightData.status}. ` +
-        `${flightData.arriveDelay > 0 ? `Arrival delayed ${flightData.arriveDelay} minutes.` : 'On time.'} ` +
-        `Scheduled arrival: ${flightData.scheduledArrive ? new Date(flightData.scheduledArrive).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}) : 'unknown'}. ` +
-        `Estimated arrival: ${flightData.estimatedArrive ? new Date(flightData.estimatedArrive).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}) : 'unknown'}. ` +
-        `If booking a taxi for this flight, use the estimated arrival time + 30 minutes for immigration/baggage. ` +
-        `You can share this flight status with the guest naturally.`
-    }
-  }
+  // (flight check moved before Claude call)
 
   // 12a. Auto-ticket for maintenance/facility issues
   const msgLower = message.toLowerCase()
