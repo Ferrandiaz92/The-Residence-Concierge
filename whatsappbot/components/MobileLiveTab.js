@@ -567,8 +567,8 @@ function StaffPortal({ conversations, selectedConv, onSelectConv, session, hotel
           </>
         )}
 
-        {/* ── Details ── */}
-        <div>
+        {/* ── Details — hidden when facility has its own notes ── */}
+        {reqType !== 'facility' && <div>
           <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151', marginBottom:'8px' }}>Details</div>
           <textarea value={details} onChange={e => setDetails(e.target.value)} rows={3}
             placeholder={reqType==='external' ? 'e.g. Taxi to airport at 6pm, 2 passengers' : 'e.g. AC not working in room'}
@@ -576,15 +576,17 @@ function StaffPortal({ conversations, selectedConv, onSelectConv, session, hotel
           />
         </div>
 
+        </div>}
+
         {/* ── Send button ── */}
         <button onClick={handleSend}
-          disabled={sending || !details.trim() || (!selectedConv && !noGuest)}
+          disabled={sending || (reqType !== 'facility' && !details.trim()) || (!selectedConv && !noGuest)}
           style={{
             width:'100%', padding:'14px',
-            background: sent ? '#16A34A' : (!details.trim() || (!selectedConv && !noGuest)) ? '#E5E7EB' : '#1C3D2E',
+            background: sent ? '#16A34A' : ((reqType !== 'facility' && !details.trim()) || (!selectedConv && !noGuest)) ? '#E5E7EB' : '#1C3D2E',
             border:'none', borderRadius:'12px', fontSize:'15px', fontWeight:'700',
-            color: (!details.trim() || (!selectedConv && !noGuest)) ? '#9CA3AF' : 'white',
-            cursor: (!details.trim() || (!selectedConv && !noGuest)) ? 'not-allowed' : 'pointer',
+            color: ((reqType !== 'facility' && !details.trim()) || (!selectedConv && !noGuest)) ? '#9CA3AF' : 'white',
+            cursor: ((reqType !== 'facility' && !details.trim()) || (!selectedConv && !noGuest)) ? 'not-allowed' : 'pointer',
             fontFamily:"'DM Sans', sans-serif",
           }}>
           {sent ? '✓ Sent!' : sending ? 'Sending…' : reqType==='external' ? 'Send booking request' : reqType==='facility' ? 'Send Booking Confirmation' : 'Create ticket'}

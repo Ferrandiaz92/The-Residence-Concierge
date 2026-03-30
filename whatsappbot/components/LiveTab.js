@@ -114,12 +114,20 @@ function ExpandableBookingDesktop({ b }) {
 function DesktopTicketRow({ t, session, conversations, onSelectConv, onSetCentreMode, onReload }) {
   const [open, setOpen] = React.useState(false)
   const typeConfig = {
-    facility_booking: { label:'Facility',    bg:'#DCFCE7', color:'#14532D', emoji:'🎾' },
-    room_issue:       { label:'Maintenance', bg:'#FEF2F2', color:'#DC2626', emoji:'🔧' },
-    housekeeping:     { label:'Housekeeping',bg:'#F0FDF4', color:'#15803D', emoji:'🛎️' },
-    fnb:              { label:'F&B',         bg:'#FEF3C7', color:'#B45309', emoji:'🍽️' },
+    room_issue:   { label:'Maintenance', bg:'#FEF2F2', color:'#DC2626', emoji:'🔧' },
+    housekeeping: { label:'Housekeeping',bg:'#F0FDF4', color:'#15803D', emoji:'🛎️' },
+    fnb:          { label:'F&B',         bg:'#FEF3C7', color:'#B45309', emoji:'🍽️' },
   }
-  const tc = typeConfig[t.category] || typeConfig[t.department] || { label:'Ticket', bg:'#F1F5F9', color:'#334155', emoji:'📋' }
+  // For facility bookings, pick emoji from facility name
+  const FACILITY_EMOJI = { tennis:'🎾', padel:'🎾', court:'🎾', spa:'💆', gym:'🏋️', pool:'🏊', conference:'💼', yoga:'🧘', massage:'💆', beach:'🏖️', rooftop:'🌅', restaurant:'🍽️', bar:'🍹', golf:'⛳' }
+  function getFacilityEmoji(desc) {
+    const lower = (desc || '').toLowerCase()
+    for (const [key, em] of Object.entries(FACILITY_EMOJI)) { if (lower.includes(key)) return em }
+    return '🏨'
+  }
+  const tc = t.category === 'facility_booking'
+    ? { label:'Facility', bg:'#DCFCE7', color:'#14532D', emoji: getFacilityEmoji(t.description) }
+    : (typeConfig[t.category] || typeConfig[t.department] || { label:'Ticket', bg:'#F1F5F9', color:'#334155', emoji:'📋' })
   const isPrivileged = ['manager','supervisor','receptionist'].includes(session?.role)
 
   return (
@@ -730,14 +738,16 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
               </div>
             )}
 
-            {/* Details */}
-            <div>
-              <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151', marginBottom:'6px' }}>Details</div>
-              <textarea value={requestText} onChange={e=>setRequestText(e.target.value)}
-                placeholder={requestType==='external'?'e.g. Taxi to Larnaca airport at 6pm, 2 passengers':'e.g. AC not working in room, making strange noise'}
-                style={{ width:'100%', height:'56px', padding:'10px 12px', background:'white', border:'0.5px solid #D1D5DB', borderRadius:'10px', fontSize:'12px', color:'#111827', resize:'none', fontFamily:'var(--font)', outline:'none' }}
-              />
-            </div>
+            {/* Details — only for external and internal, not facility (has Notes field above) */}
+            {requestType !== 'facility' && (
+              <div>
+                <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151', marginBottom:'6px' }}>Details</div>
+                <textarea value={requestText} onChange={e=>setRequestText(e.target.value)}
+                  placeholder={requestType==='external'?'e.g. Taxi to Larnaca airport at 6pm, 2 passengers':'e.g. AC not working in room, making strange noise'}
+                  style={{ width:'100%', height:'56px', padding:'10px 12px', background:'white', border:'0.5px solid #D1D5DB', borderRadius:'10px', fontSize:'12px', color:'#111827', resize:'none', fontFamily:'var(--font)', outline:'none' }}
+                />
+              </div>
+            )}
 
             {/* CTA */}
             {/* No guest toggle */}
@@ -750,8 +760,8 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
               </div>
             )}
             <button onClick={handleSendRequest}
-              disabled={sending || !requestText.trim() || (!selectedConv && !noGuest)}
-              style={{ width:'100%', padding:'11px', background: sent?'#16A34A':(!requestText.trim()||(!selectedConv&&!noGuest))?'#E5E7EB':'var(--green-800)', border:'none', borderRadius:'10px', fontSize:'13px', fontWeight:'700', color:(!requestText.trim()||(!selectedConv&&!noGuest))?'#9CA3AF':'white', cursor:(!requestText.trim()||(!selectedConv&&!noGuest))?'not-allowed':'pointer', fontFamily:'var(--font)', transition:'background 0.2s', letterSpacing:'0.2px' }}>
+              disabled={sending || (requestType !== 'facility' && !requestText.trim()) || (!selectedConv && !noGuest)}
+              style={{ width:'100%', padding:'11px', background: sent?'#16A34A':((requestType!=='facility'&&!requestText.trim())||(!selectedConv&&!noGuest))?'#E5E7EB':'var(--green-800)', border:'none', borderRadius:'10px', fontSize:'13px', fontWeight:'700', color:((requestType!=='facility'&&!requestText.trim())||(!selectedConv&&!noGuest))?'#9CA3AF':'white', cursor:((requestType!=='facility'&&!requestText.trim())||(!selectedConv&&!noGuest))?'not-allowed':'pointer', fontFamily:'var(--font)', transition:'background 0.2s', letterSpacing:'0.2px' }}>
               {sent?'✓ Sent':sending?'Sending...':requestType==='external'?'Send request':requestType==='facility'?'Send Booking Confirmation':'Create internal ticket'}
             </button>
           </div>
