@@ -400,7 +400,7 @@ export async function handleInboundWhatsApp(rawBody) {
   }
 
   // 13. Handoff check — added missing language patterns
-  const isHandoff = /\[handoff\]|connect you with our|connect you with reception|te pongo en contacto|je vous mets en contact|verbinde sie mit|vi metto in contatto|передаю вас|מעביר אותך|转接给|σας συνδέω/i.test(aiResponse)
+  const isHandoff = /\[handoff\]|connect you with (?:our )?(?:reception|team|staff|front desk|manager)|te pongo en contacto con (?:recepci[oó]n|el equipo)|je vous mets en contact avec|verbinde sie mit (?:der rezeption|unserem team)|передаю вас (?:на ресепшн|команде)|מעביר אותך ל(?:צוות|קבלה)|转接给(?:前台|我们的团队)|σας συνδέω με/i.test(aiResponse)
 
   if (isHandoff) {
     await supabase.from('conversations').update({ status: 'escalated' }).eq('id', conv.id)
