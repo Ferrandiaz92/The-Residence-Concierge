@@ -148,6 +148,36 @@ export async function POST(request) {
       link_id:   booking.id,
     }).catch(() => {})
 
+    // When created from staff portal — immediately confirm + notify guest
+    const { data: guest } = guestId
+      ? await supabase.from('guests').select('id, name, surname, phone, language, room').eq('id', guestId).single()
+      : { data: null }
+
+    if (guest?.phone) {
+      const lang = guest.language || 'en'
+      const fName = facility?.name || facilityName
+      const CONFIRM_MSGS = {
+        en: `Your ${fName} booking is confirmed ✅\n\n📅 Date: ${date || 'TBC'}\n⏰ Time: ${time || 'TBC'}\n👥 Guests: ${guestsCount || 1}\n\nSee you there! 🎾`,
+        ru: `Ваше бронирование ${fName} подтверждено ✅\n\n📅 ${date || 'TBC'}\n⏰ ${time || 'TBC'}`,
+        he: `ההזמנה שלך ל${fName} אושרה ✅\n\n📅 ${date || 'TBC'}\n⏰ ${time || 'TBC'}`,
+        de: `${fName} Buchung bestätigt ✅\n\n📅 ${date || 'TBC'}\n⏰ ${time || 'TBC'}`,
+        fr: `Réservation ${fName} confirmée ✅\n\n📅 ${date || 'TBC'}\n⏰ ${time || 'TBC'}`,
+        es: `Reserva de ${fName} confirmada ✅\n\n📅 ${date || 'TBC'}\n⏰ ${time || 'TBC'}`,
+      }
+      const msg = CONFIRM_MSGS[lang] || CONFIRM_MSGS.en
+      try {
+        await sendWhatsApp(guest.phone, msg)
+        // Mark booking as confirmed
+        await supabase.from('facility_bookings').update({ status: 'confirmed', guest_notified: true, ack_by: session.name || session.email, ack_at: new Date().toISOString() }).eq('id', booking.id)
+        // Append to conversation so it shows in dashboard chat
+        const { data: conv } = await supabase.from('conversations').select('id').eq('guest_id', guestId).in('status', ['active','escalated']).order('created_at', { ascending: false }).limit(1).single()
+        if (conv) {
+          await supabase.from('messages').insert({ conversation_id: conv.id, hotel_id: hotelId || session.hotelId, role: 'assistant', content: msg, sent_by: 'facility_confirmation' }).catch(() => {})
+          await supabase.from('conversations').update({ last_message_at: new Date().toISOString() }).eq('id', conv.id)
+        }
+      } catch (e) { console.error('Guest confirm notify failed:', e.message) }
+    }
+
     return Response.json({ status: 'created', booking })
   } catch (err) { return Response.json({ error: err.message }, { status: 500 }) }
 }
