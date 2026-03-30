@@ -156,8 +156,10 @@ export async function POST(request) {
     if (guest?.phone) {
       const lang = guest.language || 'en'
       const fName = facility?.name || facilityName
+      const bookRef = booking.id.slice(-6).toUpperCase()
+      const dateDisp = date ? (() => { try { const [y,m,d] = date.split('-'); return d+'/'+m+'/'+y } catch { return date } })() : 'TBC'
       const CONFIRM_MSGS = {
-        en: `Your ${fName} booking is confirmed ✅\n\n📅 Date: ${date || 'TBC'}\n⏰ Time: ${time || 'TBC'}\n👥 Guests: ${guestsCount || 1}\n\nSee you there! 🎾`,
+        en: `Your ${fName} booking is confirmed ✅\n\n📅 Date: ${dateDisp}\n⏰ Time: ${time || 'TBC'}\n👥 Guests: ${guestsCount || 1}\n\nSee you there! 🎾\n\n🔖 Booking ref: ${bookRef}\n(Show this to staff on arrival)`,
         ru: `Ваше бронирование ${fName} подтверждено ✅\n\n📅 ${date || 'TBC'}\n⏰ ${time || 'TBC'}`,
         he: `ההזמנה שלך ל${fName} אושרה ✅\n\n📅 ${date || 'TBC'}\n⏰ ${time || 'TBC'}`,
         de: `${fName} Buchung bestätigt ✅\n\n📅 ${date || 'TBC'}\n⏰ ${time || 'TBC'}`,
@@ -225,7 +227,9 @@ export async function PATCH(request) {
     if (guest?.phone) {
       let msg
       if (action === 'confirmed') {
-        msg = getMsg('confirmed', lang, facName, booking.date || '', booking.time || '')
+        const ref = (bookingId || '').slice(-6).toUpperCase()
+        const dateFormatted = booking.date ? (() => { try { const [y,m,d] = booking.date.split('-'); return d+'/'+m+'/'+y } catch { return booking.date } })() : 'TBC'
+        msg = getMsg('confirmed', lang, facName, dateFormatted, booking.time || '') + '\n\n🔖 Booking ref: ' + ref + '\n(Show this to staff on arrival)'
       } else if (action === 'rejected') {
         msg = getMsg('rejected', lang, facName, booking.date || '', booking.time || '')
       } else if (action === 'alternative') {
@@ -251,6 +255,10 @@ export async function PATCH(request) {
               content:         msg,
               sent_by:         'facility_confirmation',
             }).catch(() => {})
+            // Update last_message_at AND ensure conv is active so it shows in dashboard
+            await supabase.from('conversations')
+              .update({ last_message_at: new Date().toISOString(), status: 'active' })
+              .eq('id', conv.id)
           }
         } catch (e) { console.error('Guest notify failed:', e.message) }
       }
