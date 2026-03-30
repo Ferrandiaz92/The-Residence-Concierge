@@ -120,12 +120,12 @@ function TierEditor({ tiers, onChange }) {
 
 // ── PRODUCT FORM ──────────────────────────────────────────
 function ProductForm({ product, partners, hotelId, onSave, onCancel }) {
-  const isEdit = !!product?.id
+  const isEdit = !!(product?.id && !product?._new)
   const [form, setForm] = useState({
     partnerId:      product?.partner_id      || (partners[0]?.id || ''),
     name:           product?.name            || '',
     description:    product?.description     || '',
-    category:       product?.category        || 'activity',
+    category:       product?.category        || (product?._new ? 'spa_treatment' : 'event'),
     tiers:          product?.tiers?.length   ? product.tiers : [{ name:'', price:'' }],
     commissionRate: product?.commission_rate ?? 15,
     availableFrom:  product?.available_from  || '',
@@ -491,9 +491,13 @@ export default function ProductsManager({ hotelId }) {
             </div>
           </div>
         ) : (
-          <button onClick={() => setEditing('new')}
+          <button onClick={() => {
+              // Start with correct category based on current filter
+              const defaultCat = serviceFilter === 'hotel_service' ? 'spa_treatment' : 'event'
+              setEditing({ _new: true, category: defaultCat })
+            }}
             style={{ width:'100%', padding:'13px', background: products.length===0?'#1C3D2E':'white', border: products.length===0?'none':'1px dashed #D1D5DB', borderRadius:'12px', fontSize:'13px', fontWeight:'600', color: products.length===0?'white':'#374151', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-            + Add product or service
+            {serviceFilter === 'hotel_service' ? '+ Add hotel service' : '+ Add product or service'}
           </button>
         )
       )}

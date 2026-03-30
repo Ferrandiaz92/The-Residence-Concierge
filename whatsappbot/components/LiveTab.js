@@ -148,15 +148,7 @@ function DesktopTicketRow({ t, session, conversations, onSelectConv, onSetCentre
           </div>
           <div style={{ fontSize:'11px', color:'#6B7280', marginTop:'1px' }}>
             {t.category === 'facility_booking'
-              ? (() => {
-                  const dl2 = (t.description || '').split('\n')
-                  const getV = (pfx) => { const l = dl2.find(x => x.indexOf(pfx) === 0); return l ? l.slice(pfx.length).trim() : null }
-                  const gName = t.guests?.name ? (t.guests.name + (t.guests.room ? ' · Room ' + t.guests.room : '')) : ''
-                  const tPart = getV('Time:')
-                  const dPart = getV('Date:')
-                  const parts = [gName, tPart && ('⏰ ' + tPart), dPart && ('📅 ' + dPart)].filter(Boolean)
-                  return parts.join(' · ')
-                })()
+              ? (t.guests?.name ? (t.guests.name + (t.guests.room ? ' · Room ' + t.guests.room : '')) : 'Facility booking')
               : `${t.room ? 'Room ' + t.room + ' · ' : ''}${t.department} · ${t.status}`
             }
           </div>
@@ -167,13 +159,44 @@ function DesktopTicketRow({ t, session, conversations, onSelectConv, onSetCentre
       </div>
       {open && (
         <div style={{ padding:'8px 14px 12px 48px', background:'#F9FAFB', borderTop:'0.5px solid #F3F4F6', display:'flex', flexDirection:'column', gap:'7px' }}>
-          <div style={{ fontSize:'11px', color:'#374151', lineHeight:'1.6' }}>{t.description}</div>
+          {t.category === 'facility_booking' ? (() => {
+            const dl  = (t.description || '').split('\n').map(l => l.trim()).filter(Boolean)
+            const get = (pfx) => { const l = dl.find(x => x.startsWith(pfx)); return l ? l.slice(pfx.length).trim() : null }
+            const facName  = get('Facility:')
+            const date     = get('Date:')
+            const time     = get('Time:')
+            const guests   = get('Guests:')
+            const guestLine = get('Guest:')
+            const [guestName, roomPart] = guestLine ? guestLine.split('·').map(s => s.trim()) : [t.guests?.name, t.guests?.room ? 'Room ' + t.guests.room : null]
+            const guestType = t.guests?.guest_type ? ({ stay:'Stay guest', day_visitor:'Day visitor', member:'Member', prospect:'Prospect', event:'Event guest' }[t.guests.guest_type] || t.guests.guest_type) : null
+            return (
+              <div style={{ fontSize:'12px', color:'#374151', lineHeight:'2', display:'flex', flexDirection:'column' }}>
+                {guestName  && <span style={{ fontWeight:'600' }}>{guestName}</span>}
+                {roomPart   && <span>{roomPart}</span>}
+                {guestType  && <span style={{ fontSize:'11px', color:'#6B7280' }}>{guestType}</span>}
+                {facName    && <span>🎾 {facName}</span>}
+                {time       && <span>⏰ Time: {time}</span>}
+                {date       && <span>📅 Date: {date}</span>}
+                {guests     && <span>👥 Guests: {guests}</span>}
+              </div>
+            )
+          })() : (
+            <div style={{ fontSize:'11px', color:'#374151', lineHeight:'1.6' }}>{t.description}</div>
+          )}
           <div style={{ display:'flex', gap:'6px', flexWrap:'wrap' }}>
             {isPrivileged && t.status === 'pending' && (
               <button onClick={async () => {
-                if (t.category === 'facility_booking' && t.facility_booking_id) {
-                  // Route to facility-bookings API — sends WhatsApp to guest + facility contact
-                  await fetch('/api/facility-bookings', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ bookingId: t.facility_booking_id, action:'confirmed' }) })
+                if (t.category === 'facility_booking') {
+                  // Find the matching facility_booking row by guest_id, then confirm it
+                  // which sends WhatsApp to guest AND notifies facility contact
+                  const facRes  = await fetch('/api/facility-bookings?hotelId=' + (t.hotel_id || '') + '&status=pending')
+                  const facData = await facRes.json()
+                  const match   = (facData.bookings || []).find(b => b.guest_id === t.guest_id)
+                  if (match) {
+                    await fetch('/api/facility-bookings', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ bookingId: match.id, action:'confirmed' }) })
+                  }
+                  // Also mark the ticket resolved
+                  await fetch('/api/tickets', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ticketId: t.id, status:'resolved' }) })
                 } else {
                   await fetch('/api/tickets', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ticketId: t.id, status:'in_progress' }) })
                 }

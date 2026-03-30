@@ -706,12 +706,46 @@ function TicketAlertRow({ ticket: t, depts = [], isPrivileged = false, onOpenThr
       </div>
       {expanded && (
         <div style={{ padding:'0 16px 12px 56px', display:'flex', flexDirection:'column', gap:'8px' }}>
-          <div style={{ fontSize:'12px', color:'#374151', lineHeight:'1.6' }}>{t.description}</div>
+          {t.category === 'facility_booking' ? (() => {
+            const dl  = (t.description || '').split('\n').map(l => l.trim()).filter(Boolean)
+            const get = (pfx) => { const l = dl.find(x => x.startsWith(pfx)); return l ? l.slice(pfx.length).trim() : null }
+            const facName  = get('Facility:')
+            const date     = get('Date:')
+            const time     = get('Time:')
+            const guestLine = get('Guest:')
+            const [gName] = guestLine ? guestLine.split('·').map(s => s.trim()) : [t.guests?.name]
+            const rPart   = t.guests?.room ? 'Room ' + t.guests.room : null
+            const gType   = t.guests?.guest_type ? ({ stay:'Stay guest', day_visitor:'Day visitor', member:'Member', prospect:'Prospect', event:'Event guest' }[t.guests.guest_type] || t.guests.guest_type) : null
+            return (
+              <div style={{ fontSize:'13px', color:'#374151', lineHeight:'2', display:'flex', flexDirection:'column' }}>
+                {gName   && <span style={{ fontWeight:'600' }}>{gName}</span>}
+                {rPart   && <span>{rPart}</span>}
+                {gType   && <span style={{ fontSize:'12px', color:'#6B7280' }}>{gType}</span>}
+                {facName && <span>🎾 {facName}</span>}
+                {time    && <span>⏰ Time: {time}</span>}
+                {date    && <span>📅 Date: {date}</span>}
+              </div>
+            )
+          })() : (
+            <div style={{ fontSize:'12px', color:'#374151', lineHeight:'1.6' }}>{t.description}</div>
+          )}
           <div style={{ display:'flex', gap:'7px', flexWrap:'wrap' }}>
             {isPrivileged && t.status === 'pending' && (
-              <button onClick={() => updateStatus('in_progress')} disabled={updating}
+              <button onClick={async () => {
+                if (t.category === 'facility_booking') {
+                  const facRes  = await fetch('/api/facility-bookings?status=pending')
+                  const facData = await facRes.json()
+                  const match   = (facData.bookings || []).find(b => b.guest_id === t.guest_id)
+                  if (match) {
+                    await fetch('/api/facility-bookings', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ bookingId: match.id, action:'confirmed' }) })
+                  }
+                  await fetch('/api/tickets', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ticketId: t.id, status:'resolved' }) })
+                } else {
+                  await updateStatus('in_progress')
+                }
+              }} disabled={updating}
                 style={{ fontSize:'12px', fontWeight:'600', padding:'6px 12px', borderRadius:'7px', border:'0.5px solid #86EFAC', background:'#DCFCE7', color:'#14532D', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                👍 Accept
+                {t.category === 'facility_booking' ? '✅ Confirm booking' : '👍 Accept'}
               </button>
             )}
             {isPrivileged && t.status === 'in_progress' && (
