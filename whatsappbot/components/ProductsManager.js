@@ -228,6 +228,7 @@ function ProductForm({ product, partners, hotelId, onSave, onCancel }) {
       <TierEditor tiers={form.tiers} onChange={v => set('tiers', v)} />
 
       <div style={S.section}>
+        {CATEGORIES.find(cat => cat.key === form.category)?.type !== 'hotel_service' && <>
         <label style={S.label}>Our commission (%)</label>
         <input
           type="number" value={form.commissionRate}
@@ -236,6 +237,7 @@ function ProductForm({ product, partners, hotelId, onSave, onCancel }) {
           style={{ ...S.input, maxWidth:'160px' }}
         />
       </div>
+        </>
 
       <div style={S.divider}/>
 
