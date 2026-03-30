@@ -364,6 +364,8 @@ function StaffPortal({ conversations, selectedConv, onSelectConv, session, hotel
   }
 
   const g = selectedConv?.guests || {}
+  const needsDetails = reqType !== 'facility'
+  const canSubmit = needsDetails ? details.trim().length > 0 : facFacilityId.length > 0
 
   return (
     <div style={{ flex:1, overflowY:'auto', background:'#F9FAFB' }}>
@@ -568,25 +570,23 @@ function StaffPortal({ conversations, selectedConv, onSelectConv, session, hotel
         )}
 
         {/* ── Details — hidden when facility has its own notes ── */}
-        {reqType !== 'facility' && <div>
+        {needsDetails && <div>
           <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151', marginBottom:'8px' }}>Details</div>
           <textarea value={details} onChange={e => setDetails(e.target.value)} rows={3}
             placeholder={reqType==='external' ? 'e.g. Taxi to airport at 6pm, 2 passengers' : 'e.g. AC not working in room'}
             style={{ width:'100%', padding:'12px 14px', background:'white', border:'1px solid #E5E7EB', borderRadius:'12px', fontSize:'16px', color:'#111827', resize:'none', fontFamily:"'DM Sans', sans-serif", outline:'none', lineHeight:'1.5', WebkitAppearance:'none' }}
           />
-        </div>
-
         </div>}
 
         {/* ── Send button ── */}
         <button onClick={handleSend}
-          disabled={sending || (reqType !== 'facility' && !details.trim()) || (!selectedConv && !noGuest)}
+          disabled={sending || !canSubmit || (!selectedConv && !noGuest)}
           style={{
             width:'100%', padding:'14px',
-            background: sent ? '#16A34A' : ((reqType !== 'facility' && !details.trim()) || (!selectedConv && !noGuest)) ? '#E5E7EB' : '#1C3D2E',
+            background: sent ? '#16A34A' : (!canSubmit || (!selectedConv && !noGuest)) ? '#E5E7EB' : '#1C3D2E',
             border:'none', borderRadius:'12px', fontSize:'15px', fontWeight:'700',
-            color: ((reqType !== 'facility' && !details.trim()) || (!selectedConv && !noGuest)) ? '#9CA3AF' : 'white',
-            cursor: ((reqType !== 'facility' && !details.trim()) || (!selectedConv && !noGuest)) ? 'not-allowed' : 'pointer',
+            color: (!canSubmit || (!selectedConv && !noGuest)) ? '#9CA3AF' : 'white',
+            cursor: (!canSubmit || (!selectedConv && !noGuest)) ? 'not-allowed' : 'pointer',
             fontFamily:"'DM Sans', sans-serif",
           }}>
           {sent ? '✓ Sent!' : sending ? 'Sending…' : reqType==='external' ? 'Send booking request' : reqType==='facility' ? 'Send Booking Confirmation' : 'Create ticket'}
