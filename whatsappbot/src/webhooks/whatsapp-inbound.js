@@ -430,6 +430,7 @@ export async function handleInboundWhatsApp(rawBody) {
     const ackMsg = ackMsgs[guest.language] || ackMsgs.en
     await sendWhatsApp(from, ackMsg)
     await appendMessage(conv.id, 'assistant', ackMsg)
+    return  // handoff handled — do not fall through to normal reply path
   }
 
   // Feature #2: Room cancellation — escalate immediately
