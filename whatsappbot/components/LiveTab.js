@@ -110,6 +110,90 @@ function ExpandableBookingDesktop({ b }) {
   )
 }
 
+// ── TICKET ROW (desktop) — proper component so useState is legal ──
+function DesktopTicketRow({ t, session, conversations, onSelectConv, onSetCentreMode, onReload }) {
+  const [open, setOpen] = React.useState(false)
+  const typeConfig = {
+    facility_booking: { label:'Facility',    bg:'#DCFCE7', color:'#14532D', emoji:'🎾' },
+    room_issue:       { label:'Maintenance', bg:'#FEF2F2', color:'#DC2626', emoji:'🔧' },
+    housekeeping:     { label:'Housekeeping',bg:'#F0FDF4', color:'#15803D', emoji:'🛎️' },
+    fnb:              { label:'F&B',         bg:'#FEF3C7', color:'#B45309', emoji:'🍽️' },
+  }
+  const tc = typeConfig[t.category] || typeConfig[t.department] || { label:'Ticket', bg:'#F1F5F9', color:'#334155', emoji:'📋' }
+  const isPrivileged = ['manager','supervisor','receptionist'].includes(session?.role)
+
+  return (
+    <div style={{ borderBottom:'0.5px solid var(--border)' }}>
+      <div onClick={() => setOpen(o => !o)}
+        style={{ display:'flex', alignItems:'flex-start', gap:'10px', padding:'10px 14px', cursor:'pointer', background: open ? '#F9FAFB' : 'white' }}>
+        <div style={{ width:'24px', height:'24px', borderRadius:'6px', background:tc.bg, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'12px', flexShrink:0, marginTop:'1px' }}>
+          {tc.emoji}
+        </div>
+        <div style={{ flex:1, minWidth:0 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:'5px', marginBottom:'2px', flexWrap:'wrap' }}>
+            <span style={{ fontSize:'10px', fontWeight:'700', padding:'1px 6px', borderRadius:'4px', background:tc.bg, color:tc.color }}>{tc.label}</span>
+            {t.priority === 'urgent' && <span style={{ fontSize:'10px', fontWeight:'700', padding:'1px 6px', borderRadius:'4px', background:'#FEE2E2', color:'#DC2626' }}>URGENT</span>}
+            {t.priority === 'planned' && <span style={{ fontSize:'10px', fontWeight:'600', padding:'1px 6px', borderRadius:'4px', background:'#EFF6FF', color:'#2563EB' }}>PLANNED</span>}
+          </div>
+          <div style={{ fontSize:'12px', fontWeight:'600', color:'#111827', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:'180px' }}>
+            {t.description?.slice(0, 45)}{t.description?.length > 45 ? '…' : ''}
+          </div>
+          <div style={{ fontSize:'11px', color:'#6B7280', marginTop:'1px' }}>
+            {t.room ? `Room ${t.room} · ` : ''}{t.department} · {t.status}
+          </div>
+        </div>
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ flexShrink:0, marginTop:'6px' }}>
+          <path d={open ? 'M1 7L5 3L9 7' : 'M1 3L5 7L9 3'} stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </div>
+      {open && (
+        <div style={{ padding:'8px 14px 12px 48px', background:'#F9FAFB', borderTop:'0.5px solid #F3F4F6', display:'flex', flexDirection:'column', gap:'7px' }}>
+          <div style={{ fontSize:'11px', color:'#374151', lineHeight:'1.6' }}>{t.description}</div>
+          <div style={{ display:'flex', gap:'6px', flexWrap:'wrap' }}>
+            {isPrivileged && t.status === 'pending' && (
+              <button onClick={async () => {
+                await fetch('/api/tickets', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ticketId: t.id, status:'in_progress' }) })
+                onReload()
+              }} style={{ fontSize:'11px', fontWeight:'600', padding:'4px 10px', borderRadius:'5px', border:'0.5px solid #86EFAC', background:'#DCFCE7', color:'#14532D', cursor:'pointer', fontFamily:'var(--font)' }}>
+                👍 Accept
+              </button>
+            )}
+            {isPrivileged && t.status === 'in_progress' && (
+              <button onClick={async () => {
+                await fetch('/api/tickets', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ticketId: t.id, status:'resolved' }) })
+                onReload()
+              }} style={{ fontSize:'11px', fontWeight:'600', padding:'4px 10px', borderRadius:'5px', border:'0.5px solid #86EFAC', background:'#DCFCE7', color:'#14532D', cursor:'pointer', fontFamily:'var(--font)' }}>
+                ✅ Complete
+              </button>
+            )}
+            {t.guest_id && (() => {
+              const conv = (conversations || []).find(c => c.guests?.id === t.guest_id)
+              if (!conv) return null
+              return (
+                <button onClick={() => { onSelectConv(conv); onSetCentreMode('chat') }}
+                  style={{ fontSize:'11px', fontWeight:'600', padding:'4px 10px', borderRadius:'5px', border:'0.5px solid #93C5FD', background:'#DBEAFE', color:'#1E3A5F', cursor:'pointer', fontFamily:'var(--font)' }}>
+                  💬 Go to chat
+                </button>
+              )
+            })()}
+            <select onChange={async (e) => {
+              if (!e.target.value) return
+              await fetch('/api/tickets', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ticketId: t.id, status: t.status, department: e.target.value }) })
+              e.target.value = ''
+              onReload()
+            }} style={{ fontSize:'11px', padding:'3px 7px', borderRadius:'5px', border:'0.5px solid #D1D5DB', background:'white', color:'#6B7280', cursor:'pointer', fontFamily:'var(--font)' }}>
+              <option value="">Reassign…</option>
+              {['maintenance','housekeeping','fnb','concierge','security'].map(d => (
+                <option key={d} value={d} disabled={d === t.department}>{d.charAt(0).toUpperCase()+d.slice(1)}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function SelectedGuestChip({ conv, onClear }) {
   const sg   = conv.guests || {}
   const isEsc = conv.status === 'escalated'
@@ -667,94 +751,20 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
             {sh('Open tickets', `${issues.length} need action`, issues.length > 0)}
             {issues.length === 0 ? (
               <div style={{ padding:'16px', textAlign:'center', color:'#9CA3AF', fontSize:'13px' }}>All clear ✓</div>
-            ) : issues.map(t => {
-              const [ticketOpen, setTicketOpen] = React.useState(false)
-              const typeConfig = {
-                facility_booking: { label:'Facility', bg:'#DCFCE7', color:'#14532D', emoji:'🎾' },
-                room_issue:       { label:'Maintenance', bg:'#FEF2F2', color:'#DC2626', emoji:'🔧' },
-                housekeeping:     { label:'Housekeeping', bg:'#F0FDF4', color:'#15803D', emoji:'🛎️' },
-                fnb:              { label:'F&B', bg:'#FEF3C7', color:'#B45309', emoji:'🍽️' },
-                default:          { label:'Ticket', bg:'#F1F5F9', color:'#334155', emoji:'📋' },
-              }
-              const tc = typeConfig[t.category] || typeConfig[t.department] || typeConfig.default
-              const isPrivileged = ['manager','supervisor','receptionist'].includes(session?.role)
-              return (
-                <div key={t.id} style={{ borderBottom:'0.5px solid var(--border)' }}>
-                  {/* Row header */}
-                  <div onClick={() => setTicketOpen(o => !o)}
-                    style={{ display:'flex', alignItems:'flex-start', gap:'10px', padding:'10px 14px', cursor:'pointer', background: ticketOpen ? '#F9FAFB' : 'white' }}>
-                    <div style={{ width:'24px', height:'24px', borderRadius:'6px', background:tc.bg, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'12px', flexShrink:0, marginTop:'1px' }}>
-                      {tc.emoji}
-                    </div>
-                    <div style={{ flex:1, minWidth:0 }}>
-                      <div style={{ display:'flex', alignItems:'center', gap:'5px', marginBottom:'2px', flexWrap:'wrap' }}>
-                        <span style={{ fontSize:'10px', fontWeight:'700', padding:'1px 6px', borderRadius:'4px', background:tc.bg, color:tc.color }}>{tc.label}</span>
-                        {t.priority === 'urgent' && <span style={{ fontSize:'10px', fontWeight:'700', padding:'1px 6px', borderRadius:'4px', background:'#FEE2E2', color:'#DC2626' }}>URGENT</span>}
-                        {t.priority === 'planned' && <span style={{ fontSize:'10px', fontWeight:'600', padding:'1px 6px', borderRadius:'4px', background:'#EFF6FF', color:'#2563EB' }}>PLANNED</span>}
-                      </div>
-                      <div style={{ fontSize:'12px', fontWeight:'600', color:'#111827', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:'180px' }}>
-                        {t.description?.slice(0, 45)}{t.description?.length > 45 ? '…' : ''}
-                      </div>
-                      <div style={{ fontSize:'11px', color:'#6B7280', marginTop:'1px' }}>
-                        {t.room ? `Room ${t.room} · ` : ''}{t.department} · {t.status}
-                      </div>
-                    </div>
-                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ flexShrink:0, marginTop:'6px' }}>
-                      <path d={ticketOpen ? 'M1 7L5 3L9 7' : 'M1 3L5 7L9 3'} stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                  </div>
-                  {/* Expanded detail */}
-                  {ticketOpen && (
-                    <div style={{ padding:'8px 14px 12px 48px', background:'#F9FAFB', borderTop:'0.5px solid #F3F4F6', display:'flex', flexDirection:'column', gap:'7px' }}>
-                      <div style={{ fontSize:'11px', color:'#374151', lineHeight:'1.6' }}>{t.description}</div>
-                      <div style={{ display:'flex', gap:'6px', flexWrap:'wrap' }}>
-                        {/* Accept / Complete — privileged roles */}
-                        {isPrivileged && t.status === 'pending' && (
-                          <button onClick={async () => {
-                            await fetch('/api/tickets', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ticketId: t.id, status:'in_progress' }) })
-                            loadData()
-                          }} style={{ fontSize:'11px', fontWeight:'600', padding:'4px 10px', borderRadius:'5px', border:'0.5px solid #86EFAC', background:'#DCFCE7', color:'#14532D', cursor:'pointer', fontFamily:'var(--font)' }}>
-                            👍 Accept
-                          </button>
-                        )}
-                        {isPrivileged && t.status === 'in_progress' && (
-                          <button onClick={async () => {
-                            await fetch('/api/tickets', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ticketId: t.id, status:'resolved' }) })
-                            loadData()
-                          }} style={{ fontSize:'11px', fontWeight:'600', padding:'4px 10px', borderRadius:'5px', border:'0.5px solid #86EFAC', background:'#DCFCE7', color:'#14532D', cursor:'pointer', fontFamily:'var(--font)' }}>
-                            ✅ Complete
-                          </button>
-                        )}
-                        {/* Go to chat */}
-                        {t.guest_id && (
-                          <button onClick={() => {
-                            const conv = conversations.find(c => c.guests?.id === t.guest_id)
-                            if (conv) { setSelectedConv(conv); setCentreMode('chat') }
-                          }} style={{ fontSize:'11px', fontWeight:'600', padding:'4px 10px', borderRadius:'5px', border:'0.5px solid #93C5FD', background:'#DBEAFE', color:'#1E3A5F', cursor:'pointer', fontFamily:'var(--font)' }}>
-                            💬 Go to chat
-                          </button>
-                        )}
-                        {/* Reassign */}
-                        <select onChange={async (e) => {
-                          if (!e.target.value) return
-                          await fetch('/api/tickets', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ticketId: t.id, status: t.status, department: e.target.value }) })
-                          e.target.value = ''
-                          loadData()
-                        }} style={{ fontSize:'11px', padding:'3px 7px', borderRadius:'5px', border:'0.5px solid #D1D5DB', background:'white', color:'#6B7280', cursor:'pointer', fontFamily:'var(--font)' }}>
-                          <option value="">Reassign…</option>
-                          {['maintenance','housekeeping','fnb','concierge','security'].map(d => (
-                            <option key={d} value={d} disabled={d === t.department}>{d.charAt(0).toUpperCase()+d.slice(1)}</option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )
-            })}
+            ) : issues.map(t => (
+              <DesktopTicketRow
+                key={t.id}
+                t={t}
+                session={session}
+                conversations={conversations}
+                onSelectConv={setSelectedConv}
+                onSetCentreMode={setCentreMode}
+                onReload={loadData}
+              />
+            ))}
           </div>
 
-                    {/* Upcoming */}
+          {/* Upcoming */}
           <div style={{ borderBottom:'0.5px solid var(--border)' }}>
             {sh('Upcoming', 'today & tomorrow')}
             {upcoming.length === 0 ? (
