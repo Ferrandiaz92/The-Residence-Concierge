@@ -176,7 +176,7 @@ function DesktopTicketRow({ t, session, conversations, onSelectConv, onSetCentre
                 {guestType  && <span style={{ fontSize:'11px', color:'#6B7280' }}>{guestType}</span>}
                 {facName    && <span>🎾 {facName}</span>}
                 {time       && <span>⏰ Time: {time}</span>}
-                {date       && <span>📅 Date: {date}</span>}
+                {date       && <span>📅 Date: {(() => { try { const [y,m,d] = date.split('-'); return d+'/'+m+'/'+y } catch { return date } })()}</span>}
                 {guests     && <span>👥 Guests: {guests}</span>}
               </div>
             )

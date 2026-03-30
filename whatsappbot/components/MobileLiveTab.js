@@ -694,10 +694,21 @@ function TicketAlertRow({ ticket: t, depts = [], isPrivileged = false, onOpenThr
             {t.priority==='planned' && <span style={{ fontSize:'10px', fontWeight:'600', padding:'1px 6px', borderRadius:'4px', background:'#EFF6FF', color:'#2563EB' }}>PLANNED</span>}
           </div>
           <div style={{ fontSize:'13px', fontWeight:'600', color:'#111827', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-            {t.description?.slice(0,50)}{t.description?.length>50?'…':''}
+            {t.category === 'facility_booking'
+              ? (() => {
+                  const lines = (t.description || '').split('\n')
+                  const facLine = lines.find(l => l.indexOf('Facility:') === 0)
+                  const name = facLine ? facLine.slice('Facility:'.length).trim() : 'Facility'
+                  return 'Booking Request: ' + name
+                })()
+              : (t.description?.slice(0,50) + (t.description?.length > 50 ? '…' : ''))
+            }
           </div>
           <div style={{ fontSize:'11px', color:'#6B7280', marginTop:'1px' }}>
-            {t.room ? `Room ${t.room} · ` : ''}{t.department} · <span style={{ textTransform:'capitalize' }}>{t.status}</span>
+            {t.category === 'facility_booking'
+              ? (t.guests?.name ? (t.guests.name + (t.guests.room ? ' · Room ' + t.guests.room : '')) : 'Facility booking')
+              : `${t.room ? 'Room ' + t.room + ' · ' : ''}${t.department} · ${t.status}`
+            }
           </div>
         </div>
         <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ flexShrink:0, marginTop:'6px' }}>
@@ -723,7 +734,7 @@ function TicketAlertRow({ ticket: t, depts = [], isPrivileged = false, onOpenThr
                 {gType   && <span style={{ fontSize:'12px', color:'#6B7280' }}>{gType}</span>}
                 {facName && <span>🎾 {facName}</span>}
                 {time    && <span>⏰ Time: {time}</span>}
-                {date    && <span>📅 Date: {date}</span>}
+                {date    && <span>📅 Date: {(() => { try { const [y,m,d] = date.split('-'); return d+'/'+m+'/'+y } catch { return date } })()}</span>}
               </div>
             )
           })() : (
