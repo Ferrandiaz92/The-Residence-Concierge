@@ -37,7 +37,7 @@ const PROSPECT_TOPICS = {
 
 const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']
 
-export default function VisitorsTab({ hotelId }) {
+export default function VisitorsTab({ hotelId, onNavigateToConv }) {
   const [data, setData]           = useState(null)
   const [loading, setLoading]     = useState(true)
   const [section, setSection]     = useState('overview')
@@ -416,6 +416,11 @@ export default function VisitorsTab({ hotelId }) {
                           {p.last_message_snippet && (
                             <div style={{ fontSize:'12px', color:'#6B7280', fontStyle:'italic', background:'#F9FAFB', padding:'7px 10px', borderRadius:'8px', borderLeft:'3px solid #E5E7EB' }}>
                               "{p.last_message_snippet}{p.last_message_snippet?.length >= 79 ? '...' : ''}"
+                              {p.language && p.language !== 'en' && p.last_message_translated && (
+                                <div style={{ marginTop:'4px', fontSize:'11px', color:'#9CA3AF', fontStyle:'normal' }}>
+                                  🇬🇧 {p.last_message_translated}
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>
@@ -436,6 +441,16 @@ export default function VisitorsTab({ hotelId }) {
 
                       {/* Pipeline controls */}
                       <div style={{ padding:'10px 16px', borderTop:'1px solid #F3F4F6', background:'#F9FAFB', display:'flex', alignItems:'center', gap:'16px', flexWrap:'wrap' }}>
+                        {/* Open chat button */}
+                        <button onClick={async () => {
+                          if (!onNavigateToConv) return
+                          const res  = await fetch(`/api/conversations?hotelId=${hotelId}`)
+                          const data = await res.json()
+                          const conv = (data.conversations || []).find(c => c.guests?.id === p.id)
+                          if (conv) onNavigateToConv(conv)
+                        }} style={{ fontSize:'12px', fontWeight:'600', padding:'5px 12px', borderRadius:'8px', border:'1px solid #93C5FD', background:'#DBEAFE', color:'#1E3A5F', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                          💬 Open chat
+                        </button>
                         <div style={{ fontSize:'12px', fontWeight:'600', color:'#6B7280' }}>Status:</div>
                         <div style={{ display:'flex', gap:'5px' }}>
                           {Object.entries(PROSPECT_STATUS).map(([key, cfg]) => (

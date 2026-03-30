@@ -147,6 +147,7 @@ export default function BotQA({ hotelId }) {
           <option value="day_visitor">☀️ Day visitors</option>
           <option value="event">🎭 Event guests</option>
           <option value="prospect">🔍 Prospects</option>
+          <option value="member">⭐ Members</option>
         </select>
 
         <select value={language} onChange={e=>setLanguage(e.target.value)}

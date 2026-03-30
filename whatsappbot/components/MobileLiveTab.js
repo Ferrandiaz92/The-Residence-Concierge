@@ -318,6 +318,10 @@ function StaffPortal({ conversations, selectedConv, onSelectConv, session, hotel
   const [partners,        setPartners]        = useState([])
   const [facilities,      setFacilities]      = useState([])
   const [selectedPartner, setSelectedPartner] = useState('')
+  const [facFacilityId,   setFacFacilityId]   = useState('')
+  const [facDate,         setFacDate]          = useState('')
+  const [facTime,         setFacTime]          = useState('')
+  const [facPax,          setFacPax]           = useState('1')
   const [showConvPicker, setShowConvPicker] = useState(false)
   const [noGuest,        setNoGuest]        = useState(false)
 
@@ -338,15 +342,22 @@ function StaffPortal({ conversations, selectedConv, onSelectConv, session, hotel
   }, [hotelId])
 
   async function handleSend() {
-    if (!details.trim() || sending) return
+    if (reqType !== 'facility' && !details.trim()) return
     if (!selectedConv && !noGuest) return
     setSending(true)
     try {
-      const endpoint = reqType === 'external' ? '/api/bookings' : '/api/tickets'
-      const body = reqType === 'external'
-        ? { hotelId, guestId: selectedConv.guests?.id, type: category, details: { description: details }, createdBy: `staff:${session?.name||''}` }
-        : { hotelId, guestId: selectedConv?.guests?.id || null, department, category: deptCategory||department, description: details, room: selectedConv?.guests?.room||selectedConv?.guests?.guest_room||null, priority, createdBy: `staff:${session?.name||''}` }
-      await fetch(endpoint, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) })
+      if (reqType === 'facility') {
+        const facilityName = facilities.find(f => f.id === facFacilityId)?.name || ''
+        if (!facFacilityId) { setSending(false); return }
+        await fetch('/api/facility-bookings', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ hotelId, facilityId: facFacilityId, facilityName, guestId: selectedConv?.guests?.id || null, date: facDate, time: facTime, guestsCount: parseInt(facPax||'1'), notes: details || null, createdBy: `staff:${session?.name||''}` }),
+        })
+      } else if (reqType === 'external') {
+        await fetch('/api/bookings', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ hotelId, guestId: selectedConv?.guests?.id, type: category, details: { description: details }, createdBy: `staff:${session?.name||''}` }) })
+      } else {
+        await fetch('/api/tickets', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ hotelId, guestId: selectedConv?.guests?.id || null, department, category: deptCategory||department, description: details, room: selectedConv?.guests?.room||selectedConv?.guests?.guest_room||null, priority, createdBy: `staff:${session?.name||''}` }) })
+      }
       setSent(true); setDetails('')
       setTimeout(() => setSent(false), 3000)
     } finally { setSending(false) }
@@ -481,7 +492,7 @@ function StaffPortal({ conversations, selectedConv, onSelectConv, session, hotel
           <div style={{ display:'flex', flexDirection:'column', gap:'12px' }}>
             <div>
               <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151', marginBottom:'8px' }}>Facility</div>
-              <select data-facility-select style={{ width:'100%', padding:'12px 14px', background:'white', border:'1px solid #E5E7EB', borderRadius:'12px', fontSize:'16px', color:'#111827', fontFamily:"'DM Sans', sans-serif", outline:'none', WebkitAppearance:'none' }}>
+              <select value={facFacilityId} onChange={e => setFacFacilityId(e.target.value)} style={{ width:'100%', padding:'12px 14px', background:'white', border:'1px solid #E5E7EB', borderRadius:'12px', fontSize:'16px', color:'#111827', fontFamily:"'DM Sans', sans-serif", outline:'none', WebkitAppearance:'none' }}>
                 <option value=''>Select facility…</option>
                 {facilities.map(f => (
                   <option key={f.id} value={f.id}>{f.name}{f.department ? ' — ' + f.department : ''}</option>
@@ -491,16 +502,16 @@ function StaffPortal({ conversations, selectedConv, onSelectConv, session, hotel
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px' }}>
               <div>
                 <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151', marginBottom:'8px' }}>Date</div>
-                <input type='date' data-facility-date style={{ width:'100%', padding:'12px 14px', border:'1px solid #E5E7EB', borderRadius:'12px', fontSize:'16px', fontFamily:"'DM Sans', sans-serif", outline:'none', boxSizing:'border-box', WebkitAppearance:'none' }} />
+                <input type='date' value={facDate} onChange={e => setFacDate(e.target.value)} style={{ width:'100%', padding:'12px 14px', border:'1px solid #E5E7EB', borderRadius:'12px', fontSize:'16px', fontFamily:"'DM Sans', sans-serif", outline:'none', boxSizing:'border-box', WebkitAppearance:'none' }} />
               </div>
               <div>
                 <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151', marginBottom:'8px' }}>Time</div>
-                <input type='time' data-facility-time style={{ width:'100%', padding:'12px 14px', border:'1px solid #E5E7EB', borderRadius:'12px', fontSize:'16px', fontFamily:"'DM Sans', sans-serif", outline:'none', boxSizing:'border-box', WebkitAppearance:'none' }} />
+                <input type='time' value={facTime} onChange={e => setFacTime(e.target.value)} style={{ width:'100%', padding:'12px 14px', border:'1px solid #E5E7EB', borderRadius:'12px', fontSize:'16px', fontFamily:"'DM Sans', sans-serif", outline:'none', boxSizing:'border-box', WebkitAppearance:'none' }} />
               </div>
             </div>
             <div>
               <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151', marginBottom:'8px' }}>Number of guests</div>
-              <input type='number' min='1' defaultValue='1' data-facility-pax style={{ width:'100%', padding:'12px 14px', border:'1px solid #E5E7EB', borderRadius:'12px', fontSize:'16px', fontFamily:"'DM Sans', sans-serif", outline:'none', boxSizing:'border-box' }} />
+              <input type='number' min='1' value={facPax} onChange={e => setFacPax(e.target.value)} style={{ width:'100%', padding:'12px 14px', border:'1px solid #E5E7EB', borderRadius:'12px', fontSize:'16px', fontFamily:"'DM Sans', sans-serif", outline:'none', boxSizing:'border-box' }} />
             </div>
           </div>
         )}

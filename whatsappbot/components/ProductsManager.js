@@ -127,7 +127,7 @@ function ProductForm({ product, partners, hotelId, onSave, onCancel }) {
     description:    product?.description     || '',
     category:       product?.category        || 'activity',
     tiers:          product?.tiers?.length   ? product.tiers : [{ name:'', price:'' }],
-    commissionRate: product?.commission_rate || 15,
+    commissionRate: product?.commission_rate ?? 15,
     availableFrom:  product?.available_from  || '',
     availableTo:    product?.available_to    || '',
     availableTimes: product?.available_times || '',
@@ -139,7 +139,8 @@ function ProductForm({ product, partners, hotelId, onSave, onCancel }) {
 
   async function save() {
     if (!form.name.trim())   { setError('Name is required'); return }
-    if (!form.partnerId)     { setError('Select a partner'); return }
+    const isHotelSvc = CATEGORIES.find(cat => cat.key === form.category)?.type === 'hotel_service'
+    if (!form.partnerId && !isHotelSvc) { setError('Select a partner'); return }
     const validTiers = form.tiers.filter(t => t.name?.trim() && parseFloat(t.price) > 0)
     if (validTiers.length === 0) { setError('Add at least one pricing option with a name and price'); return }
 
@@ -165,13 +166,24 @@ function ProductForm({ product, partners, hotelId, onSave, onCancel }) {
       </div>
 
       {/* ── BASIC INFO ── */}
-      <div style={S.section}>
-        <label style={S.label}>Partner</label>
-        <select value={form.partnerId} onChange={e => set('partnerId', e.target.value)} style={S.select}>
-          <option value="">Select partner…</option>
-          {partners.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
-      </div>
+      {/* Only show partner selector for partner services, not hotel services */}
+      {(() => {
+        const isHotelService = CATEGORIES.find(cat => cat.key === form.category)?.type === 'hotel_service'
+        if (isHotelService) return (
+          <div style={{ padding:'10px 14px', background:'#F0FDF4', borderRadius:'9px', border:'0.5px solid #86EFAC', fontSize:'12px', color:'#14532D' }}>
+            🏨 <strong>Hotel Service</strong> — no partner or commission needed. This service is provided directly by the hotel.
+          </div>
+        )
+        return (
+          <div style={S.section}>
+            <label style={S.label}>Partner</label>
+            <select value={form.partnerId} onChange={e => set('partnerId', e.target.value)} style={S.select}>
+              <option value="">Select partner…</option>
+              {partners.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </div>
+        )
+      })()}
 
       <div style={S.section}>
         <label style={S.label}>Name *</label>
@@ -429,6 +441,16 @@ export default function ProductsManager({ hotelId }) {
             </div>
           )}
         </>
+      )}
+
+      {/* Editing form — inline, scrolls user to context */}
+      {editing && editing !== 'new' && (
+        <div style={{ marginBottom:'12px' }}>
+          <div style={{ fontSize:'11px', color:'#6B7280', marginBottom:'8px', display:'flex', alignItems:'center', gap:'6px' }}>
+            <span style={{ fontSize:'14px' }}>✏️</span> Editing: <strong>{editing.name}</strong>
+            <button onClick={() => setEditing(null)} style={{ marginLeft:'auto', fontSize:'11px', padding:'2px 8px', borderRadius:'5px', border:'0.5px solid #E5E7EB', background:'white', color:'#6B7280', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>Cancel</button>
+          </div>
+        </div>
       )}
 
       {/* List — filtered by service type */}

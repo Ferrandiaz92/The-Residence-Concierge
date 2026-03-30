@@ -136,10 +136,29 @@ function DesktopTicketRow({ t, session, conversations, onSelectConv, onSetCentre
             {t.priority === 'planned' && <span style={{ fontSize:'10px', fontWeight:'600', padding:'1px 6px', borderRadius:'4px', background:'#EFF6FF', color:'#2563EB' }}>PLANNED</span>}
           </div>
           <div style={{ fontSize:'12px', fontWeight:'600', color:'#111827', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:'180px' }}>
-            {t.description?.slice(0, 45)}{t.description?.length > 45 ? '…' : ''}
+            {t.category === 'facility_booking'
+              ? (() => {
+                  const facilityMatch = t.description?.match(/Facility[:\s]+([^
+]+)/)
+                  const facilityName  = facilityMatch?.[1]?.trim() || 'Facility'
+                  return `Booking Request: ${facilityName}`
+                })()
+              : (t.description?.slice(0, 45) + (t.description?.length > 45 ? '…' : ''))
+            }
           </div>
           <div style={{ fontSize:'11px', color:'#6B7280', marginTop:'1px' }}>
-            {t.room ? `Room ${t.room} · ` : ''}{t.department} · {t.status}
+            {t.category === 'facility_booking'
+              ? (() => {
+                  const guestName = t.guests?.name ? `${t.guests.name}${t.guests.room ? ' · Room ' + t.guests.room : ''}` : ''
+                  const timeMatch = t.description?.match(/Time[:\s]+([^
+]+)/)
+                  const dateMatch = t.description?.match(/Date[:\s]+([^
+]+)/)
+                  const parts = [guestName, timeMatch?.[1] && `⏰ ${timeMatch[1]}`, dateMatch?.[1] && `📅 ${dateMatch[1]}`].filter(Boolean)
+                  return parts.join(' · ')
+                })()
+              : `${t.room ? 'Room ' + t.room + ' · ' : ''}${t.department} · ${t.status}`
+            }
           </div>
         </div>
         <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ flexShrink:0, marginTop:'6px' }}>
@@ -152,13 +171,18 @@ function DesktopTicketRow({ t, session, conversations, onSelectConv, onSetCentre
           <div style={{ display:'flex', gap:'6px', flexWrap:'wrap' }}>
             {isPrivileged && t.status === 'pending' && (
               <button onClick={async () => {
-                await fetch('/api/tickets', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ticketId: t.id, status:'in_progress' }) })
+                if (t.category === 'facility_booking' && t.facility_booking_id) {
+                  // Route to facility-bookings API — sends WhatsApp to guest + facility contact
+                  await fetch('/api/facility-bookings', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ bookingId: t.facility_booking_id, action:'confirmed' }) })
+                } else {
+                  await fetch('/api/tickets', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ticketId: t.id, status:'in_progress' }) })
+                }
                 onReload()
               }} style={{ fontSize:'11px', fontWeight:'600', padding:'4px 10px', borderRadius:'5px', border:'0.5px solid #86EFAC', background:'#DCFCE7', color:'#14532D', cursor:'pointer', fontFamily:'var(--font)' }}>
-                👍 Accept
+                {t.category === 'facility_booking' ? '✅ Confirm booking' : '👍 Accept'}
               </button>
             )}
-            {isPrivileged && t.status === 'in_progress' && (
+            {isPrivileged && t.status === 'in_progress' && t.category !== 'facility_booking' && (
               <button onClick={async () => {
                 await fetch('/api/tickets', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ticketId: t.id, status:'resolved' }) })
                 onReload()
@@ -247,6 +271,10 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
   const [partners,    setPartners]        = useState([])
   const [facilities,     setFacilities]     = useState([])
   const [selectedPartner, setSelectedPartner] = useState('')
+  const [facFacilityId,   setFacFacilityId]   = useState('')
+  const [facDate,         setFacDate]          = useState('')
+  const [facTime,         setFacTime]          = useState('')
+  const [facPax,          setFacPax]           = useState('1')
   const chatEndRef = useRef(null)
 
   useEffect(() => {
@@ -339,15 +367,11 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
       if (requestType === 'facility') {
         // Facility booking — create via facility-bookings API
         // which sends WhatsApp to facility contact + notifies guest
-        const facSelect  = document.querySelector('select[data-facility-select]')
-        const dateInput  = document.querySelector('input[data-facility-date]')
-        const timeInput  = document.querySelector('input[data-facility-time]')
-        const paxInput   = document.querySelector('input[data-facility-pax]')
-        const facilityId   = facSelect?.value
-        const facilityName = facSelect?.options[facSelect.selectedIndex]?.text || ''
-        const date         = dateInput?.value
-        const time         = timeInput?.value
-        const guestsCount  = parseInt(paxInput?.value || '1')
+        const facilityId   = facFacilityId
+        const facilityName = facilities.find(f => f.id === facFacilityId)?.name || ''
+        const date         = facDate
+        const time         = facTime
+        const guestsCount  = parseInt(facPax || '1')
         if (!facilityId) { setSending(false); return }
         await fetch('/api/facility-bookings', {
           method:'POST', headers:{'Content-Type':'application/json'},
@@ -600,7 +624,7 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
               <div style={{ display:'flex', flexDirection:'column', gap:'10px' }}>
                 <div>
                   <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151', marginBottom:'6px' }}>Facility</div>
-                  <select data-facility-select style={{ width:'100%', padding:'9px 12px', border:'0.5px solid #D1D5DB', borderRadius:'9px', fontSize:'13px', color:'#111827', background:'white', fontFamily:'var(--font)', outline:'none' }}>
+                  <select value={facFacilityId} onChange={e => setFacFacilityId(e.target.value)} style={{ width:'100%', padding:'9px 12px', border:'0.5px solid #D1D5DB', borderRadius:'9px', fontSize:'13px', color:'#111827', background:'white', fontFamily:'var(--font)', outline:'none' }}>
                     <option value=''>Select facility…</option>
                     {facilities.map(f => (
                       <option key={f.id} value={f.id}>{f.name}{f.department ? ' — ' + f.department : ''}</option>
@@ -610,16 +634,16 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
                 <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'8px' }}>
                   <div>
                     <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151', marginBottom:'5px' }}>Date</div>
-                    <input type='date' data-facility-date style={{ width:'100%', padding:'9px 12px', border:'0.5px solid #D1D5DB', borderRadius:'9px', fontSize:'13px', fontFamily:'var(--font)', outline:'none', boxSizing:'border-box' }} />
+                    <input type='date' value={facDate} onChange={e => setFacDate(e.target.value)} style={{ width:'100%', padding:'9px 12px', border:'0.5px solid #D1D5DB', borderRadius:'9px', fontSize:'13px', fontFamily:'var(--font)', outline:'none', boxSizing:'border-box' }} />
                   </div>
                   <div>
                     <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151', marginBottom:'5px' }}>Time</div>
-                    <input type='time' data-facility-time style={{ width:'100%', padding:'9px 12px', border:'0.5px solid #D1D5DB', borderRadius:'9px', fontSize:'13px', fontFamily:'var(--font)', outline:'none', boxSizing:'border-box' }} />
+                    <input type='time' value={facTime} onChange={e => setFacTime(e.target.value)} style={{ width:'100%', padding:'9px 12px', border:'0.5px solid #D1D5DB', borderRadius:'9px', fontSize:'13px', fontFamily:'var(--font)', outline:'none', boxSizing:'border-box' }} />
                   </div>
                 </div>
                 <div>
                   <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151', marginBottom:'5px' }}>Number of guests</div>
-                  <input type='number' min='1' defaultValue='1' data-facility-pax style={{ width:'100%', padding:'9px 12px', border:'0.5px solid #D1D5DB', borderRadius:'9px', fontSize:'13px', fontFamily:'var(--font)', outline:'none', boxSizing:'border-box' }} />
+                  <input type='number' min='1' value={facPax} onChange={e => setFacPax(e.target.value)} style={{ width:'100%', padding:'9px 12px', border:'0.5px solid #D1D5DB', borderRadius:'9px', fontSize:'13px', fontFamily:'var(--font)', outline:'none', boxSizing:'border-box' }} />
                 </div>
                 <div>
                   <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151', marginBottom:'5px' }}>Notes (optional)</div>
