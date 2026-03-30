@@ -109,7 +109,13 @@ function TabContent({ tab, hotelId, session, selectedGuest, onSelectGuest, isMob
     case 'guests':    return isMobile
       ? <MobileGuestsTab hotelId={hotelId} selectedGuest={selectedGuest} />
       : <GuestsTab       hotelId={hotelId} selectedGuest={selectedGuest} />
-    case 'visitors':  return <VisitorsTab  hotelId={hotelId} />
+    case 'visitors':  return <VisitorsTab  hotelId={hotelId} onNavigateToConv={(conv) => {
+      onSelectGuest(conv.guests || {})
+      // Navigate to live tab and open the conversation
+      if (typeof window !== 'undefined') {
+        window.__openConversation = conv
+      }
+    }} />
     case 'analytics': return <AnalyticsTab hotelId={hotelId} />
     case 'scheduled': return <ScheduledTab hotelId={hotelId} />
     case 'settings':  return <SettingsTab    hotelId={hotelId} session={session} isMobile={isMobile} />
