@@ -138,10 +138,10 @@ function DesktopTicketRow({ t, session, conversations, onSelectConv, onSetCentre
           <div style={{ fontSize:'12px', fontWeight:'600', color:'#111827', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:'180px' }}>
             {t.category === 'facility_booking'
               ? (() => {
-                  const facilityMatch = t.description?.match(/Facility[:\s]+([^
-]+)/)
-                  const facilityName  = facilityMatch?.[1]?.trim() || 'Facility'
-                  return `Booking Request: ${facilityName}`
+                  const descLines = (t.description || '').split('\n')
+                  const facLine = descLines.find(l => l.indexOf('Facility:') === 0)
+                  const facName = facLine ? facLine.slice('Facility:'.length).trim() : 'Facility'
+                  return 'Booking Request: ' + facName
                 })()
               : (t.description?.slice(0, 45) + (t.description?.length > 45 ? '…' : ''))
             }
@@ -149,12 +149,12 @@ function DesktopTicketRow({ t, session, conversations, onSelectConv, onSetCentre
           <div style={{ fontSize:'11px', color:'#6B7280', marginTop:'1px' }}>
             {t.category === 'facility_booking'
               ? (() => {
-                  const guestName = t.guests?.name ? `${t.guests.name}${t.guests.room ? ' · Room ' + t.guests.room : ''}` : ''
-                  const timeMatch = t.description?.match(/Time[:\s]+([^
-]+)/)
-                  const dateMatch = t.description?.match(/Date[:\s]+([^
-]+)/)
-                  const parts = [guestName, timeMatch?.[1] && `⏰ ${timeMatch[1]}`, dateMatch?.[1] && `📅 ${dateMatch[1]}`].filter(Boolean)
+                  const dl2 = (t.description || '').split('\n')
+                  const getV = (pfx) => { const l = dl2.find(x => x.indexOf(pfx) === 0); return l ? l.slice(pfx.length).trim() : null }
+                  const gName = t.guests?.name ? (t.guests.name + (t.guests.room ? ' · Room ' + t.guests.room : '')) : ''
+                  const tPart = getV('Time:')
+                  const dPart = getV('Date:')
+                  const parts = [gName, tPart && ('⏰ ' + tPart), dPart && ('📅 ' + dPart)].filter(Boolean)
                   return parts.join(' · ')
                 })()
               : `${t.room ? 'Room ' + t.room + ' · ' : ''}${t.department} · ${t.status}`
