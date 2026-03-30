@@ -160,7 +160,7 @@ function DesktopDashboard({ session, tabs, activeTab, setActiveTab, searchQuery,
                     <div style={{ flex:1 }}>
                       <div style={{ fontSize:'14px', fontWeight:'600', color:'#111827' }}>{guest.name} {guest.surname}</div>
                       <div style={{ fontSize:'12px', color:'#6B7280', marginTop:'1px' }}>
-                        {guest.guest_type === 'day_visitor' ? '🌟 Day visitor' : guest.stay_status === 'prospect' || !guest.room ? '🔍 Prospect' : `Room ${guest.room}`} · {guest.phone}
+                        {guest.guest_type === 'day_visitor' ? '🌟 Day visitor' : guest.guest_type === 'member' ? '⭐ Member' : guest.stay_status === 'prospect' || !guest.room ? '🔍 Prospect' : `Room ${guest.room}`} · {guest.phone}
                       </div>
                     </div>
                     <div style={{ fontSize:'11px', fontWeight:'700', padding:'3px 8px', borderRadius:'5px', background:lc.bg, color:lc.color }}>
@@ -306,7 +306,7 @@ function MobileTopbar({ session, badge, handleLogout, tabLabel, showSearch, onSe
               <div style={{ flex:1, minWidth:0 }}>
                 <div style={{ fontSize:'14px', fontWeight:'600', color:'#111827' }}>{guest.name} {guest.surname}</div>
                 <div style={{ fontSize:'12px', color:'#6B7280', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
-                  {guest.guest_type==='day_visitor'?'🌟 Day visitor':guest.stay_status==='prospect'||!guest.room?'🔍 Prospect':`Room ${guest.room}`} · {guest.phone}
+                  {guest.guest_type==='day_visitor'?'🌟 Day visitor':guest.guest_type==='member'?'⭐ Member':guest.stay_status==='prospect'||!guest.room?'🔍 Prospect':`Room ${guest.room}`} · {guest.phone}
                 </div>
               </div>
             </div>
