@@ -112,8 +112,7 @@ export async function processFacilityRequest(facility, hotel, guest, convId) {
     // Alert facility contact via WhatsApp (if phone configured)
     if (facilityRecord?.contact_phone) {
       const alertMsg = [
-        `🎾 FACILITY BOOKING REQUEST`,
-        `Facility: ${facility.facility}`,
+        `🎾 Booking Request: ${facility.facility}`,
         `Date: ${facility.date || 'TBC'} at ${facility.time || 'TBC'}`,
         `Guests: ${facility.guests || 1}`,
         `Guest: ${guest.name || ''} ${guest.surname || ''}${guest.room ? ' · Room ' + guest.room : ''}`,
@@ -143,7 +142,7 @@ export async function processFacilityRequest(facility, hotel, guest, convId) {
     await supabase.from('notifications').insert({
       hotel_id:  hotel.id,
       type:      'facility_booking_request',
-      title:     `🎾 Facility booking — ${facility.facility}`,
+      title:     `🎾 Booking Request: ${facility.facility}`,
       body:      `${guest.name || 'Guest'}${guest.room ? ' · Room ' + guest.room : ''} · ${facility.date || ''} at ${facility.time || ''}`,
       link_type: 'facility_booking',
       link_id:   booking.id,
