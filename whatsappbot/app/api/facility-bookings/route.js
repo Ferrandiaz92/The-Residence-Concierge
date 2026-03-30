@@ -241,24 +241,16 @@ export async function PATCH(request) {
           await sendWhatsApp(guest.phone, msg)
           await supabase.from('facility_bookings').update({ guest_notified: true }).eq('id', bookingId)
 
-          // Append to conversation
-          const { data: conv } = await supabase
-            .from('conversations').select('id')
-            .eq('guest_id', guest.id || booking.guest_id)
-            .in('status', ['active','escalated'])
-            .order('created_at', { ascending: false }).limit(1).single()
-          if (conv) {
-            await supabase.from('messages').insert({
-              conversation_id: conv.id,
-              hotel_id:        booking.hotel_id,
-              role:            'assistant',
-              content:         msg,
-              sent_by:         'facility_confirmation',
-            }).catch(() => {})
-            // Update last_message_at AND ensure conv is active so it shows in dashboard
-            await supabase.from('conversations')
-              .update({ last_message_at: new Date().toISOString(), status: 'active' })
-              .eq('id', conv.id)
+          // Append to conversation — search all statuses, create if none
+          const guestId2 = guest.id || booking.guest_id
+          let { data: convP } = await supabase.from('conversations').select('id').eq('guest_id', guestId2).order('last_message_at', { ascending: false }).limit(1).single()
+          if (!convP) {
+            const { data: nc } = await supabase.from('conversations').insert({ guest_id: guestId2, hotel_id: booking.hotel_id, status: 'active' }).select('id').single()
+            convP = nc
+          }
+          if (convP) {
+            await supabase.from('messages').insert({ conversation_id: convP.id, hotel_id: booking.hotel_id, role: 'assistant', content: msg, sent_by: 'facility_confirmation' }).catch(() => {})
+            await supabase.from('conversations').update({ last_message_at: new Date().toISOString(), status: 'active' }).eq('id', convP.id)
           }
         } catch (e) { console.error('Guest notify failed:', e.message) }
       }
