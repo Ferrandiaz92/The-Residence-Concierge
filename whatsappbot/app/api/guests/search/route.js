@@ -1,5 +1,5 @@
 // app/api/guests/search/route.js
-// Returns all guest types: stay, day_visitor, event, prospect
+// Returns all guest types: stay, day_visitor, event, prospect, member
 import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 
