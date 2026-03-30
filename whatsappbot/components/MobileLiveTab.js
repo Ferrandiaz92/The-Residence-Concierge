@@ -481,7 +481,7 @@ function StaffPortal({ conversations, selectedConv, onSelectConv, session, hotel
           <div style={{ display:'flex', flexDirection:'column', gap:'12px' }}>
             <div>
               <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151', marginBottom:'8px' }}>Facility</div>
-              <select style={{ width:'100%', padding:'12px 14px', background:'white', border:'1px solid #E5E7EB', borderRadius:'12px', fontSize:'16px', color:'#111827', fontFamily:"'DM Sans', sans-serif", outline:'none', WebkitAppearance:'none' }}>
+              <select data-facility-select style={{ width:'100%', padding:'12px 14px', background:'white', border:'1px solid #E5E7EB', borderRadius:'12px', fontSize:'16px', color:'#111827', fontFamily:"'DM Sans', sans-serif", outline:'none', WebkitAppearance:'none' }}>
                 <option value=''>Select facility…</option>
                 {facilities.map(f => (
                   <option key={f.id} value={f.id}>{f.name}{f.department ? ' — ' + f.department : ''}</option>
@@ -491,16 +491,16 @@ function StaffPortal({ conversations, selectedConv, onSelectConv, session, hotel
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px' }}>
               <div>
                 <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151', marginBottom:'8px' }}>Date</div>
-                <input type='date' style={{ width:'100%', padding:'12px 14px', border:'1px solid #E5E7EB', borderRadius:'12px', fontSize:'16px', fontFamily:"'DM Sans', sans-serif", outline:'none', boxSizing:'border-box', WebkitAppearance:'none' }} />
+                <input type='date' data-facility-date style={{ width:'100%', padding:'12px 14px', border:'1px solid #E5E7EB', borderRadius:'12px', fontSize:'16px', fontFamily:"'DM Sans', sans-serif", outline:'none', boxSizing:'border-box', WebkitAppearance:'none' }} />
               </div>
               <div>
                 <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151', marginBottom:'8px' }}>Time</div>
-                <input type='time' style={{ width:'100%', padding:'12px 14px', border:'1px solid #E5E7EB', borderRadius:'12px', fontSize:'16px', fontFamily:"'DM Sans', sans-serif", outline:'none', boxSizing:'border-box', WebkitAppearance:'none' }} />
+                <input type='time' data-facility-time style={{ width:'100%', padding:'12px 14px', border:'1px solid #E5E7EB', borderRadius:'12px', fontSize:'16px', fontFamily:"'DM Sans', sans-serif", outline:'none', boxSizing:'border-box', WebkitAppearance:'none' }} />
               </div>
             </div>
             <div>
               <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151', marginBottom:'8px' }}>Number of guests</div>
-              <input type='number' min='1' defaultValue='1' style={{ width:'100%', padding:'12px 14px', border:'1px solid #E5E7EB', borderRadius:'12px', fontSize:'16px', fontFamily:"'DM Sans', sans-serif", outline:'none', boxSizing:'border-box' }} />
+              <input type='number' min='1' defaultValue='1' data-facility-pax style={{ width:'100%', padding:'12px 14px', border:'1px solid #E5E7EB', borderRadius:'12px', fontSize:'16px', fontFamily:"'DM Sans', sans-serif", outline:'none', boxSizing:'border-box' }} />
             </div>
           </div>
         )}
@@ -576,7 +576,7 @@ function StaffPortal({ conversations, selectedConv, onSelectConv, session, hotel
             cursor: (!details.trim() || (!selectedConv && !noGuest)) ? 'not-allowed' : 'pointer',
             fontFamily:"'DM Sans', sans-serif",
           }}>
-          {sent ? '✓ Created!' : sending ? 'Creating…' : reqType==='external' ? 'Send booking request' : 'Create ticket'}
+          {sent ? '✓ Sent!' : sending ? 'Sending…' : reqType==='external' ? 'Send booking request' : reqType==='facility' ? 'Send Booking Confirmation' : 'Create ticket'}
         </button>
 
         <div style={{ height:'20px' }}/>
@@ -638,8 +638,26 @@ function ExpandableBooking({ booking: b, guest: g, tc }) {
 }
 
 
-function TicketAlertRow({ ticket: t, depts = [], isPrivileged = false }) {
-  const [updating, setUpdating] = useState(false)
+function TicketAlertRow({ ticket: t, depts = [], isPrivileged = false, onOpenThread, conversations = [] }) {
+  const [updating,  setUpdating]  = useState(false)
+  const [expanded,  setExpanded]  = useState(false)
+
+  const typeConfig = {
+    facility_booking: { emoji:'🎾', label:'Facility', bg:'#DCFCE7', color:'#14532D' },
+    room_issue:       { emoji:'🔧', label:'Maintenance', bg:'#FEF2F2', color:'#DC2626' },
+    housekeeping:     { emoji:'🛎️', label:'Housekeeping', bg:'#F0FDF4', color:'#15803D' },
+  }
+  const tc = typeConfig[t.category] || typeConfig[t.department] || { emoji:'📋', label:'Ticket', bg:'#F1F5F9', color:'#334155' }
+
+  async function updateStatus(status) {
+    setUpdating(true)
+    try {
+      await fetch('/api/tickets', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ticketId: t.id, status }),
+      })
+    } finally { setUpdating(false) }
+  }
 
   async function reassign(newDept) {
     setUpdating(true)
@@ -652,30 +670,66 @@ function TicketAlertRow({ ticket: t, depts = [], isPrivileged = false }) {
   }
 
   return (
-    <div style={{ padding:'14px 16px', background:'white', borderBottom:'1px solid #F3F4F6' }}>
-      <div style={{ display:'flex', gap:'10px', alignItems:'flex-start' }}>
-        <div style={{ width:'28px', height:'28px', borderRadius:'8px', background: t.priority==='urgent'?'#FEE2E2':'#FFFBEB', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'14px', flexShrink:0 }}>
-          {t.priority==='urgent'?'🚨':'⚠️'}
+    <div style={{ background:'white', borderBottom:'1px solid #F3F4F6' }}>
+      <div onClick={() => setExpanded(e => !e)}
+        style={{ padding:'12px 16px', display:'flex', gap:'10px', alignItems:'flex-start', cursor:'pointer' }}>
+        <div style={{ width:'28px', height:'28px', borderRadius:'8px', background:tc.bg, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'14px', flexShrink:0 }}>
+          {tc.emoji}
         </div>
-        <div style={{ flex:1 }}>
-          <div style={{ fontSize:'13px', fontWeight:'600', color:'#111827', marginBottom:'2px' }}>{t.description?.slice(0,70)}{t.description?.length>70?'…':''}</div>
-          <div style={{ fontSize:'12px', color:'#6B7280' }}>
-            {t.room ? `Room ${t.room} · ` : ''}{t.department} · <span style={{ color: t.status==='escalated'?'#DC2626':'#D97706', textTransform:'capitalize' }}>{t.status}</span>
+        <div style={{ flex:1, minWidth:0 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:'5px', marginBottom:'2px', flexWrap:'wrap' }}>
+            <span style={{ fontSize:'10px', fontWeight:'700', padding:'1px 6px', borderRadius:'4px', background:tc.bg, color:tc.color }}>{tc.label}</span>
+            {t.priority==='urgent' && <span style={{ fontSize:'10px', fontWeight:'700', padding:'1px 6px', borderRadius:'4px', background:'#FEE2E2', color:'#DC2626' }}>URGENT</span>}
+            {t.priority==='planned' && <span style={{ fontSize:'10px', fontWeight:'600', padding:'1px 6px', borderRadius:'4px', background:'#EFF6FF', color:'#2563EB' }}>PLANNED</span>}
           </div>
-          {t.priority==='urgent' && <span style={{ display:'inline-block', marginTop:'4px', fontSize:'10px', fontWeight:'700', padding:'2px 7px', borderRadius:'4px', background:'#FEE2E2', color:'#DC2626' }}>URGENT</span>}
+          <div style={{ fontSize:'13px', fontWeight:'600', color:'#111827', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+            {t.description?.slice(0,50)}{t.description?.length>50?'…':''}
+          </div>
+          <div style={{ fontSize:'11px', color:'#6B7280', marginTop:'1px' }}>
+            {t.room ? `Room ${t.room} · ` : ''}{t.department} · <span style={{ textTransform:'capitalize' }}>{t.status}</span>
+          </div>
         </div>
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ flexShrink:0, marginTop:'6px' }}>
+          <path d={expanded ? 'M1 7L5 3L9 7' : 'M1 3L5 7L9 3'} stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
       </div>
-      {/* Reassign — supervisor + manager only */}
-      {isPrivileged && depts.length > 0 && (
-        <select onChange={e => { if (e.target.value) { reassign(e.target.value); e.target.value = '' } }}
-          style={{ width:'100%', marginTop:'10px', padding:'8px 10px', border:'0.5px solid #E5E7EB', borderRadius:'8px', fontSize:'12px', color:'#6B7280', background:'white', cursor:'pointer', fontFamily:"'DM Sans', sans-serif" }}>
-          <option value=''>↩ Reassign to department…</option>
-          {depts.map(d => (
-            <option key={d.id} value={d.key} disabled={d.key === t.department}>
-              {d.name}{d.key === t.department ? ' (current)' : ''}
-            </option>
-          ))}
-        </select>
+      {expanded && (
+        <div style={{ padding:'0 16px 12px 56px', display:'flex', flexDirection:'column', gap:'8px' }}>
+          <div style={{ fontSize:'12px', color:'#374151', lineHeight:'1.6' }}>{t.description}</div>
+          <div style={{ display:'flex', gap:'7px', flexWrap:'wrap' }}>
+            {isPrivileged && t.status === 'pending' && (
+              <button onClick={() => updateStatus('in_progress')} disabled={updating}
+                style={{ fontSize:'12px', fontWeight:'600', padding:'6px 12px', borderRadius:'7px', border:'0.5px solid #86EFAC', background:'#DCFCE7', color:'#14532D', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                👍 Accept
+              </button>
+            )}
+            {isPrivileged && t.status === 'in_progress' && (
+              <button onClick={() => updateStatus('resolved')} disabled={updating}
+                style={{ fontSize:'12px', fontWeight:'600', padding:'6px 12px', borderRadius:'7px', border:'0.5px solid #86EFAC', background:'#DCFCE7', color:'#14532D', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                ✅ Complete
+              </button>
+            )}
+            {t.guest_id && onOpenThread && (() => {
+              const conv = conversations.find(c => c.guests?.id === t.guest_id)
+              if (!conv) return null
+              return (
+                <button onClick={() => onOpenThread(conv)}
+                  style={{ fontSize:'12px', fontWeight:'600', padding:'6px 12px', borderRadius:'7px', border:'0.5px solid #93C5FD', background:'#DBEAFE', color:'#1E3A5F', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                  💬 Go to chat
+                </button>
+              )
+            })()}
+            {isPrivileged && depts.length > 0 && (
+              <select onChange={e => { if (e.target.value) { reassign(e.target.value); e.target.value = '' } }}
+                style={{ fontSize:'12px', padding:'6px 10px', borderRadius:'7px', border:'0.5px solid #E5E7EB', background:'white', color:'#6B7280', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                <option value=''>Reassign…</option>
+                {depts.map(d => (
+                  <option key={d.id} value={d.key} disabled={d.key === t.department}>{d.name}</option>
+                ))}
+              </select>
+            )}
+          </div>
+        </div>
       )}
     </div>
   )
@@ -737,7 +791,7 @@ function IssuesPanel({ tickets, bookings, conversations = [], onOpenThread, sess
       {issues.length === 0
         ? <EmptyRow text="All clear ✓" />
         : issues.map(t => (
-          <TicketAlertRow key={t.id} ticket={t} depts={depts} isPrivileged={isSupervisorOrManager} />
+          <TicketAlertRow key={t.id} ticket={t} depts={depts} isPrivileged={isSupervisorOrManager} onOpenThread={onOpenThread} conversations={conversations} />
         ))
       }
 

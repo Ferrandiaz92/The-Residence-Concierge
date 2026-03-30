@@ -248,15 +248,46 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
   }
 
   async function handleSendRequest() {
-    if (!requestText.trim()) return
+    if (requestType !== 'facility' && !requestText.trim()) return
     if (!selectedConv && !noGuest) return
     setSending(true)
     try {
-      const endpoint = requestType === 'external' ? '/api/bookings' : '/api/tickets'
-      const body = requestType === 'external'
-        ? { hotelId, guestId: selectedConv?.guests?.id || null, type: category, details: { description: requestText }, createdBy: `staff:${session?.name||''}` }
-        : { hotelId, guestId: selectedConv?.guests?.id || null, department, category: deptCategory || department, description: requestText, room: selectedConv?.guests?.room || selectedConv?.guests?.guest_room || null, priority, createdBy: `staff:${session?.name||''}` }
-      await fetch(endpoint, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) })
+      if (requestType === 'facility') {
+        // Facility booking — create via facility-bookings API
+        // which sends WhatsApp to facility contact + notifies guest
+        const facSelect  = document.querySelector('select[data-facility-select]')
+        const dateInput  = document.querySelector('input[data-facility-date]')
+        const timeInput  = document.querySelector('input[data-facility-time]')
+        const paxInput   = document.querySelector('input[data-facility-pax]')
+        const facilityId   = facSelect?.value
+        const facilityName = facSelect?.options[facSelect.selectedIndex]?.text || ''
+        const date         = dateInput?.value
+        const time         = timeInput?.value
+        const guestsCount  = parseInt(paxInput?.value || '1')
+        if (!facilityId) { setSending(false); return }
+        await fetch('/api/facility-bookings', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({
+            hotelId,
+            facilityId,
+            facilityName: facilityName.split(' — ')[0],
+            guestId:      selectedConv?.guests?.id || null,
+            date, time, guestsCount,
+            notes:        requestText || null,
+            createdBy:    `staff:${session?.name||''}`,
+          }),
+        })
+      } else if (requestType === 'external') {
+        await fetch('/api/bookings', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ hotelId, guestId: selectedConv?.guests?.id || null, type: category, details: { description: requestText }, createdBy: `staff:${session?.name||''}` }),
+        })
+      } else {
+        await fetch('/api/tickets', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ hotelId, guestId: selectedConv?.guests?.id || null, department, category: deptCategory || department, description: requestText, room: selectedConv?.guests?.room || selectedConv?.guests?.guest_room || null, priority, createdBy: `staff:${session?.name||''}` }),
+        })
+      }
       setSent(true); setRequestText('')
       setTimeout(() => setSent(false), 3000)
       loadData()
@@ -485,7 +516,7 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
               <div style={{ display:'flex', flexDirection:'column', gap:'10px' }}>
                 <div>
                   <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151', marginBottom:'6px' }}>Facility</div>
-                  <select style={{ width:'100%', padding:'9px 12px', border:'0.5px solid #D1D5DB', borderRadius:'9px', fontSize:'13px', color:'#111827', background:'white', fontFamily:'var(--font)', outline:'none' }}>
+                  <select data-facility-select style={{ width:'100%', padding:'9px 12px', border:'0.5px solid #D1D5DB', borderRadius:'9px', fontSize:'13px', color:'#111827', background:'white', fontFamily:'var(--font)', outline:'none' }}>
                     <option value=''>Select facility…</option>
                     {facilities.map(f => (
                       <option key={f.id} value={f.id}>{f.name}{f.department ? ' — ' + f.department : ''}</option>
@@ -495,16 +526,22 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
                 <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'8px' }}>
                   <div>
                     <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151', marginBottom:'5px' }}>Date</div>
-                    <input type='date' style={{ width:'100%', padding:'9px 12px', border:'0.5px solid #D1D5DB', borderRadius:'9px', fontSize:'13px', fontFamily:'var(--font)', outline:'none', boxSizing:'border-box' }} />
+                    <input type='date' data-facility-date style={{ width:'100%', padding:'9px 12px', border:'0.5px solid #D1D5DB', borderRadius:'9px', fontSize:'13px', fontFamily:'var(--font)', outline:'none', boxSizing:'border-box' }} />
                   </div>
                   <div>
                     <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151', marginBottom:'5px' }}>Time</div>
-                    <input type='time' style={{ width:'100%', padding:'9px 12px', border:'0.5px solid #D1D5DB', borderRadius:'9px', fontSize:'13px', fontFamily:'var(--font)', outline:'none', boxSizing:'border-box' }} />
+                    <input type='time' data-facility-time style={{ width:'100%', padding:'9px 12px', border:'0.5px solid #D1D5DB', borderRadius:'9px', fontSize:'13px', fontFamily:'var(--font)', outline:'none', boxSizing:'border-box' }} />
                   </div>
                 </div>
                 <div>
                   <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151', marginBottom:'5px' }}>Number of guests</div>
-                  <input type='number' min='1' defaultValue='1' style={{ width:'100%', padding:'9px 12px', border:'0.5px solid #D1D5DB', borderRadius:'9px', fontSize:'13px', fontFamily:'var(--font)', outline:'none', boxSizing:'border-box' }} />
+                  <input type='number' min='1' defaultValue='1' data-facility-pax style={{ width:'100%', padding:'9px 12px', border:'0.5px solid #D1D5DB', borderRadius:'9px', fontSize:'13px', fontFamily:'var(--font)', outline:'none', boxSizing:'border-box' }} />
+                </div>
+                <div>
+                  <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151', marginBottom:'5px' }}>Notes (optional)</div>
+                  <textarea value={requestText} onChange={e=>setRequestText(e.target.value)}
+                    placeholder='Any special requests or notes for the facility team…'
+                    style={{ width:'100%', height:'48px', padding:'9px 12px', border:'0.5px solid #D1D5DB', borderRadius:'9px', fontSize:'12px', fontFamily:'var(--font)', outline:'none', resize:'none', boxSizing:'border-box' }} />
                 </div>
               </div>
             )}
@@ -584,7 +621,7 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
             <button onClick={handleSendRequest}
               disabled={sending || !requestText.trim() || (!selectedConv && !noGuest)}
               style={{ width:'100%', padding:'11px', background: sent?'#16A34A':(!requestText.trim()||(!selectedConv&&!noGuest))?'#E5E7EB':'var(--green-800)', border:'none', borderRadius:'10px', fontSize:'13px', fontWeight:'700', color:(!requestText.trim()||(!selectedConv&&!noGuest))?'#9CA3AF':'white', cursor:(!requestText.trim()||(!selectedConv&&!noGuest))?'not-allowed':'pointer', fontFamily:'var(--font)', transition:'background 0.2s', letterSpacing:'0.2px' }}>
-              {sent?'✓ Created':sending?'Creating...':requestType==='external'?'Send request':'Create internal ticket'}
+              {sent?'✓ Sent':sending?'Sending...':requestType==='external'?'Send request':requestType==='facility'?'Send Booking Confirmation':'Create internal ticket'}
             </button>
           </div>
         )}
@@ -630,50 +667,94 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
             {sh('Open tickets', `${issues.length} need action`, issues.length > 0)}
             {issues.length === 0 ? (
               <div style={{ padding:'16px', textAlign:'center', color:'#9CA3AF', fontSize:'13px' }}>All clear ✓</div>
-            ) : issues.map(t => (
-              <div key={t.id} style={{ display:'flex', alignItems:'flex-start', gap:'10px', padding:'12px 14px', borderBottom:'0.5px solid var(--border)' }}>
-                <div style={{ width:'20px', height:'20px', borderRadius:'6px', background:t.priority==='urgent'?'#FEE2E2':'#FFFBEB', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'11px', flexShrink:0, marginTop:'1px' }}>
-                  {t.priority==='urgent'?'!':'↩'}
-                </div>
-                <div style={{ flex:1 }}>
-                  <div style={{ fontSize:'12px', fontWeight:'600', color:'#111827', marginBottom:'2px' }}>
-                    {t.description?.slice(0,40)}
-                    {t.priority==='urgent' && <span style={{ fontSize:'10px', fontWeight:'700', padding:'1px 6px', borderRadius:'4px', background:'#FEE2E2', color:'#DC2626', marginLeft:'5px' }}>urgent</span>}
+            ) : issues.map(t => {
+              const [ticketOpen, setTicketOpen] = React.useState(false)
+              const typeConfig = {
+                facility_booking: { label:'Facility', bg:'#DCFCE7', color:'#14532D', emoji:'🎾' },
+                room_issue:       { label:'Maintenance', bg:'#FEF2F2', color:'#DC2626', emoji:'🔧' },
+                housekeeping:     { label:'Housekeeping', bg:'#F0FDF4', color:'#15803D', emoji:'🛎️' },
+                fnb:              { label:'F&B', bg:'#FEF3C7', color:'#B45309', emoji:'🍽️' },
+                default:          { label:'Ticket', bg:'#F1F5F9', color:'#334155', emoji:'📋' },
+              }
+              const tc = typeConfig[t.category] || typeConfig[t.department] || typeConfig.default
+              const isPrivileged = ['manager','supervisor','receptionist'].includes(session?.role)
+              return (
+                <div key={t.id} style={{ borderBottom:'0.5px solid var(--border)' }}>
+                  {/* Row header */}
+                  <div onClick={() => setTicketOpen(o => !o)}
+                    style={{ display:'flex', alignItems:'flex-start', gap:'10px', padding:'10px 14px', cursor:'pointer', background: ticketOpen ? '#F9FAFB' : 'white' }}>
+                    <div style={{ width:'24px', height:'24px', borderRadius:'6px', background:tc.bg, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'12px', flexShrink:0, marginTop:'1px' }}>
+                      {tc.emoji}
+                    </div>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ display:'flex', alignItems:'center', gap:'5px', marginBottom:'2px', flexWrap:'wrap' }}>
+                        <span style={{ fontSize:'10px', fontWeight:'700', padding:'1px 6px', borderRadius:'4px', background:tc.bg, color:tc.color }}>{tc.label}</span>
+                        {t.priority === 'urgent' && <span style={{ fontSize:'10px', fontWeight:'700', padding:'1px 6px', borderRadius:'4px', background:'#FEE2E2', color:'#DC2626' }}>URGENT</span>}
+                        {t.priority === 'planned' && <span style={{ fontSize:'10px', fontWeight:'600', padding:'1px 6px', borderRadius:'4px', background:'#EFF6FF', color:'#2563EB' }}>PLANNED</span>}
+                      </div>
+                      <div style={{ fontSize:'12px', fontWeight:'600', color:'#111827', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:'180px' }}>
+                        {t.description?.slice(0, 45)}{t.description?.length > 45 ? '…' : ''}
+                      </div>
+                      <div style={{ fontSize:'11px', color:'#6B7280', marginTop:'1px' }}>
+                        {t.room ? `Room ${t.room} · ` : ''}{t.department} · {t.status}
+                      </div>
+                    </div>
+                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ flexShrink:0, marginTop:'6px' }}>
+                      <path d={ticketOpen ? 'M1 7L5 3L9 7' : 'M1 3L5 7L9 3'} stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
                   </div>
-                  <div style={{ fontSize:'11px', color:'#6B7280' }}>{t.room ? `Room ${t.room} · ` : ''}{t.department} · {t.status}</div>
-                  <div style={{ display:'flex', gap:'6px', marginTop:'6px', flexWrap:'wrap' }}>
-                    {/* Escalation button */}
-                    <button style={{ fontSize:'11px', fontWeight:'600', padding:'3px 9px', borderRadius:'5px', border:'0.5px solid #FCD34D', background:'#FFFBEB', color:'#D97706', cursor:'pointer', fontFamily:'var(--font)' }}>
-                      {t.escalation_level===0?'Call supervisor':t.escalation_level===1?'Call team':'Contact manager'}
-                    </button>
-                    {/* Fix #17: Reopen resolved tickets */}
-                    {t.status === 'resolved' && (
-                      <button onClick={async () => {
-                        await fetch('/api/tickets', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ticketId: t.id, status:'pending' }) })
-                        load()
-                      }} style={{ fontSize:'11px', fontWeight:'600', padding:'3px 9px', borderRadius:'5px', border:'0.5px solid #D1D5DB', background:'white', color:'#6B7280', cursor:'pointer', fontFamily:'var(--font)' }}>
-                        ↩ Reopen
-                      </button>
-                    )}
-                    {/* Fix #18: Reassign department */}
-                    <select onChange={async (e) => {
-                      if (!e.target.value) return
-                      await fetch('/api/tickets', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ticketId: t.id, status: t.status, department: e.target.value }) })
-                      e.target.value = ''
-                      load()
-                    }} style={{ fontSize:'11px', padding:'3px 7px', borderRadius:'5px', border:'0.5px solid #D1D5DB', background:'white', color:'#6B7280', cursor:'pointer', fontFamily:'var(--font)' }}>
-                      <option value="">Reassign…</option>
-                      {['maintenance','housekeeping','fnb','concierge','security'].map(d => (
-                        <option key={d} value={d} disabled={d === t.department}>{d.charAt(0).toUpperCase()+d.slice(1)}</option>
-                      ))}
-                    </select>
-                  </div>
+                  {/* Expanded detail */}
+                  {ticketOpen && (
+                    <div style={{ padding:'8px 14px 12px 48px', background:'#F9FAFB', borderTop:'0.5px solid #F3F4F6', display:'flex', flexDirection:'column', gap:'7px' }}>
+                      <div style={{ fontSize:'11px', color:'#374151', lineHeight:'1.6' }}>{t.description}</div>
+                      <div style={{ display:'flex', gap:'6px', flexWrap:'wrap' }}>
+                        {/* Accept / Complete — privileged roles */}
+                        {isPrivileged && t.status === 'pending' && (
+                          <button onClick={async () => {
+                            await fetch('/api/tickets', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ticketId: t.id, status:'in_progress' }) })
+                            loadData()
+                          }} style={{ fontSize:'11px', fontWeight:'600', padding:'4px 10px', borderRadius:'5px', border:'0.5px solid #86EFAC', background:'#DCFCE7', color:'#14532D', cursor:'pointer', fontFamily:'var(--font)' }}>
+                            👍 Accept
+                          </button>
+                        )}
+                        {isPrivileged && t.status === 'in_progress' && (
+                          <button onClick={async () => {
+                            await fetch('/api/tickets', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ticketId: t.id, status:'resolved' }) })
+                            loadData()
+                          }} style={{ fontSize:'11px', fontWeight:'600', padding:'4px 10px', borderRadius:'5px', border:'0.5px solid #86EFAC', background:'#DCFCE7', color:'#14532D', cursor:'pointer', fontFamily:'var(--font)' }}>
+                            ✅ Complete
+                          </button>
+                        )}
+                        {/* Go to chat */}
+                        {t.guest_id && (
+                          <button onClick={() => {
+                            const conv = conversations.find(c => c.guests?.id === t.guest_id)
+                            if (conv) { setSelectedConv(conv); setCentreMode('chat') }
+                          }} style={{ fontSize:'11px', fontWeight:'600', padding:'4px 10px', borderRadius:'5px', border:'0.5px solid #93C5FD', background:'#DBEAFE', color:'#1E3A5F', cursor:'pointer', fontFamily:'var(--font)' }}>
+                            💬 Go to chat
+                          </button>
+                        )}
+                        {/* Reassign */}
+                        <select onChange={async (e) => {
+                          if (!e.target.value) return
+                          await fetch('/api/tickets', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ticketId: t.id, status: t.status, department: e.target.value }) })
+                          e.target.value = ''
+                          loadData()
+                        }} style={{ fontSize:'11px', padding:'3px 7px', borderRadius:'5px', border:'0.5px solid #D1D5DB', background:'white', color:'#6B7280', cursor:'pointer', fontFamily:'var(--font)' }}>
+                          <option value="">Reassign…</option>
+                          {['maintenance','housekeeping','fnb','concierge','security'].map(d => (
+                            <option key={d} value={d} disabled={d === t.department}>{d.charAt(0).toUpperCase()+d.slice(1)}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
 
-          {/* Upcoming */}
+                    {/* Upcoming */}
           <div style={{ borderBottom:'0.5px solid var(--border)' }}>
             {sh('Upcoming', 'today & tomorrow')}
             {upcoming.length === 0 ? (

@@ -170,7 +170,8 @@ export default function SettingsTab({ hotelId, session, isMobile = false }) {
     { key:'policies',   label:'Policies' },
     { key:'pricing',    label:'Pricing' },
     { key:'local_tips', label:'Local tips' },
-    { key:'custom',     label:'Custom FAQ' },
+    { key:'custom',     label:'Custom FAQ'  },
+    { key:'memberships', label:'Memberships'  },
   ]
 
   useEffect(() => {
@@ -484,7 +485,8 @@ export default function SettingsTab({ hotelId, session, isMobile = false }) {
                   <div>
                     <label style={labelStyle}>Answer the bot gives guests</label>
                     <textarea value={newKb.answer||''} onChange={e=>setNewKb(k=>({...k,answer:e.target.value}))}
-                      style={{ ...inputStyle, height:'72px', resize:'none' }} placeholder="Full answer..."/>
+                      style={{ ...inputStyle, height: newKb.category==='memberships' ? '180px' : '72px', resize:'vertical' }}
+                      placeholder={newKb.category==='memberships' ? 'Describe what is included in this membership — benefits, facilities access, operating hours, price, how to sign up...' : 'Full answer...'}/>
                   </div>
                   <div style={{ display:'flex', gap:'8px', justifyContent:'flex-end' }}>
                     {cancelBtn(()=>setNewKb(null))}

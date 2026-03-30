@@ -5,13 +5,26 @@
 'use client'
 import { useState, useEffect } from 'react'
 
+// Service source types
+const SERVICE_TYPES = [
+  { key:'all',           label:'All',             icon:'' },
+  { key:'partner',       label:'Partner Services', icon:'🤝' },
+  { key:'hotel_service', label:'Hotel Services',   icon:'🏨' },
+]
+
+// Categories — used within each service type
 const CATEGORIES = [
-  { key:'event',     label:'Event',      icon:'🎤' },
-  { key:'activity',  label:'Activity',   icon:'🚤' },
-  { key:'dining',    label:'Dining',     icon:'🍽️' },
-  { key:'transport', label:'Transport',  icon:'🚗' },
-  { key:'wellness',  label:'Wellness',   icon:'💆' },
-  { key:'other',     label:'Other',      icon:'✨' },
+  { key:'event',           label:'Event',              icon:'🎤',  type:'partner'       },
+  { key:'activity',        label:'Activity',           icon:'🚤',  type:'partner'       },
+  { key:'dining',          label:'Dining',             icon:'🍽️',  type:'partner'       },
+  { key:'transport',       label:'Transport',          icon:'🚗',  type:'partner'       },
+  { key:'wellness',        label:'Wellness',           icon:'💆',  type:'partner'       },
+  { key:'other',           label:'Other',              icon:'✨',  type:'partner'       },
+  { key:'spa_treatment',   label:'Spa Treatment',      icon:'🧖',  type:'hotel_service' },
+  { key:'birthday',        label:'Birthday Party',     icon:'🎂',  type:'hotel_service' },
+  { key:'celebration',     label:'Special Celebration',icon:'🥂',  type:'hotel_service' },
+  { key:'membership',      label:'Membership',         icon:'⭐',  type:'hotel_service' },
+  { key:'hotel_other',     label:'Other Hotel Service',icon:'🏨',  type:'hotel_service' },
 ]
 
 const S = {
@@ -343,11 +356,12 @@ function ProductCard({ p, onEdit, onToggle }) {
 
 // ── MAIN ─────────────────────────────────────────────────
 export default function ProductsManager({ hotelId }) {
-  const [products, setProducts] = useState([])
-  const [partners, setPartners] = useState([])
-  const [loading,  setLoading]  = useState(true)
-  const [editing,  setEditing]  = useState(null)
-  const [saved,    setSaved]    = useState(false)
+  const [products,     setProducts]     = useState([])
+  const [partners,     setPartners]     = useState([])
+  const [loading,      setLoading]      = useState(true)
+  const [editing,      setEditing]      = useState(null)
+  const [saved,        setSaved]        = useState(false)
+  const [serviceFilter, setServiceFilter] = useState('all')
 
   useEffect(() => { if (hotelId) load() }, [hotelId])
 
@@ -394,8 +408,18 @@ export default function ProductsManager({ hotelId }) {
               Products & services
             </div>
             <div style={{ fontSize:'12px', color:'#6B7280', lineHeight:'1.5' }}>
-              Everything the bot can offer guests — tours, transfers, dining, spa, events and more.
+              Everything the bot can offer guests — partner experiences AND hotel services.
               The bot will present these and send payment links automatically.
+            </div>
+
+            {/* Service type filter */}
+            <div style={{ display:'flex', gap:'6px', marginTop:'12px', flexWrap:'wrap' }}>
+              {SERVICE_TYPES.map(t => (
+                <button key={t.key} onClick={() => setServiceFilter(t.key)}
+                  style={{ padding:'5px 14px', borderRadius:'20px', fontSize:'12px', fontWeight:'500', border:'0.5px solid', borderColor:serviceFilter===t.key?'#1C3D2E':'#D1D5DB', background:serviceFilter===t.key?'#1C3D2E':'white', color:serviceFilter===t.key?'white':'#374151', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                  {t.icon} {t.label}
+                </button>
+              ))}
             </div>
           </div>
 
@@ -407,10 +431,23 @@ export default function ProductsManager({ hotelId }) {
         </>
       )}
 
-      {/* List */}
-      {!editing && products.map(p => (
-        <ProductCard key={p.id} p={p} onEdit={setEditing} onToggle={toggleActive} />
-      ))}
+      {/* List — filtered by service type */}
+      {!editing && (() => {
+        const filtered = serviceFilter === 'all'
+          ? products
+          : products.filter(p => {
+              const cat = CATEGORIES.find(c => c.key === p.category)
+              if (serviceFilter === 'partner') return !cat || cat.type === 'partner'
+              if (serviceFilter === 'hotel_service') return cat?.type === 'hotel_service'
+              return true
+            })
+        if (filtered.length === 0 && serviceFilter !== 'all') return (
+          <div style={{ padding:'32px', textAlign:'center', background:'white', borderRadius:'12px', border:'1px dashed #D1D5DB', fontSize:'13px', color:'#9CA3AF', fontFamily:"'DM Sans',sans-serif" }}>
+            No {serviceFilter === 'hotel_service' ? 'hotel services' : 'partner services'} yet. Click below to add one.
+          </div>
+        )
+        return filtered.map(p => <ProductCard key={p.id} p={p} onEdit={setEditing} onToggle={toggleActive} />)
+      })()}
 
       {/* Form */}
       {editing && (

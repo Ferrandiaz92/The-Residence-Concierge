@@ -29,6 +29,7 @@ const GUEST_TYPES = {
   day_visitor: { label:'Day visitor',  bg:'#FEF3C7', color:'#78350F', icon:'☀️' },
   event:       { label:'Event guest',  bg:'#EDE9FE', color:'#4C1D95', icon:'🎭' },
   prospect:    { label:'Prospect',     bg:'#F1F5F9', color:'#334155', icon:'🔍' },
+  member:     { label:'Member',        bg:'#FEF0FF', color:'#701A75', icon:'⭐' },
 }
 
 const SERVICE_ICONS = {
