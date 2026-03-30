@@ -198,6 +198,77 @@ export async function handleInboundWhatsApp(rawBody) {
     }
   }
 
+  // 4b. Facility alternative reply check (Yes/No to alternative slot offer)
+  const msgTrimmed = message.trim().toLowerCase()
+  if (msgTrimmed === 'yes' || msgTrimmed === 'no' || msgTrimmed === 'si' || msgTrimmed === 'да' || msgTrimmed === 'כן' || msgTrimmed === 'نعم') {
+    // Check if this guest has a pending 'alternative' facility booking
+    const { data: altBooking } = await supabase
+      .from('facility_bookings')
+      .select('*')
+      .eq('guest_id', guest.id)
+      .eq('status', 'alternative')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single()
+
+    if (altBooking) {
+      const isYes = ['yes','si','да','כן','نعم','oui','ja','sí'].includes(msgTrimmed)
+      const lang  = guest.language || 'en'
+      const facName = altBooking.facility_name || 'facility'
+      const altTime = altBooking.alternative_time || ''
+      const altDate = altBooking.alternative_date || ''
+
+      if (isYes) {
+        // Confirm the alternative slot
+        await supabase.from('facility_bookings').update({
+          status:        'confirmed',
+          time:          altBooking.alternative_time || altBooking.time,
+          date:          altBooking.alternative_date || altBooking.date,
+          guest_notified: true,
+          ack_at:        new Date().toISOString(),
+        }).eq('id', altBooking.id)
+
+        const ref = altBooking.id.slice(-6).toUpperCase()
+        const dateDisp = altDate ? (() => { try { const [y,m,d] = altDate.split('-'); return d+'/'+m+'/'+y } catch { return altDate } })() : ''
+        const CONF = {
+          en: `Your ${facName} booking is confirmed ✅\n\n📅 Date: ${dateDisp || 'TBC'}\n⏰ Time: ${altTime || 'TBC'}\n\nSee you there! 🎾\n\n🔖 Booking ref: ${ref}\n(Show this to staff on arrival)`,
+          ru: `Бронирование ${facName} подтверждено ✅\n\n📅 ${dateDisp || 'TBC'}\n⏰ ${altTime || 'TBC'}\n\n🔖 Реф: ${ref}`,
+          he: `ההזמנה ל${facName} אושרה ✅\n\n📅 ${dateDisp || 'TBC'}\n⏰ ${altTime || 'TBC'}\n\n🔖 מספר: ${ref}`,
+          de: `${facName} bestätigt ✅\n\n📅 ${dateDisp || 'TBC'}\n⏰ ${altTime || 'TBC'}\n\n🔖 Ref: ${ref}`,
+          fr: `${facName} confirmé ✅\n\n📅 ${dateDisp || 'TBC'}\n⏰ ${altTime || 'TBC'}\n\n🔖 Réf: ${ref}`,
+          es: `${facName} confirmado ✅\n\n📅 ${dateDisp || 'TBC'}\n⏰ ${altTime || 'TBC'}\n\n🔖 Ref: ${ref}`,
+        }
+        const confirmMsg = CONF[lang] || CONF.en
+        await sendWhatsApp(from, confirmMsg)
+        await appendMessage(conv?.id, 'assistant', confirmMsg, { sent_by: 'facility_confirmation' })
+
+        // Notify facility contact
+        if (altBooking.facility_id) {
+          const { data: fac } = await supabase.from('facilities').select('contact_phone, name').eq('id', altBooking.facility_id).single()
+          if (fac?.contact_phone) {
+            const facMsg = `✅ Guest confirmed the alternative slot: ${altTime}${altDate ? ' on ' + altDate : ''}\nRef: ${ref}\nGuest: ${guest.name || ''}${guest.room ? ' · Room ' + guest.room : ''}`
+            await sendWhatsApp(fac.contact_phone, facMsg).catch(() => {})
+          }
+        }
+      } else {
+        // Guest said No — politely offer to find another time
+        const DECLINE = {
+          en: `No problem! Would you like me to check other available times for ${facName}? 😊`,
+          ru: `Понятно! Подобрать другое время для ${facName}? 😊`,
+          he: `אין בעיה! תרצה לבדוק זמנים אחרים ל${facName}? 😊`,
+          de: `Kein Problem! Soll ich andere Zeiten für ${facName} prüfen? 😊`,
+          fr: `Pas de problème! Voulez-vous que je vérifie d'autres créneaux pour ${facName}? 😊`,
+          es: `¡No hay problema! ¿Busco otros horarios disponibles para ${facName}? 😊`,
+        }
+        const declineMsg = DECLINE[lang] || DECLINE.en
+        await supabase.from('facility_bookings').update({ status: 'rejected' }).eq('id', altBooking.id)
+        await sendWhatsApp(from, declineMsg)
+        await appendMessage(conv?.id, 'assistant', declineMsg, { sent_by: 'facility_confirmation' })
+      }
+      return  // handled — don't pass to Claude or ticket handler
+    }
+  }
+
   // 5. Feedback reply check
   const isFeedback = await handleFeedbackReply(from, message, hotel.id)
   if (isFeedback) return
