@@ -121,8 +121,7 @@ export async function POST(request) {
         : { data: null }
 
       const alertMsg = [
-        `🎾 FACILITY BOOKING REQUEST`,
-        `Facility: ${facility.name}`,
+        `🎾 Booking Request: ${facility.name}`,
         `Date: ${date || 'TBC'} at ${time || 'TBC'}`,
         `Guests: ${guestsCount || 1}`,
         guest ? `Guest: ${guest.name || ''} ${guest.surname || ''}${guest.room ? ` · Room ${guest.room}` : ''}` : '',
@@ -143,7 +142,7 @@ export async function POST(request) {
     await supabase.from('notifications').insert({
       hotel_id:  hotelId || session.hotelId,
       type:      'facility_booking_request',
-      title:     `🎾 Facility request — ${facility?.name || facilityName}`,
+      title:     `🎾 Booking Request: ${facility?.name || facilityName}`,
       body:      `${date} at ${time} · ${guestsCount || 1} guest(s)`,
       link_type: 'facility_booking',
       link_id:   booking.id,
