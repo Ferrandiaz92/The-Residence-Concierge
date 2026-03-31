@@ -162,15 +162,20 @@ export default function AnalyticsTab({ hotelId }) {
   return (
     <div style={{ height:'100%', overflow:'hidden', display:'flex', flexDirection:'column', fontFamily:"'DM Sans',sans-serif" }}>
 
-      {/* Section tabs */}
+      {/* Section tabs — Bot QA first, then Overview */}
       <div style={{ display:'flex', background:'white', borderBottom:'1px solid #E5E7EB', flexShrink:0 }}>
-        {[{ key:'overview', label:'Overview' }, { key:'qa', label:'Bot QA review' }].map(sec => (
+        {[
+          { key:'qa',       label:'Bot QA',  badge: true  },
+          { key:'overview', label:'Overview', badge: false },
+        ].map(sec => (
           <button key={sec.key} onClick={() => setActiveSection(sec.key)}
-            style={{ padding:'12px 24px', fontSize:'14px', fontWeight:activeSection===sec.key?'700':'500', color:activeSection===sec.key?GREEN:'#9CA3AF', background:'none', border:'none', borderBottom:activeSection===sec.key?`3px solid ${GREEN}`:'3px solid transparent', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+            style={{ padding:'12px 24px', fontSize:'14px', fontWeight:activeSection===sec.key?'700':'500', color:activeSection===sec.key?GREEN:'#9CA3AF', background:'none', border:'none', borderBottom:activeSection===sec.key?`3px solid ${GREEN}`:'3px solid transparent', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", display:'flex', alignItems:'center', gap:'7px' }}>
             {sec.label}
           </button>
         ))}
       </div>
+
+      {activeSection === 'qa'       && <BotQA hotelId={hotelId} />}
 
       {activeSection === 'overview' && (
         <div className="scrollable" style={{ padding:'18px', background:'#F9FAFB' }}>
@@ -350,11 +355,7 @@ export default function AnalyticsTab({ hotelId }) {
         </div>
       )}
 
-      {activeSection === 'qa' && (
-        <div className="scrollable" style={{ padding:'18px', background:'#F9FAFB' }}>
-          <BotQA hotelId={hotelId} />
-        </div>
-      )}
+
     </div>
   )
 }
