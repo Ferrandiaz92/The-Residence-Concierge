@@ -25,7 +25,7 @@ export async function POST(request) {
     const session = getSession()
     if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const { hotelId, conversationId, messageIndex, messageContent, flagType, note } = await request.json()
+    const { hotelId, conversationId, messageIndex, messageContent, flagType, note, correctAnswer } = await request.json()
 
     if (!hotelId || !conversationId || messageIndex === undefined || !flagType) {
       return Response.json({ error: 'Missing required fields' }, { status: 400 })
@@ -41,6 +41,7 @@ export async function POST(request) {
         message_content: messageContent,
         flag_type:       flagType,
         note:            note || null,
+        correct_answer:  correctAnswer || null,
         flagged_by:      session.name || session.email,
       })
       .select()
