@@ -26,11 +26,10 @@ export function extractFlightNumber(text) {
   const matches = []
   let m
   while ((m = re.exec(upper)) !== null) {
-    const iata = m[1] + m[2]
-    if (!FALSE_POSITIVES.has(m[1])) matches.push(iata)
+    const designator = m[1] + ' ' + m[2]   // e.g. 'A3 0904', 'BA 123'
+    if (!FALSE_POSITIVES.has(m[1])) matches.push(designator)
   }
   if (matches.length === 0) return null
-  // Return first match (operating carrier for codeshares)
   return matches[0]
 }
 
@@ -42,8 +41,8 @@ export function extractAllFlightNumbers(text) {
   const matches = []
   let m
   while ((m = re.exec(upper)) !== null) {
-    const iata = m[1] + m[2]
-    if (!FALSE_POSITIVES.has(m[1])) matches.push(iata)
+    const designator = m[1] + ' ' + m[2]  // e.g. 'W6 7837', 'EZY 1234'
+    if (!FALSE_POSITIVES.has(m[1])) matches.push(designator)
   }
   return matches
 }
@@ -54,20 +53,10 @@ function getDateOffset(days) {
   return d.toISOString().split('T')[0]
 }
 
-// Format a raw extracted flight code into the IATA designator AeroDataBox expects.
-// e.g. 'W67837' → 'W6 7837'  |  'BA123' → 'BA 123'  |  'EZY1234' → 'EZY 1234'
-// AeroDataBox requires airline prefix + space + numeric part in the URL.
-function formatFlightDesignator(raw) {
-  // Match 2-letter or 3-letter airline prefix followed by digits
-  const m = raw.match(/^([A-Z]{1,3}(?:\d(?=[A-Z]))?)(\d+[A-Z]?)$/)
-  if (!m) return raw   // can't parse — send as-is
-  return `${m[1]} ${m[2]}`
-}
-
 async function fetchAeroDataBox(key, flightIata, date) {
-  const designator = formatFlightDesignator(flightIata)
+  // flightIata already has correct format e.g. 'A3 0904' — extracted with space
   try {
-    const url = `https://aerodatabox.p.rapidapi.com/flights/number/${encodeURIComponent(designator)}/${date}`
+    const url = `https://aerodatabox.p.rapidapi.com/flights/number/${encodeURIComponent(flightIata)}/${date}`
     const res = await fetch(url, {
       headers: {
         'X-RapidAPI-Key':  key,
@@ -76,12 +65,12 @@ async function fetchAeroDataBox(key, flightIata, date) {
       signal: AbortSignal.timeout(8000),
     })
     if (!res.ok) {
-      console.log(`AeroDataBox ${designator} ${date}: HTTP ${res.status}`)
+      console.log(`AeroDataBox ${flightIata} ${date}: HTTP ${res.status}`)
       return null
     }
     const data = await res.json()
     if (Array.isArray(data) && data.length === 0) {
-      console.log(`AeroDataBox ${designator} ${date}: empty response — flight not operating this date`)
+      console.log(`AeroDataBox ${flightIata} ${date}: empty response — flight not operating this date`)
       return null
     }
     return parseAeroDataBox(flightIata, data)
@@ -105,6 +94,11 @@ function parseAeroDataBox(flightIata, data) {
   const depDelay = dep.delay || 0
   const arrDelay = arr.delay || 0
 
+  // ── Local time helpers (extracts HH:MM from local time strings) ──
+  const fmtLocal = (s) => { const m = (s||'').match(/(\d{2}:\d{2})/); return m ? m[1] : null }
+  const arrLocal  = arr.predictedTime?.local || arr.revisedTime?.local || arr.scheduledTime?.local
+  const depLocal  = dep.revisedTime?.local   || dep.scheduledTime?.local
+
   return {
     iata:            flightIata,
     status,
@@ -114,19 +108,21 @@ function parseAeroDataBox(flightIata, data) {
     destination:     arr.airport?.name,
     destinationIata: arr.airport?.iata,
     // Departure
-    scheduledDepart: dep.scheduledTime?.utc || dep.scheduledTime?.local,
-    estimatedDepart: dep.revisedTime?.utc   || dep.revisedTime?.local || dep.scheduledTime?.utc,
-    actualDepart:    dep.actualTime?.utc    || dep.actualTime?.local,
-    departDelay:     depDelay,
-    departTerminal:  dep.terminal,
-    departGate:      dep.gate,
+    scheduledDepart:    dep.scheduledTime?.utc || dep.scheduledTime?.local,
+    estimatedDepart:    dep.revisedTime?.utc   || dep.revisedTime?.local || dep.scheduledTime?.utc,
+    actualDepart:       dep.actualTime?.utc    || dep.actualTime?.local,
+    departDelay:        depDelay,
+    departTerminal:     dep.terminal,
+    departGate:         dep.gate,
+    departureTimeLocal: fmtLocal(depLocal),   // 'HH:MM' local — used by bot prompt
     // Arrival
-    scheduledArrive: arr.scheduledTime?.utc || arr.scheduledTime?.local,
-    estimatedArrive: arr.revisedTime?.utc   || arr.revisedTime?.local || arr.scheduledTime?.utc,
-    actualArrive:    arr.actualTime?.utc    || arr.actualTime?.local,
-    arriveDelay:     arrDelay,
-    arriveTerminal:  arr.terminal,
-    gate:            arr.gate,
+    scheduledArrive:  arr.scheduledTime?.utc || arr.scheduledTime?.local,
+    estimatedArrive:  arr.revisedTime?.utc   || arr.revisedTime?.local || arr.scheduledTime?.utc,
+    actualArrive:     arr.actualTime?.utc    || arr.actualTime?.local,
+    arriveDelay:      arrDelay,
+    arriveTerminal:   arr.terminal,
+    gate:             arr.gate,
+    arrivalTimeLocal: fmtLocal(arrLocal),     // 'HH:MM' local — used by bot prompt
   }
 }
 
@@ -140,11 +136,10 @@ export async function getFlightStatus(flightIata) {
     return null
   }
 
-  const designator = formatFlightDesignator(flightIata)
+  // flightIata already formatted with space e.g. 'A3 0904', 'BA 123'
   try {
-    // Try today first, then ±1 day (handles late-night/early-morning edge cases)
     const today = new Date().toISOString().split('T')[0]
-    const url   = `https://aerodatabox.p.rapidapi.com/flights/number/${encodeURIComponent(designator)}/${today}`
+    const url   = `https://aerodatabox.p.rapidapi.com/flights/number/${encodeURIComponent(flightIata)}/${today}`
 
     const res = await fetch(url, {
       headers: {
@@ -154,7 +149,7 @@ export async function getFlightStatus(flightIata) {
       signal: AbortSignal.timeout(8000),
     })
 
-    console.log(`AeroDataBox ${designator} ${today}: status=${res.status}`)
+    console.log(`AeroDataBox ${flightIata} ${today}: status=${res.status}`)
 
     // Try adjacent dates on 404 OR on empty 200 response
     if (res.status === 404 || res.status === 200) {
@@ -168,13 +163,13 @@ export async function getFlightStatus(flightIata) {
         }
       }
       // Fall through to adjacent dates
-      console.log(`AeroDataBox ${designator}: trying ±1 day`)
+      console.log(`AeroDataBox ${flightIata}: trying ±1 day`)
       const [yesterday, tomorrow] = await Promise.all([
         fetchAeroDataBox(key, flightIata, getDateOffset(-1)),
         fetchAeroDataBox(key, flightIata, getDateOffset(1)),
       ])
       const found = yesterday || tomorrow
-      console.log(`AeroDataBox ±1 day result for ${designator}:`, found ? `found (${found.status})` : 'not found')
+      console.log(`AeroDataBox ±1 day result for ${flightIata}:`, found ? `found (${found.status})` : 'not found')
       return found || null
     }
 
@@ -183,7 +178,7 @@ export async function getFlightStatus(flightIata) {
     return null
 
   } catch (err) {
-    console.error(`AeroDataBox fetch failed for ${designator}: ${err.message}`)
+    console.error(`AeroDataBox fetch failed for ${flightIata}: ${err.message}`)
     return null
   }
 }
