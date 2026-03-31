@@ -30,7 +30,7 @@ function getDesktopTabs(role) {
     { key:'live',      label:'Live',           roles:['receptionist','manager','admin',...DEPT_ROLES] },
     { key:'guests',    label:'Guests',          roles:['receptionist','manager','admin'] },
     { key:'visitors',  label:'Day Visitors',    roles:['receptionist','manager','admin'] },
-    { key:'analytics', label:'Analytics',       roles:['manager','admin'] },
+    { key:'analytics', label:'Analytics',       roles:['manager','admin','communications'] },
     { key:'scheduled', label:'Messaging',       roles:['manager','admin'] },
     { key:'settings',  label:'Concierge Setup', roles:['manager','admin'] },
     { key:'facilities', label:'Facilities', icon:'🎾', roles:['manager','receptionist','supervisor','concierge','communications'] },
@@ -51,6 +51,7 @@ function getMobileTabs(role) {
     { key:'settings', label:'Setup', icon:IconSettings },
   ]
   if (isCommunications(role)) return [
+    { key:'analytics', label:'Bot QA',   icon:IconAnalytics },
     { key:'scheduled', label:'Messaging', icon:IconSettings },
     { key:'settings',  label:'Setup',     icon:IconSettings },
   ]
@@ -91,6 +92,9 @@ function IconSettings({ size=22, color='currentColor' }) {
 }
 function IconFacilities({ size=22, color='currentColor' }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none"><path d="M3 17l4-8 4 4 4-6 4 6" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><rect x="2" y="19" width="20" height="2" rx="1" fill={color} opacity="0.3"/></svg>
+}
+function IconAnalytics({ size=22, color='currentColor' }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none"><path d="M9 19V13M12 19V9M15 19V15M5 9l4-4 4 4 6-6" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
 }
 function IconLogout({ size=18, color='currentColor' }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" stroke={color} strokeWidth="2" strokeLinecap="round"/><path d="M16 17l5-5-5-5M21 12H9" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
@@ -413,7 +417,7 @@ export default function DashboardPage() {
           setSession(d.session)
           // Set correct default tab based on role
           const role = d.session.role
-          if (role === 'communications') setActiveTab('scheduled')
+          if (role === 'communications') setActiveTab('analytics')
           else if (role === 'supervisor') setActiveTab('live')
           else if (role === 'employee')   setActiveTab('live')
           // manager, receptionist stay on 'live' (already default)
