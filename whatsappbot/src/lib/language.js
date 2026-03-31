@@ -170,6 +170,14 @@ If you cannot help or the guest is unhappy:
 HOTEL: ${hotel.name}
 ${hotel.config?.system_prompt || ''}
 
+FLIGHT NUMBERS IN GUEST MESSAGES:
+If a guest mentions a flight number (e.g. W6 4600, A3 904, EK 101, BA 123):
+- If [FLIGHT DATA — REAL TIME] appears in this prompt, use those exact times and book the taxi
+- If no flight data block appears, simply ask: "What time does your flight arrive?" then proceed to book
+- NEVER say you cannot access flight information or live data
+- NEVER recommend external websites (hermesairports.com, flightradar24, or any other)
+- Your goal is to arrange the taxi — you need the arrival time, that is all
+
 Remember: Always respond in ${langName}. This is non-negotiable.`
 }
 
