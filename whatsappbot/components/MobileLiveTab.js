@@ -38,16 +38,39 @@ const PRIORITIES = [
 // ── PAYMENT BADGE HELPER (mobile) ────────────────────────────
 function getConvPaymentStatus(conv, orders) {
   if (!orders || orders.length === 0) return null
-  const convOrders = orders.filter(o =>
+  const raw = orders.filter(o =>
     o.conversation_id === conv.id ||
     (o.guest_id === conv.guests?.id && o.conversation_session === conv.session_id)
   )
-  if (convOrders.length === 0) return null
-  const hasPaid    = convOrders.some(o => o.status === 'paid')
-  const hasWaiting = convOrders.some(o => ['pending', 'unpaid', 'awaiting'].includes(o.status))
+  if (raw.length === 0) return null
+  // Deduplicate — keep latest status per order ID
+  const byId = {}
+  for (const o of raw) {
+    if (!byId[o.id] || new Date(o.updated_at||o.created_at) > new Date(byId[o.id].updated_at||byId[o.id].created_at)) {
+      byId[o.id] = o
+    }
+  }
+  const deduped    = Object.values(byId)
+  const hasPaid    = deduped.some(o => o.status === 'paid')
+  const hasWaiting = deduped.some(o => ['pending_payment','unpaid','awaiting'].includes(o.status))
   if (hasPaid)    return { label: 'Paid ✓',          bg: '#DCFCE7', color: '#14532D' }
   if (hasWaiting) return { label: 'Awaiting payment', bg: '#FEF3C7', color: '#78350F' }
   return null
+}
+
+function getSessionOrders(conv, orders) {
+  if (!orders) return []
+  const raw = orders.filter(o =>
+    o.conversation_id === conv?.id ||
+    (o.guest_id === conv?.guests?.id && o.conversation_session === conv?.session_id)
+  )
+  const byId = {}
+  for (const o of raw) {
+    if (!byId[o.id] || new Date(o.updated_at||o.created_at) > new Date(byId[o.id].updated_at||byId[o.id].created_at)) {
+      byId[o.id] = o
+    }
+  }
+  return Object.values(byId)
 }
 
 const canReply   = (role) => ['receptionist','manager','admin','supervisor'].includes(role)
@@ -93,21 +116,14 @@ function GuestChip({ conv }) {
 //  CONVERSATIONS LIST
 // ════════════════════════════════════════════════════════════
 function ConversationsList({ conversations, selectedConvId, onOpenThread, orders = [] }) {
+  const [pastOpen, setPastOpen] = React.useState(false)
   const escalated = conversations.filter(c => c.status === 'escalated')
+  const cutoff    = Date.now() - 72 * 60 * 60 * 1000
+  const recent    = conversations.filter(c => new Date(c.last_message_at).getTime() >= cutoff)
+  const past      = conversations.filter(c => new Date(c.last_message_at).getTime() <  cutoff)
 
-  return (
-    <div style={{ flex:1, overflowY:'auto', background:'#F9FAFB' }}>
-      {escalated.length > 0 && (
-        <div style={{ padding:'9px 16px', background:'#FEF2F2', borderBottom:'1px solid #FCA5A5', fontSize:'12px', fontWeight:'600', color:'#DC2626', display:'flex', alignItems:'center', gap:'6px' }}>
-          ⚠️ {escalated.length} conversation{escalated.length > 1 ? 's' : ''} need{escalated.length === 1 ? 's' : ''} reply
-        </div>
-      )}
-      {conversations.length === 0 && (
-        <div style={{ padding:'48px 24px', textAlign:'center', color:'#9CA3AF', fontSize:'13px' }}>
-          No active conversations
-        </div>
-      )}
-      {conversations.map(conv => {
+  // Render a single conversation row
+  function ConvRowMobile({ conv }) {
         const g       = conv.guests || {}
         const msgs    = conv.messages || []
         const last    = msgs[msgs.length - 1]
@@ -181,7 +197,38 @@ function ConversationsList({ conversations, selectedConvId, onOpenThread, orders
             </div>
           </div>
         )
-      })}
+  }
+
+  return (
+    <div style={{ flex:1, overflowY:'auto', background:'#F9FAFB' }}>
+      {escalated.length > 0 && (
+        <div style={{ padding:'9px 16px', background:'#FEF2F2', borderBottom:'1px solid #FCA5A5', fontSize:'12px', fontWeight:'600', color:'#DC2626', display:'flex', alignItems:'center', gap:'6px' }}>
+          ⚠️ {escalated.length} conversation{escalated.length > 1 ? 's' : ''} need{escalated.length === 1 ? 's' : ''} reply
+        </div>
+      )}
+      {conversations.length === 0 && (
+        <div style={{ padding:'48px 24px', textAlign:'center', color:'#9CA3AF', fontSize:'13px' }}>No active conversations</div>
+      )}
+
+      {/* Recent <72h — always visible */}
+      {recent.map(conv => <ConvRowMobile key={conv.id} conv={conv} />)}
+
+      {/* Past >72h — collapsed with count badge */}
+      {past.length > 0 && (
+        <>
+          <button onClick={() => setPastOpen(o => !o)}
+            style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 16px', background:'#F9FAFB', border:'none', borderBottom:'1px solid #E5E7EB', borderTop:'1px solid #E5E7EB', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+            <span style={{ fontSize:'12px', fontWeight:'600', color:'#6B7280', display:'flex', alignItems:'center', gap:'6px' }}>
+              Past conversations
+              <span style={{ fontSize:'10px', fontWeight:'700', padding:'1px 6px', borderRadius:'10px', background:'#F3F4F6', color:'#6B7280' }}>{past.length}</span>
+            </span>
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+              <path d={pastOpen ? 'M1 7L5 3L9 7' : 'M1 3L5 7L9 3'} stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
+          {pastOpen && past.map(conv => <ConvRowMobile key={conv.id} conv={conv} />)}
+        </>
+      )}
     </div>
   )
 }
@@ -281,10 +328,7 @@ function ChatThread({ conv, session, onBack, onReload, orders = [] }) {
       {/* Payment inline card */}
       {(() => {
         const ps = orders ? getConvPaymentStatus(conv, orders) : null
-        const sessionOrders = (orders || []).filter(o =>
-          o.conversation_id === conv?.id ||
-          (o.guest_id === conv?.guests?.id && o.conversation_session === conv?.session_id)
-        )
+        const sessionOrders = getSessionOrders(conv, orders)
         if (!ps || sessionOrders.length === 0) return null
         return (
           <div style={{ padding:'0 16px 8px', display:'flex', justifyContent:'center' }}>
@@ -1044,8 +1088,21 @@ function IssuesPanel({ tickets, bookings, conversations = [], onOpenThread, onNa
 // ── Mobile expandable booking with Go to Chat + View Guest ──
 function MobileExpandableBooking({ booking: b, guest: g, tc, matchConv, onOpenThread, onNavigateToGuest }) {
   const [open, setOpen] = useState(false)
-  const typeEmoji = { taxi:'🚗', restaurant:'🍽️', activity:'⛵', late_checkout:'🕐', facility:'🏨' }
-  const emoji = typeEmoji[b.type] || '📋'
+  const FACILITY_EMOJI_MAP = {
+    tennis:'🎾', padel:'🎾', court:'🎾', squash:'🎾',
+    pool:'🏊', swim:'🏊', spa:'💆', massage:'💆', sauna:'💆', wellness:'💆',
+    gym:'🏋️', fitness:'🏋️', conference:'💼', meeting:'💼', business:'💼',
+    restaurant:'🍽️', dining:'🍽️', bar:'🍹',
+    rooftop:'🌅', beach:'🏖️', golf:'⛳', yoga:'🧘',
+  }
+  function getFacilityEmoji(b) {
+    const src = ((b.facility?.name||'') + ' ' + (b.facility?.category||'') + ' ' + (b.details?.facility_name||'')).toLowerCase()
+    for (const [key, em] of Object.entries(FACILITY_EMOJI_MAP)) { if (src.includes(key)) return em }
+    return '🏨'
+  }
+  const typeEmoji = { taxi:'🚗', restaurant:'🍽️', activity:'⛵', late_checkout:'🕐' }
+  const isFacility = b.type === 'facility' || b.source === 'facility' || b._isFacility
+  const emoji = isFacility ? getFacilityEmoji(b) : (typeEmoji[b.type] || '📋')
   const guestLabel = g.name ? `${g.name}${g.surname ? ' ' + g.surname : ''}` : 'Guest'
   const guestSub   = g.room ? `Room ${g.room}` : (g.phone ? g.phone.slice(-8) : '')
   return (

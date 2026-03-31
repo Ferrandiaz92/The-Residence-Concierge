@@ -28,10 +28,11 @@ const CAT_EMOJI = {
   restaurant: '🍽️', rooftop: '🌅', beach: '🏖️', other: '🏨',
 }
 const STATUS_CONFIG = {
+  all:         { bg: '#F1F5F9', color: '#334155', label: 'All' },
   pending:     { bg: '#FEF3C7', color: '#78350F', label: 'Pending' },
   confirmed:   { bg: '#DCFCE7', color: '#14532D', label: 'Confirmed' },
-  rejected:    { bg: '#FEF2F2', color: '#DC2626', label: 'Rejected' },
   alternative: { bg: '#DBEAFE', color: '#1E3A5F', label: 'Alternative offered' },
+  rejected:    { bg: '#FEF2F2', color: '#DC2626', label: 'Rejected' },
 }
 
 const canEdit    = (role) => ['manager'].includes(role)
@@ -311,7 +312,7 @@ export default function FacilitiesTab({ hotelId, session, isMobile = false }) {
   const [loading,    setLoading]    = useState(true)
   const [section,    setSection]    = useState('bookings')  // 'bookings' | 'facilities'
   const [editingFac, setEditingFac] = useState(null)        // null | {} (new) | {id,...} (edit)
-  const [statusFilter, setStatusFilter] = useState('pending')
+  const [statusFilter, setStatusFilter] = useState('all')
 
   if (!canView(session?.role)) return null
 
@@ -325,7 +326,7 @@ export default function FacilitiesTab({ hotelId, session, isMobile = false }) {
   async function load() {
     try {
       const [bRes, fRes] = await Promise.all([
-        fetch(`/api/facility-bookings?hotelId=${hotelId}&status=${statusFilter}`),
+        fetch(`/api/facility-bookings?hotelId=${hotelId}${statusFilter !== 'all' ? '&status=' + statusFilter : ''}`),
         fetch(`/api/facilities?hotelId=${hotelId}`),
       ])
       const [bData, fData] = await Promise.all([bRes.json(), fRes.json()])
@@ -359,7 +360,7 @@ export default function FacilitiesTab({ hotelId, session, isMobile = false }) {
   // ── Status filter for bookings ────────────────────────────
   const StatusFilter = () => (
     <div style={{ display: 'flex', gap: '4px', padding: '8px 14px', background: '#F9FAFB', borderBottom: '0.5px solid #E5E7EB', flexShrink: 0, overflowX: 'auto' }}>
-      {['pending', 'confirmed', 'alternative', 'rejected'].map(s => {
+      {['all', 'pending', 'confirmed', 'alternative', 'rejected'].map(s => {
         const sc = STATUS_CONFIG[s]
         return (
           <button key={s} onClick={() => setStatusFilter(s)}
@@ -388,7 +389,7 @@ export default function FacilitiesTab({ hotelId, session, isMobile = false }) {
           <div style={{ flex: 1, overflowY: 'auto', padding: isMobile ? '12px 16px' : '12px 14px', background: '#F9FAFB' }}>
             {bookings.length === 0 ? (
               <div style={{ padding: '40px', textAlign: 'center', color: '#9CA3AF', fontSize: '13px' }}>
-                {statusFilter === 'pending' ? 'No pending facility requests ✓' : `No ${statusFilter} bookings`}
+                {statusFilter === 'all' ? 'No facility bookings yet ✓' : statusFilter === 'pending' ? 'No pending facility requests ✓' : `No ${statusFilter} bookings`}
               </div>
             ) : bookings.map(b => (
               <BookingCard key={b.id} booking={b} session={session} onAction={load} isMobile={isMobile} />
