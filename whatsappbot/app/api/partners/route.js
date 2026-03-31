@@ -123,35 +123,3 @@ export async function DELETE(request) {
   }
 }
 
-// PATCH — update partner fields (unreachable flag, reactivate)
-export async function PATCH(request) {
-  try {
-    const session = getSession()
-    if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 })
-    if (!CAN_EDIT.includes(session.role)) {
-      return Response.json({ error: 'Manager access required' }, { status: 403 })
-    }
-
-    const { partnerId, unreachable, active } = await request.json()
-    if (!partnerId) return Response.json({ error: 'partnerId required' }, { status: 400 })
-
-    const supabase = getSupabase()
-    const updates = {}
-    if (unreachable !== undefined) updates.unreachable = unreachable
-    if (active      !== undefined) updates.active      = active
-    // When marking as reachable, clear the unreachable_since timestamp
-    if (unreachable === false) updates.unreachable_since = null
-
-    const { data, error } = await supabase
-      .from('partners')
-      .update(updates)
-      .eq('id', partnerId)
-      .select()
-      .single()
-
-    if (error) throw error
-    return Response.json({ status: 'updated', partner: data })
-  } catch (err) {
-    return Response.json({ error: err.message }, { status: 500 })
-  }
-}
