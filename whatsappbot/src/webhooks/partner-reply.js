@@ -113,6 +113,61 @@ function buildGuestNotification(replyType, booking, partner, altMessage, languag
   return null
 }
 
+// ── SESSION-EXPIRED HELPERS ──────────────────────────────────
+
+// Creates a staff notification when the 24h WhatsApp session is closed
+// and we can't reach the guest automatically
+async function createSessionExpiredAlert({ supabase, hotel, guest, booking, partner, replyType, notification }) {
+  const guestName = `${guest.name || ''} ${guest.surname || ''}`.trim() || 'Guest'
+  const typeLabel = replyType === 'confirmed' ? 'CONFIRMED' : replyType === 'declined' ? 'DECLINED' : 'replied'
+
+  await supabase.from('notifications').insert({
+    hotel_id:  hotel.id,
+    type:      'session_expired_manual_needed',
+    title:     `📵 Manual message needed — ${partner.name} ${typeLabel}`,
+    body:      `${guestName} · Room ${guest.room || '?'} — WhatsApp session expired. Please message guest: "${notification?.slice(0, 120)}..."`,
+    link_type: 'booking',
+    link_id:   booking.id,
+    urgent:    true,
+  }).catch(() => {})
+}
+
+// Attempts to send a pre-approved WhatsApp template message.
+// Template must be configured in hotel.config.whatsapp_templates.
+// Returns true if sent successfully, false if no template or send failed.
+async function trySendTemplate({ guest, booking, partner, replyType, hotel }) {
+  try {
+    const templates = hotel.config?.whatsapp_templates
+    if (!templates) return false
+
+    const templateKey = `${booking.type}_${replyType}`  // e.g. 'taxi_confirmed'
+    const template    = templates[templateKey] || templates[replyType]
+    if (!template) return false
+
+    // WhatsApp template via Twilio Content API
+    const twilio = (await import('../lib/twilio.js'))
+    const client = twilio.getTwilioClient?.() || null
+    if (!client) return false
+
+    const toPhone = guest.phone.startsWith('whatsapp:') ? guest.phone : `whatsapp:${guest.phone}`
+
+    await client.messages.create({
+      from:             process.env.TWILIO_WHATSAPP_NUMBER,
+      to:               toPhone,
+      contentSid:       template.sid,           // e.g. 'HXxxxxxxx'
+      contentVariables: JSON.stringify({
+        1: partner.name || 'our partner',
+        2: booking.details?.time || '',
+        3: partner.details?.car  || '',
+      }),
+    })
+    return true
+  } catch(e) {
+    console.warn('Template send failed:', e.message)
+    return false
+  }
+}
+
 export async function handlePartnerReply(rawBody) {
   const { from, message } = parseIncomingMessage(rawBody)
   log.info('Partner reply received', { preview: message.slice(0, 60) })
@@ -196,33 +251,64 @@ export async function handlePartnerReply(rawBody) {
     link_id:   booking.id,
   }).catch(() => {})
 
-  // IMPROVEMENT 2: Notify guest + append to conversation so dashboard shows it
+  // Notify guest — with 24h session awareness
+  // WhatsApp Business only allows free-form messages within 24h of last guest message.
+  // If the window is closed we fall back to a template message (if configured),
+  // or create a staff notification so reception can follow up manually.
   const notification = buildGuestNotification(replyType, booking, partner, message, guest?.language)
 
   if (notification && guest?.phone) {
-    try {
-      await sendWhatsApp(guest.phone, notification)
+    // Find the active conversation and check session window
+    const { data: conv } = await supabase
+      .from('conversations')
+      .select('id, last_message_at')
+      .eq('guest_id', guest.id)
+      .in('status', ['active', 'escalated'])
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single()
 
-      // ── IMPROVEMENT 2: Append to conversation ─────────────
-      // Before: guest got the WhatsApp but the dashboard showed nothing.
-      // Staff couldn't see that confirmation was sent.
-      // Now: appended to conversation so it appears in the chat timeline.
-      const { data: conv } = await supabase
-        .from('conversations')
-        .select('id')
-        .eq('guest_id', guest.id)
-        .in('status', ['active', 'escalated'])
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single()
+    const lastMsgAt   = conv?.last_message_at ? new Date(conv.last_message_at) : null
+    const sessionOpen = lastMsgAt && (Date.now() - lastMsgAt.getTime()) < 23.5 * 60 * 60 * 1000
 
-      if (conv) {
-        await appendMessage(conv.id, 'assistant', notification, { sent_by: 'partner_reply' })
+    if (sessionOpen) {
+      // ── Session open: send free-form message ─────────────────
+      try {
+        await sendWhatsApp(guest.phone, notification)
+        if (conv) {
+          await appendMessage(conv.id, 'assistant', notification, { sent_by: 'partner_reply' })
+        }
+        log.info('Guest notified of partner reply (session open)', { ...hCtx, ...gCtx, replyType })
+      } catch(e) {
+        // Check if Twilio error is specifically 63016 (session expired mid-check)
+        const is63016 = e?.code === 63016 || e?.message?.includes('63016')
+        if (is63016) {
+          log.warn('Partner reply: 24h session closed mid-send — creating staff notification', { ...hCtx, ...gCtx })
+          await createSessionExpiredAlert({ supabase, hotel, guest, booking, partner, replyType, notification })
+        } else {
+          await log.error('Failed to notify guest of partner reply', e, { ...hCtx, ...gCtx, bookingId: booking.id })
+        }
       }
+    } else {
+      // ── Session closed (>23.5h): try template, else staff alert ─
+      log.warn('Partner reply: 24h session closed — attempting template fallback', {
+        ...hCtx, ...gCtx,
+        lastMsgAt: lastMsgAt?.toISOString(),
+        hoursElapsed: lastMsgAt ? Math.round((Date.now() - lastMsgAt.getTime()) / 3600000) : 'unknown',
+      })
 
-      log.info('Guest notified of partner reply', { ...hCtx, ...gCtx, replyType, bookingType: booking.type })
-    } catch(e) {
-      await log.error('Failed to notify guest of partner reply', e, { ...hCtx, ...gCtx, bookingId: booking.id })
+      const templateSent = await trySendTemplate({ guest, booking, partner, replyType, hotel })
+
+      if (templateSent) {
+        if (conv) {
+          const templateNote = `[Sent via WhatsApp template — session had expired] ${notification}`
+          await appendMessage(conv.id, 'assistant', templateNote, { sent_by: 'partner_reply_template' })
+        }
+        log.info('Partner reply: template message sent to guest', { ...hCtx, ...gCtx, replyType })
+      } else {
+        // No template configured — create staff notification
+        await createSessionExpiredAlert({ supabase, hotel, guest, booking, partner, replyType, notification })
+      }
     }
   }
 
