@@ -35,6 +35,21 @@ const PRIORITIES = [
   { key:'planned', label:'Planned', sub:'future task', color:'#2563EB', bg:'#EFF6FF', border:'#93C5FD' },
 ]
 
+// ── PAYMENT BADGE HELPER (mobile) ────────────────────────────
+function getConvPaymentStatus(conv, orders) {
+  if (!orders || orders.length === 0) return null
+  const convOrders = orders.filter(o =>
+    o.conversation_id === conv.id ||
+    (o.guest_id === conv.guests?.id && o.conversation_session === conv.session_id)
+  )
+  if (convOrders.length === 0) return null
+  const hasPaid    = convOrders.some(o => o.status === 'paid')
+  const hasWaiting = convOrders.some(o => ['pending', 'unpaid', 'awaiting'].includes(o.status))
+  if (hasPaid)    return { label: 'Paid ✓',          bg: '#DCFCE7', color: '#14532D' }
+  if (hasWaiting) return { label: 'Awaiting payment', bg: '#FEF3C7', color: '#78350F' }
+  return null
+}
+
 const canReply   = (role) => ['receptionist','manager','admin','supervisor'].includes(role)
 const DEPT_ROLES = ['maintenance','housekeeping','concierge','fnb','security','valet','frontdesk']
 
@@ -77,7 +92,7 @@ function GuestChip({ conv }) {
 // ════════════════════════════════════════════════════════════
 //  CONVERSATIONS LIST
 // ════════════════════════════════════════════════════════════
-function ConversationsList({ conversations, selectedConvId, onOpenThread }) {
+function ConversationsList({ conversations, selectedConvId, onOpenThread, orders = [] }) {
   const escalated = conversations.filter(c => c.status === 'escalated')
 
   return (
@@ -155,6 +170,11 @@ function ConversationsList({ conversations, selectedConvId, onOpenThread }) {
               <div style={{ fontSize:'12px', color: isEsc ? '#DC2626' : '#9CA3AF', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', fontWeight: isEsc ? '600' : '400' }}>
                 {isEsc ? '↩ Reply needed' : (last?.content || 'No messages')}
               </div>
+              {(() => { const ps = getConvPaymentStatus(conv, orders); return ps ? (
+                <div style={{ marginTop:'4px' }}>
+                  <span style={{ fontSize:'10px', fontWeight:'700', padding:'2px 8px', borderRadius:'5px', background:ps.bg, color:ps.color }}>{ps.label}</span>
+                </div>
+              ) : null })()}
               <div style={{ marginTop:'5px' }}>
                 <span style={{ fontSize:'10px', fontWeight:'600', padding:'2px 7px', borderRadius:'5px', background:lc.bg, color:lc.color }}>{lc.name}</span>
               </div>
@@ -169,7 +189,7 @@ function ConversationsList({ conversations, selectedConvId, onOpenThread }) {
 // ════════════════════════════════════════════════════════════
 //  CHAT THREAD — full-screen slide-in
 // ════════════════════════════════════════════════════════════
-function ChatThread({ conv, session, onBack, onReload }) {
+function ChatThread({ conv, session, onBack, onReload, orders = [] }) {
   const [replyText, setReplyText] = useState('')
   const [sending,   setSending]   = useState(false)
   const scrollRef = useRef(null)
@@ -258,6 +278,35 @@ function ChatThread({ conv, session, onBack, onReload }) {
         })}
       </div>
 
+      {/* Payment inline card */}
+      {(() => {
+        const ps = orders ? getConvPaymentStatus(conv, orders) : null
+        const sessionOrders = (orders || []).filter(o =>
+          o.conversation_id === conv?.id ||
+          (o.guest_id === conv?.guests?.id && o.conversation_session === conv?.session_id)
+        )
+        if (!ps || sessionOrders.length === 0) return null
+        return (
+          <div style={{ padding:'0 16px 8px', display:'flex', justifyContent:'center' }}>
+            <div style={{ background:ps.bg, border:`0.5px solid ${ps.color}33`, borderRadius:'12px', padding:'10px 14px', width:'100%', maxWidth:'340px' }}>
+              <div style={{ fontSize:'11px', fontWeight:'700', color:ps.color, marginBottom:'6px', display:'flex', alignItems:'center', gap:'4px' }}>
+                {ps.label === 'Paid ✓' ? '💳' : '⏳'} Payment
+              </div>
+              {sessionOrders.map(o => (
+                <div key={o.id} style={{ fontSize:'13px', color:'#374151', display:'flex', justifyContent:'space-between', alignItems:'center', paddingTop:'4px', borderTop:'0.5px solid #E5E7EB' }}>
+                  <span style={{ fontWeight:'500' }}>{o.product_name || o.description || 'Service'}</span>
+                  <span style={{ fontWeight:'700', color: o.status==='paid'?'#14532D':'#78350F', fontSize:'12px' }}>
+                    {o.amount_eur ? `€${Number(o.amount_eur).toFixed(2)} ` : ''}
+                    <span style={{ fontSize:'10px', padding:'1px 5px', borderRadius:'4px', background: o.status==='paid'?'#DCFCE7':'#FEF3C7', color: o.status==='paid'?'#14532D':'#78350F' }}>
+                      {o.status === 'paid' ? 'paid' : 'pending'}
+                    </span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      })()}
       {/* Reply input — only for reception/manager/admin */}
       {canReply(session?.role) ? (
         <div style={{ padding:'10px 16px 10px', background:'white', borderTop:'1px solid #E5E7EB', display:'flex', gap:'8px', alignItems:'flex-end', flexShrink:0, paddingBottom:'max(10px, env(safe-area-inset-bottom))' }}>
@@ -651,7 +700,7 @@ function ExpandableBooking({ booking: b, guest: g, tc }) {
 }
 
 
-function TicketAlertRow({ ticket: t, depts = [], isPrivileged = false, onOpenThread, conversations = [] }) {
+function TicketAlertRow({ ticket: t, depts = [], isPrivileged = false, onOpenThread, onNavigateToGuest, conversations = [] }) {
   const [updating,  setUpdating]  = useState(false)
   const [expanded,  setExpanded]  = useState(false)
 
@@ -777,6 +826,12 @@ function TicketAlertRow({ ticket: t, depts = [], isPrivileged = false, onOpenThr
                 </button>
               )
             })()}
+            {t.guest_id && t.guests && onNavigateToGuest && (
+              <button onClick={() => onNavigateToGuest(t.guests)}
+                style={{ fontSize:'12px', fontWeight:'600', padding:'6px 12px', borderRadius:'7px', border:'0.5px solid #D1D5DB', background:'white', color:'#374151', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                👤 View guest
+              </button>
+            )}
             {isPrivileged && depts.length > 0 && (
               <select onChange={e => { if (e.target.value) { reassign(e.target.value); e.target.value = '' } }}
                 style={{ fontSize:'12px', padding:'6px 10px', borderRadius:'7px', border:'0.5px solid #E5E7EB', background:'white', color:'#6B7280', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
@@ -793,14 +848,15 @@ function TicketAlertRow({ ticket: t, depts = [], isPrivileged = false, onOpenThr
   )
 }
 
-function IssuesPanel({ tickets, bookings, conversations = [], onOpenThread, session, hotelId }) {
+function IssuesPanel({ tickets, bookings, conversations = [], onOpenThread, onNavigateToGuest, session, hotelId }) {
   const escalatedChats = conversations.filter(c => c.status === 'escalated')
   const issues         = tickets.filter(t => !['resolved','cancelled'].includes(t.status))
   const upcoming       = bookings.filter(b => ['confirmed','pending'].includes(b.status))
   const done           = bookings.filter(b => ['completed','resolved'].includes(b.status))
-  const typeColors     = { taxi:{bg:'#DCFCE7',color:'#14532D',l:'T'}, restaurant:{bg:'#DBEAFE',color:'#1E3A5F',l:'R'}, activity:{bg:'#FEF3C7',color:'#78350F',l:'A'} }
-  const totalAlerts    = escalatedChats.length + issues.length
-  const [depts, setDepts] = useState([])
+  const [depts,       setDepts]       = useState([])
+  const [alertTab,    setAlertTab]    = useState('tickets')
+  const [facOpen,     setFacOpen]     = useState(true)
+  const [partnerOpen, setPartnerOpen] = useState(true)
   const isSupervisorOrManager = ['supervisor','manager','admin'].includes(session?.role)
 
   useEffect(() => {
@@ -811,78 +867,231 @@ function IssuesPanel({ tickets, bookings, conversations = [], onOpenThread, sess
       .catch(() => {})
   }, [hotelId])
 
+  // Separate facility tickets from partner bookings
+  const facTickets     = issues.filter(t => t.category === 'facility_booking')
+  const internalIssues = issues.filter(t => t.category !== 'facility_booking')
+  const facBookings    = upcoming.filter(b => b.source === 'facility' || b.type === 'facility')
+  const partnerBkgs    = upcoming.filter(b => b.source !== 'facility' && b.type !== 'facility' && b.partner_id)
+
   return (
-    <div style={{ flex:1, overflowY:'auto', background:'#F9FAFB' }}>
+    <div style={{ display:'flex', flexDirection:'column', flex:1, overflow:'hidden', background:'#F9FAFB' }}>
 
       {/* Cancellation alerts */}
       <CancellationAlerts hotelId={hotelId} session={session} isMobile={true} />
 
-      {/* Escalated conversations */}
-      <SectionHeader title="Conversations needing reply" badge={escalatedChats.length} badgeBg="#FEE2E2" badgeColor="#DC2626" />
-      {escalatedChats.length === 0
-        ? <EmptyRow text="No escalated conversations ✓" />
-        : escalatedChats.map(c => {
-          const g = c.guests || {}
-          const lastMsg = c.messages?.[c.messages.length - 1]
-          const preview = lastMsg?.content?.slice(0, 60) || 'No messages'
-          return (
-            <div key={c.id} onClick={() => onOpenThread(c)}
-              style={{ padding:'14px 16px', background:'#FFF5F5', borderBottom:'1px solid #FEE2E2', display:'flex', gap:'10px', alignItems:'flex-start', cursor:'pointer' }}>
-              <div style={{ width:'28px', height:'28px', borderRadius:'50%', background:'#FEE2E2', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'14px', flexShrink:0 }}>💬</div>
-              <div style={{ flex:1, minWidth:0 }}>
-                <div style={{ display:'flex', alignItems:'center', gap:'7px', marginBottom:'2px' }}>
-                  <div style={{ fontSize:'13px', fontWeight:'700', color:'#DC2626' }}>
-                    {g.name ? `${g.name} ${g.surname||''}`.trim() : 'Guest'}
+      {/* Escalated conversations banner */}
+      {escalatedChats.length > 0 && (
+        <div>
+          <SectionHeader title="Conversations needing reply" badge={escalatedChats.length} badgeBg="#FEE2E2" badgeColor="#DC2626" />
+          {escalatedChats.map(c => {
+            const g = c.guests || {}
+            return (
+              <div key={c.id} onClick={() => onOpenThread(c)}
+                style={{ padding:'12px 16px', background:'#FFF5F5', borderBottom:'1px solid #FEE2E2', display:'flex', gap:'10px', alignItems:'flex-start', cursor:'pointer' }}>
+                <div style={{ width:'26px', height:'26px', borderRadius:'50%', background:'#FEE2E2', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'13px', flexShrink:0 }}>💬</div>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:'6px', marginBottom:'2px' }}>
+                    <span style={{ fontSize:'13px', fontWeight:'700', color:'#DC2626' }}>{g.name ? `${g.name} ${g.surname||''}`.trim() : 'Guest'}</span>
+                    {g.room && <span style={{ fontSize:'11px', color:'#9CA3AF' }}>Room {g.room}</span>}
+                    <span style={{ marginLeft:'auto', fontSize:'9px', fontWeight:'700', padding:'2px 6px', borderRadius:'4px', background:'#FEE2E2', color:'#DC2626' }}>REPLY</span>
                   </div>
-                  {g.room && <div style={{ fontSize:'11px', color:'#9CA3AF' }}>Room {g.room}</div>}
-                  <div style={{ marginLeft:'auto', fontSize:'10px', fontWeight:'700', padding:'2px 7px', borderRadius:'4px', background:'#FEE2E2', color:'#DC2626' }}>NEEDS REPLY</div>
+                  <div style={{ fontSize:'12px', color:'#6B7280', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                    {c.messages?.[c.messages.length-1]?.content?.slice(0,55) || 'No messages'}
+                  </div>
                 </div>
-                <div style={{ fontSize:'12px', color:'#6B7280', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{preview}</div>
               </div>
-            </div>
-          )
-        })
-      }
+            )
+          })}
+        </div>
+      )}
 
-      {/* Ticket alerts */}
-      <SectionHeader title="Open tickets" badge={issues.length} badgeBg="#FEE2E2" badgeColor="#DC2626" divider />
-      {issues.length === 0
-        ? <EmptyRow text="All clear ✓" />
-        : issues.map(t => (
-          <TicketAlertRow key={t.id} ticket={t} depts={depts} isPrivileged={isSupervisorOrManager} onOpenThread={onOpenThread} conversations={conversations} />
-        ))
-      }
+      {/* ── Alert sub-tabs ── */}
+      <div style={{ display:'flex', background:'white', borderBottom:'1px solid #E5E7EB', flexShrink:0 }}>
+        {[
+          { key:'tickets',  label:'Open Tickets',     count: internalIssues.length },
+          { key:'bookings', label:'Booking Requests', count: upcoming.length },
+        ].map(tab => (
+          <button key={tab.key} onClick={() => setAlertTab(tab.key)}
+            style={{ flex:1, padding:'10px 4px', fontSize:'12px', fontWeight:'600', border:'none', borderBottom: alertTab===tab.key ? '2px solid #1C3D2E' : '2px solid transparent', background:'white', color: alertTab===tab.key ? '#1C3D2E' : '#9CA3AF', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", display:'flex', alignItems:'center', justifyContent:'center', gap:'5px' }}>
+            {tab.label}
+            {tab.count > 0 && (
+              <span style={{ fontSize:'9px', fontWeight:'700', padding:'1px 6px', borderRadius:'10px', background: alertTab===tab.key ? '#1C3D2E' : '#F3F4F6', color: alertTab===tab.key ? 'white' : '#6B7280' }}>{tab.count}</span>
+            )}
+          </button>
+        ))}
+      </div>
 
-      {/* Upcoming */}
-      <SectionHeader title="Upcoming bookings" divider />
-      {upcoming.length === 0
-        ? <EmptyRow text="No upcoming bookings" />
-        : upcoming.slice(0,10).map(b => {
-          const g  = b.guests || {}
-          const tc = typeColors[b.type] || {bg:'#F1F5F9',color:'#334155',l:'?'}
-          return <ExpandableBooking key={b.id} booking={b} guest={g} tc={tc} />
-        })
-      }
+      <div style={{ flex:1, overflowY:'auto' }}>
 
-      {/* Completed */}
-      {done.length > 0 && <>
-        <SectionHeader title="Completed today" divider />
-        {done.slice(0,6).map(b => {
-          const g = b.guests || {}
-          return (
-            <div key={b.id} style={{ padding:'12px 16px', background:'white', borderBottom:'1px solid #F3F4F6', display:'flex', alignItems:'center', gap:'10px' }}>
-              <div style={{ width:'8px', height:'8px', borderRadius:'50%', background:'#D1D5DB', flexShrink:0 }}/>
-              <div style={{ flex:1 }}>
-                <div style={{ fontSize:'12px', color:'#6B7280' }}>{g.name} · Room {g.room||''}</div>
-                <div style={{ fontSize:'11px', color:'#9CA3AF' }}>{b.partners?.name||b.type}</div>
-              </div>
-              <div style={{ fontSize:'11px', color:'#9CA3AF' }}>
-                {new Date(b.confirmed_at||b.created_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}
-              </div>
-            </div>
-          )
-        })}
-      </>}
+        {/* ── Tab: Open Tickets ── */}
+        {alertTab === 'tickets' && (
+          internalIssues.length === 0
+            ? <EmptyRow text="All clear — no open tickets ✓" />
+            : internalIssues.map(t => (
+                <TicketAlertRow key={t.id} ticket={t} depts={depts}
+                  isPrivileged={isSupervisorOrManager}
+                  onOpenThread={onOpenThread}
+                  onNavigateToGuest={onNavigateToGuest}
+                  conversations={conversations} />
+              ))
+        )}
+
+        {/* ── Tab: Booking Requests ── */}
+        {alertTab === 'bookings' && (
+          <div>
+            {/* Facility Bookings section */}
+            <button onClick={() => setFacOpen(o => !o)}
+              style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'space-between', padding:'11px 16px', background:'#F9FAFB', border:'none', borderBottom:'1px solid #E5E7EB', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+              <span style={{ fontSize:'13px', fontWeight:'600', color:'#374151', display:'flex', alignItems:'center', gap:'7px' }}>
+                🏨 Facility Bookings
+                {(facTickets.length + facBookings.length) > 0 && (
+                  <span style={{ fontSize:'10px', fontWeight:'700', padding:'1px 7px', borderRadius:'20px', background:'#DCFCE7', color:'#14532D' }}>
+                    {facTickets.length + facBookings.length}
+                  </span>
+                )}
+              </span>
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                <path d={facOpen ? 'M1 8L6 3L11 8' : 'M1 4L6 9L11 4'} stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
+            {facOpen && (
+              [...facTickets, ...facBookings].length === 0
+                ? <EmptyRow text="No facility bookings pending" />
+                : <>
+                    {facTickets.map(t => (
+                      <TicketAlertRow key={t.id} ticket={t} depts={depts}
+                        isPrivileged={isSupervisorOrManager}
+                        onOpenThread={onOpenThread}
+                        onNavigateToGuest={onNavigateToGuest}
+                        conversations={conversations} />
+                    ))}
+                    {facBookings.map(b => {
+                      const g  = b.guests || {}
+                      const tc = { bg:'#F0FDF4', color:'#14532D', l:'F' }
+                      const matchConv = conversations.find(c => c.guests?.id === g.id || c.guests?.phone === g.phone)
+                      return (
+                        <MobileExpandableBooking key={b.id} booking={b} guest={g} tc={tc}
+                          matchConv={matchConv}
+                          onOpenThread={onOpenThread}
+                          onNavigateToGuest={onNavigateToGuest} />
+                      )
+                    })}
+                  </>
+            )}
+
+            {/* Partner Bookings section */}
+            <button onClick={() => setPartnerOpen(o => !o)}
+              style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'space-between', padding:'11px 16px', background:'#F9FAFB', border:'none', borderBottom:'1px solid #E5E7EB', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+              <span style={{ fontSize:'13px', fontWeight:'600', color:'#374151', display:'flex', alignItems:'center', gap:'7px' }}>
+                🤝 Partner Bookings
+                {partnerBkgs.length > 0 && (
+                  <span style={{ fontSize:'10px', fontWeight:'700', padding:'1px 7px', borderRadius:'20px', background:'#DBEAFE', color:'#1E3A5F' }}>
+                    {partnerBkgs.length}
+                  </span>
+                )}
+              </span>
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                <path d={partnerOpen ? 'M1 8L6 3L11 8' : 'M1 4L6 9L11 4'} stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
+            {partnerOpen && (
+              partnerBkgs.length === 0
+                ? <EmptyRow text="No partner bookings pending" />
+                : partnerBkgs.map(b => {
+                    const g = b.guests || {}
+                    const typeColors = { taxi:{bg:'#DCFCE7',color:'#14532D'}, restaurant:{bg:'#DBEAFE',color:'#1E3A5F'}, activity:{bg:'#FEF3C7',color:'#78350F'} }
+                    const tc = typeColors[b.type] || { bg:'#F1F5F9', color:'#334155' }
+                    const matchConv = conversations.find(c => c.guests?.id === g.id || c.guests?.phone === g.phone)
+                    return (
+                      <MobileExpandableBooking key={b.id} booking={b} guest={g} tc={tc}
+                        matchConv={matchConv}
+                        onOpenThread={onOpenThread}
+                        onNavigateToGuest={onNavigateToGuest} />
+                    )
+                  })
+            )}
+
+            {/* Completed today */}
+            {done.length > 0 && (
+              <>
+                <SectionHeader title="Completed today" divider />
+                {done.slice(0,6).map(b => {
+                  const g = b.guests || {}
+                  const typeEmoji = { taxi:'🚗', restaurant:'🍽️', activity:'⛵', facility:'🏨' }
+                  return (
+                    <div key={b.id} style={{ padding:'12px 16px', background:'white', borderBottom:'1px solid #F3F4F6', display:'flex', alignItems:'center', gap:'10px' }}>
+                      <span style={{ fontSize:'16px' }}>{typeEmoji[b.type] || '📋'}</span>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:'13px', fontWeight:'600', color:'#374151', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                          {g.name || 'Guest'}{g.room ? ` · Room ${g.room}` : ''}
+                        </div>
+                        <div style={{ fontSize:'11px', color:'#9CA3AF' }}>{b.partners?.name || b.type}</div>
+                      </div>
+                      <span style={{ fontSize:'10px', fontWeight:'700', padding:'2px 6px', borderRadius:'4px', background:'#DCFCE7', color:'#14532D', flexShrink:0 }}>done</span>
+                    </div>
+                  )
+                })}
+              </>
+            )}
+          </div>
+        )}
+
+      </div>
+    </div>
+  )
+}
+
+// ── Mobile expandable booking with Go to Chat + View Guest ──
+function MobileExpandableBooking({ booking: b, guest: g, tc, matchConv, onOpenThread, onNavigateToGuest }) {
+  const [open, setOpen] = useState(false)
+  const typeEmoji = { taxi:'🚗', restaurant:'🍽️', activity:'⛵', late_checkout:'🕐', facility:'🏨' }
+  const emoji = typeEmoji[b.type] || '📋'
+  const guestLabel = g.name ? `${g.name}${g.surname ? ' ' + g.surname : ''}` : 'Guest'
+  const guestSub   = g.room ? `Room ${g.room}` : (g.phone ? g.phone.slice(-8) : '')
+  return (
+    <div style={{ background:'white', borderBottom:'1px solid #F3F4F6' }}>
+      <div onClick={() => setOpen(o => !o)}
+        style={{ padding:'12px 16px', display:'flex', alignItems:'center', gap:'10px', cursor:'pointer', background: open ? '#F9FAFB' : 'white' }}>
+        <div style={{ width:'32px', height:'32px', borderRadius:'8px', background:tc.bg, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'14px', flexShrink:0 }}>{emoji}</div>
+        <div style={{ flex:1, minWidth:0 }}>
+          <div style={{ fontSize:'13px', fontWeight:'700', color:'#111827', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+            {guestLabel}{guestSub ? <span style={{ fontWeight:'400', color:'#6B7280' }}> · {guestSub}</span> : ''}
+          </div>
+          <div style={{ fontSize:'12px', color:'#6B7280' }}>{b.partners?.name || b.type} · {b.details?.time || new Date(b.created_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}</div>
+        </div>
+        <div style={{ width:'24px', height:'24px', borderRadius:'6px', background: open ? '#1C3D2E' : '#F3F4F6', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, transition:'all .2s' }}>
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+            <path d={open ? 'M2 8L6 4L10 8' : 'M2 4L6 8L10 4'} stroke={open ? 'white' : '#6B7280'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </div>
+      </div>
+      {open && (
+        <div style={{ padding:'8px 16px 12px 58px', background:'#F9FAFB', borderTop:'1px solid #F3F4F6' }}>
+          <div style={{ fontSize:'12px', color:'#374151', display:'flex', flexDirection:'column', gap:'4px', marginBottom:'8px' }}>
+            {b.details?.destination && <div>📍 <strong>To:</strong> {b.details.destination}</div>}
+            {b.details?.pax         && <div>👥 <strong>Passengers:</strong> {b.details.pax}</div>}
+            {b.details?.date        && <div>📅 <strong>Date:</strong> {b.details.date}</div>}
+            {b.details?.time        && <div>🕐 <strong>Time:</strong> {b.details.time}</div>}
+            {b.details?.notes       && <div>📝 <strong>Notes:</strong> {b.details.notes}</div>}
+            {b.commission_amount > 0 && <div>💰 <strong>Commission:</strong> €{b.commission_amount}</div>}
+            <span style={{ fontSize:'10px', fontWeight:'700', padding:'2px 7px', borderRadius:'4px', display:'inline-block', marginTop:'2px', background: b.status==='confirmed'?'#DCFCE7':'#FEF3C7', color: b.status==='confirmed'?'#14532D':'#78350F' }}>{b.status}</span>
+          </div>
+          <div style={{ display:'flex', gap:'7px', flexWrap:'wrap' }}>
+            {matchConv && onOpenThread && (
+              <button onClick={(e) => { e.stopPropagation(); onOpenThread(matchConv) }}
+                style={{ fontSize:'12px', fontWeight:'600', padding:'6px 12px', borderRadius:'7px', border:'0.5px solid #93C5FD', background:'#DBEAFE', color:'#1E3A5F', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                💬 Go to chat
+              </button>
+            )}
+            {g.id && onNavigateToGuest && (
+              <button onClick={(e) => { e.stopPropagation(); onNavigateToGuest(g) }}
+                style={{ fontSize:'12px', fontWeight:'600', padding:'6px 12px', borderRadius:'7px', border:'0.5px solid #D1D5DB', background:'white', color:'#374151', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                👤 View guest
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -1110,6 +1319,7 @@ function ReceptionView({ hotelId, session }) {
   const [conversations, setConversations] = useState([])
   const [bookings,      setBookings]      = useState([])
   const [tickets,       setTickets]       = useState([])
+  const [orders,        setOrders]        = useState([])
   const [selectedConv,  setSelectedConv]  = useState(null)
   const [subtab,        setSubtab]        = useState('chats')   // 'chats' | 'portal' | 'issues'
   const [threadOpen,    setThreadOpen]    = useState(false)     // slides over everything
@@ -1121,16 +1331,18 @@ function ReceptionView({ hotelId, session }) {
 
   async function load() {
     try {
-      const [cr, br, tr] = await Promise.all([
+      const [cr, br, tr, or_] = await Promise.all([
         fetch(`/api/conversations?hotelId=${hotelId}`),
         fetch(`/api/bookings?hotelId=${hotelId}`),
         fetch(`/api/tickets?hotelId=${hotelId}`),
+        fetch(`/api/orders?hotelId=${hotelId}&scope=session`),
       ])
-      const [cd, bd, td] = await Promise.all([cr.json(), br.json(), tr.json()])
+      const [cd, bd, td, od] = await Promise.all([cr.json(), br.json(), tr.json(), or_.json().catch(()=>({orders:[]}))])
       const fresh = cd.conversations || []
       setConversations(fresh)
       setBookings(bd.bookings || [])
       setTickets(td.tickets  || [])
+      setOrders(od.orders    || [])
       setSelectedConv(prev => prev ? (fresh.find(c => c.id === prev.id) || prev) : prev)
     } catch {}
   }
@@ -1180,6 +1392,7 @@ function ReceptionView({ hotelId, session }) {
           conversations={conversations}
           selectedConvId={selectedConv?.id}
           onOpenThread={openThread}
+          orders={orders}
         />
       )}
       {!threadOpen && subtab === 'portal' && (
@@ -1192,7 +1405,14 @@ function ReceptionView({ hotelId, session }) {
         />
       )}
       {!threadOpen && subtab === 'issues' && (
-        <IssuesPanel tickets={tickets} bookings={bookings} conversations={conversations} onOpenThread={openThread} session={session} hotelId={hotelId} />
+        <IssuesPanel
+          tickets={tickets} bookings={bookings} conversations={conversations}
+          onOpenThread={openThread}
+          onNavigateToGuest={(guest) => {
+            // Switch to Guests tab by passing guest up — same pattern as desktop
+            setThreadOpen(false)
+          }}
+          session={session} hotelId={hotelId} />
       )}
 
       {/* Thread — slides over as full-screen overlay within this panel */}
@@ -1202,6 +1422,7 @@ function ReceptionView({ hotelId, session }) {
           session={session}
           onBack={() => setThreadOpen(false)}
           onReload={load}
+          orders={orders}
         />
       )}
     </div>

@@ -40,6 +40,24 @@ const TYPE_BORDERS = {
   prospect:    '#64748B',       // gray
 }
 
+// ── PAYMENT BADGE HELPER ─────────────────────────────────────
+// Returns the session-scoped payment status for a conversation.
+// Checks orders whose conversation_id matches OR whose created_at
+// falls within the current conversation session window.
+function getConvPaymentStatus(conv, orders) {
+  if (!orders || orders.length === 0) return null
+  const convOrders = orders.filter(o =>
+    o.conversation_id === conv.id ||
+    (o.guest_id === conv.guests?.id && o.conversation_session === conv.session_id)
+  )
+  if (convOrders.length === 0) return null
+  const hasPaid    = convOrders.some(o => o.status === 'paid')
+  const hasWaiting = convOrders.some(o => ['pending', 'unpaid', 'awaiting'].includes(o.status))
+  if (hasPaid)    return { label: 'Paid ✓',     bg: '#DCFCE7', color: '#14532D' }
+  if (hasWaiting) return { label: 'Awaiting payment', bg: '#FEF3C7', color: '#78350F' }
+  return null
+}
+
 const canReply   = (role) => ['receptionist','manager','admin','supervisor'].includes(role)
 const isDeptRole = (role) => ['maintenance','housekeeping','concierge','fnb','security','valet','frontdesk'].includes(role)
 
@@ -51,7 +69,7 @@ const PRIORITIES = [
 
 
 // ── EXPANDABLE BOOKING ROW (desktop) ─────────────────────
-function ExpandableBookingDesktop({ b }) {
+function ExpandableBookingDesktop({ b, conversations, onSelectConv, onNavigateToGuest }) {
   const [open, setOpen] = React.useState(false)
   const guest = b.guests || {}
   const typeColors = {
@@ -59,43 +77,60 @@ function ExpandableBookingDesktop({ b }) {
     restaurant:    { bg:'#DBEAFE', color:'#1E3A5F', emoji:'🍽️' },
     activity:      { bg:'#FEF3C7', color:'#78350F', emoji:'⛵' },
     late_checkout: { bg:'#FAF5FF', color:'#581C87', emoji:'🕐' },
+    facility:      { bg:'#F0FDF4', color:'#14532D', emoji:'🏨' },
   }
   const tc = typeColors[b.type] || { bg:'#F1F5F9', color:'#334155', emoji:'📋' }
   const time = b.details?.time
     ? b.details.time
     : new Date(b.confirmed_at||b.created_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})
 
+  // Guest display: name + room (stay) or name + phone tail (visitor)
+  const guestLabel = guest.name
+    ? `${guest.name}${guest.surname ? ' ' + guest.surname : ''}`
+    : 'Guest'
+  const guestSub = guest.room
+    ? `Room ${guest.room}`
+    : guest.phone
+      ? guest.phone.slice(-8)
+      : guest.guest_type || ''
+
+  // Find matching conversation for Go to Chat
+  const matchConv = (conversations || []).find(c =>
+    c.guests?.id === guest.id || c.guests?.phone === guest.phone
+  )
+
   return (
     <div style={{ borderBottom:'0.5px solid var(--border)', background: open ? '#F9FAFB' : 'white' }}>
+      {/* Row header — always visible */}
       <div onClick={() => setOpen(o => !o)}
         style={{ display:'flex', alignItems:'center', gap:'8px', padding:'10px 14px', cursor:'pointer' }}>
-        <div style={{ width:'7px', height:'7px', borderRadius:'50%', background:'#16A34A', flexShrink:0 }}/>
+        <div style={{ width:'7px', height:'7px', borderRadius:'50%', background: b.status==='confirmed' ? '#16A34A' : '#F59E0B', flexShrink:0 }}/>
         <div style={{ width:'26px', height:'26px', borderRadius:'6px', background:tc.bg, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'13px', flexShrink:0 }}>{tc.emoji}</div>
-        <div style={{ flex:1 }}>
-          <div style={{ fontSize:'12px', fontWeight:'600', color:'#111827' }}>
-            {guest.name}{guest.room ? ` · Room ${guest.room}` : ''}
+        <div style={{ flex:1, minWidth:0 }}>
+          <div style={{ fontSize:'12px', fontWeight:'700', color:'#111827', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+            {guestLabel}
+            {guestSub && <span style={{ fontWeight:'400', color:'#6B7280' }}> · {guestSub}</span>}
           </div>
-          <div style={{ fontSize:'11px', color:'#6B7280', marginTop:'1px' }}>{b.partners?.name || b.type}</div>
+          <div style={{ fontSize:'11px', color:'#6B7280', marginTop:'1px' }}>{b.partners?.name || b.type} · {time}</div>
         </div>
-        <div style={{ display:'flex', alignItems:'center', gap:'6px' }}>
-          <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151' }}>{time}</div>
-          <div style={{ width:'18px', height:'18px', borderRadius:'4px', background: open ? '#1C3D2E' : '#F3F4F6', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, transition:'all .2s' }}>
-            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-              <path d={open ? 'M1 7L5 3L9 7' : 'M1 3L5 7L9 3'} stroke={open ? 'white' : '#6B7280'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          </div>
+        <div style={{ width:'18px', height:'18px', borderRadius:'4px', background: open ? '#1C3D2E' : '#F3F4F6', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, transition:'all .2s' }}>
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+            <path d={open ? 'M1 7L5 3L9 7' : 'M1 3L5 7L9 3'} stroke={open ? 'white' : '#6B7280'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
         </div>
       </div>
+
+      {/* Expanded detail */}
       {open && (
         <div style={{ padding:'8px 14px 12px 51px', background:'#F9FAFB', borderTop:'0.5px solid #F3F4F6' }}>
-          <div style={{ fontSize:'11px', color:'#374151', display:'flex', flexDirection:'column', gap:'4px' }}>
+          <div style={{ fontSize:'11px', color:'#374151', display:'flex', flexDirection:'column', gap:'4px', marginBottom:'8px' }}>
             {b.details?.destination && <div>📍 <strong>To:</strong> {b.details.destination}</div>}
             {b.details?.pax         && <div>👥 <strong>Passengers:</strong> {b.details.pax}</div>}
             {b.details?.date        && <div>📅 <strong>Date:</strong> {b.details.date}</div>}
             {b.details?.time        && <div>🕐 <strong>Time:</strong> {b.details.time}</div>}
             {b.details?.notes       && <div>📝 <strong>Notes:</strong> {b.details.notes}</div>}
             {b.commission_amount > 0 && <div>💰 <strong>Commission:</strong> €{b.commission_amount}</div>}
-            <div style={{ marginTop:'3px' }}>
+            <div style={{ marginTop:'2px' }}>
               <span style={{ fontSize:'10px', fontWeight:'700', padding:'2px 7px', borderRadius:'4px',
                 background: b.status==='confirmed' ? '#DCFCE7' : '#FEF3C7',
                 color:      b.status==='confirmed' ? '#14532D' : '#78350F',
@@ -104,6 +139,21 @@ function ExpandableBookingDesktop({ b }) {
               </span>
             </div>
           </div>
+          {/* Action buttons */}
+          <div style={{ display:'flex', gap:'6px', flexWrap:'wrap' }}>
+            {matchConv && onSelectConv && (
+              <button onClick={(e) => { e.stopPropagation(); onSelectConv(matchConv) }}
+                style={{ fontSize:'11px', fontWeight:'600', padding:'4px 10px', borderRadius:'5px', border:'0.5px solid #93C5FD', background:'#DBEAFE', color:'#1E3A5F', cursor:'pointer', fontFamily:'var(--font)' }}>
+                💬 Go to chat
+              </button>
+            )}
+            {guest.id && onNavigateToGuest && (
+              <button onClick={(e) => { e.stopPropagation(); onNavigateToGuest(guest) }}
+                style={{ fontSize:'11px', fontWeight:'600', padding:'4px 10px', borderRadius:'5px', border:'0.5px solid #D1D5DB', background:'white', color:'#374151', cursor:'pointer', fontFamily:'var(--font)' }}>
+                👤 View guest
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -111,7 +161,7 @@ function ExpandableBookingDesktop({ b }) {
 }
 
 // ── TICKET ROW (desktop) — proper component so useState is legal ──
-function DesktopTicketRow({ t, session, conversations, onSelectConv, onSetCentreMode, onReload }) {
+function DesktopTicketRow({ t, session, conversations, onSelectConv, onSetCentreMode, onNavigateToGuest, onReload }) {
   const [open, setOpen] = React.useState(false)
   const typeConfig = {
     room_issue:   { label:'Maintenance', bg:'#FEF2F2', color:'#DC2626', emoji:'🔧' },
@@ -231,6 +281,12 @@ function DesktopTicketRow({ t, session, conversations, onSelectConv, onSetCentre
                 </button>
               )
             })()}
+            {t.guest_id && t.guests && onNavigateToGuest && (
+              <button onClick={() => onNavigateToGuest(t.guests)}
+                style={{ fontSize:'11px', fontWeight:'600', padding:'4px 10px', borderRadius:'5px', border:'0.5px solid #D1D5DB', background:'white', color:'#374151', cursor:'pointer', fontFamily:'var(--font)' }}>
+                👤 View guest
+              </button>
+            )}
             <select onChange={async (e) => {
               if (!e.target.value) return
               await fetch('/api/tickets', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ticketId: t.id, status: t.status, department: e.target.value }) })
@@ -285,6 +341,10 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
   const [conversations, setConversations] = useState([])
   const [bookings, setBookings]           = useState([])
   const [tickets, setTickets]             = useState([])
+  const [orders,  setOrders]              = useState([])
+  const [alertTab, setAlertTab]           = useState('tickets') // 'tickets' | 'bookings'
+  const [facBookingsOpen, setFacBookingsOpen] = useState(true)
+  const [partnerBookingsOpen, setPartnerBookingsOpen] = useState(true)
   const [selectedConv, setSelectedConv]   = useState(null)
   const [centreMode, setCentreMode]       = useState('portal')
   const [replyText, setReplyText]         = useState('')
@@ -348,16 +408,20 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
   }
 
   async function loadData() {
-    const [convRes, bookRes, tickRes] = await Promise.all([
+    const [convRes, bookRes, tickRes, orderRes] = await Promise.all([
       fetch(`/api/conversations?hotelId=${hotelId}`),
       fetch(`/api/bookings?hotelId=${hotelId}`),
       fetch(`/api/tickets?hotelId=${hotelId}`),
+      fetch(`/api/orders?hotelId=${hotelId}&scope=session`),
     ])
-    const [convData, bookData, tickData] = await Promise.all([convRes.json(), bookRes.json(), tickRes.json()])
+    const [convData, bookData, tickData, orderData] = await Promise.all([
+      convRes.json(), bookRes.json(), tickRes.json(), orderRes.json().catch(() => ({ orders: [] }))
+    ])
     const freshConvs = convData.conversations || []
     setConversations(freshConvs)
     setBookings(bookData.bookings || [])
     setTickets(tickData.tickets || [])
+    setOrders(orderData.orders || [])
     // Keep selected conversation messages in sync
     setSelectedConv(prev => {
       if (!prev) return prev
@@ -520,6 +584,12 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
                     : last?.content || 'No messages yet'
                   }
                 </div>
+                {/* Payment status badge */}
+                {(() => { const ps = getConvPaymentStatus(conv, orders); return ps ? (
+                  <div style={{ marginTop:'4px' }}>
+                    <span style={{ fontSize:'10px', fontWeight:'700', padding:'2px 8px', borderRadius:'5px', background:ps.bg, color:ps.color }}>{ps.label}</span>
+                  </div>
+                ) : null })()}
                 <div style={{ marginTop:'5px', display:'flex', gap:'4px' }}>
                   <span style={{ fontSize:'10px', fontWeight:'600', padding:'2px 7px', borderRadius:'5px', background:lc.bg, color:lc.color }}>
                     {lc.name || lang.toUpperCase()}
@@ -578,6 +648,36 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
                       </div>
                     )
                   })}
+                  {/* Payment status inline card — shown when a session order exists */}
+                  {(() => {
+                    const ps = getConvPaymentStatus(selectedConv, orders)
+                    const sessionOrders = (orders || []).filter(o =>
+                      o.conversation_id === selectedConv.id ||
+                      (o.guest_id === selectedConv.guests?.id && o.conversation_session === selectedConv.session_id)
+                    )
+                    if (!ps || sessionOrders.length === 0) return null
+                    return (
+                      <div style={{ display:'flex', justifyContent:'center', margin:'4px 0' }}>
+                        <div style={{ background: ps.bg, border: `0.5px solid ${ps.color}33`, borderRadius:'10px', padding:'10px 14px', minWidth:'200px', maxWidth:'80%' }}>
+                          <div style={{ fontSize:'11px', fontWeight:'700', color:ps.color, marginBottom:'6px', display:'flex', alignItems:'center', gap:'5px' }}>
+                            <span>{ps.label === 'Paid ✓' ? '💳' : '⏳'}</span> Payment
+                          </div>
+                          {sessionOrders.map(o => (
+                            <div key={o.id} style={{ fontSize:'12px', color:'#374151', display:'flex', justifyContent:'space-between', alignItems:'center', gap:'12px', padding:'3px 0', borderTop:'0.5px solid #E5E7EB' }}>
+                              <span style={{ fontWeight:'500' }}>{o.product_name || o.description || 'Service'}</span>
+                              <span style={{ fontWeight:'700', color: o.status === 'paid' ? '#14532D' : '#78350F' }}>
+                                {o.amount_eur ? `€${Number(o.amount_eur).toFixed(2)}` : ''}
+                                {' '}
+                                <span style={{ fontSize:'10px', fontWeight:'700', padding:'1px 5px', borderRadius:'4px', background: o.status==='paid'?'#DCFCE7':'#FEF3C7', color: o.status==='paid'?'#14532D':'#78350F' }}>
+                                  {o.status === 'paid' ? 'paid' : 'pending'}
+                                </span>
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )
+                  })()}
                   <div ref={chatEndRef}/>
                 </div>
                 {canReply(session?.role) ? (
@@ -768,94 +868,171 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
         )}
       </div>
 
-      {/* ── RIGHT: Issues · Upcoming · Completed ── */}
+      {/* ── RIGHT: Alerts panel with sub-tabs ── */}
       <div style={{ borderLeft:'0.5px solid var(--border)', display:'flex', flexDirection:'column', background:'white', overflow:'hidden' }}>
-        <div className="scrollable">
 
-          {/* Cancellation alerts */}
-          <CancellationAlerts hotelId={hotelId} session={session} isMobile={false} />
+        {/* Cancellation alerts (always visible above tabs) */}
+        <CancellationAlerts hotelId={hotelId} session={session} isMobile={false} />
 
-          {/* Escalated conversations */}
+        {/* Escalated conversations row */}
+        {escalated.length > 0 && (
           <div style={{ borderBottom:'0.5px solid var(--border)' }}>
-            {sh('Conversations needing reply', `${escalated.length} escalated`, escalated.length > 0)}
-            {escalated.length === 0 ? (
-              <div style={{ padding:'12px 14px', textAlign:'center', color:'#9CA3AF', fontSize:'12px' }}>No escalated conversations ✓</div>
-            ) : escalated.map(c => {
+            {sh('Conversations needing reply', `${escalated.length} escalated`, true)}
+            {escalated.map(c => {
               const g = c.guests || {}
               const lastMsg = c.messages?.[c.messages.length - 1]
-              const preview = lastMsg?.content?.slice(0, 50) || 'No messages'
               return (
-                <div key={c.id} onClick={() => setSelectedConv(c)}
-                  style={{ display:'flex', alignItems:'flex-start', gap:'10px', padding:'12px 14px', borderBottom:'0.5px solid var(--border)', background:'#FFF5F5', cursor:'pointer' }}>
-                  <div style={{ width:'28px', height:'28px', borderRadius:'50%', background:'#FEE2E2', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'13px', flexShrink:0 }}>💬</div>
+                <div key={c.id} onClick={() => { setSelectedConv(c); setCentreMode('chat') }}
+                  style={{ display:'flex', alignItems:'flex-start', gap:'10px', padding:'10px 14px', borderBottom:'0.5px solid var(--border)', background:'#FFF5F5', cursor:'pointer' }}>
+                  <div style={{ width:'26px', height:'26px', borderRadius:'50%', background:'#FEE2E2', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'12px', flexShrink:0 }}>💬</div>
                   <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ display:'flex', alignItems:'center', gap:'6px', marginBottom:'2px' }}>
-                      <span style={{ fontSize:'12px', fontWeight:'700', color:'#DC2626' }}>
-                        {g.name ? `${g.name} ${g.surname||''}`.trim() : 'Guest'}
-                      </span>
-                      {g.room && <span style={{ fontSize:'11px', color:'#9CA3AF' }}>Room {g.room}</span>}
+                    <div style={{ display:'flex', alignItems:'center', gap:'5px', marginBottom:'2px' }}>
+                      <span style={{ fontSize:'12px', fontWeight:'700', color:'#DC2626' }}>{g.name ? `${g.name} ${g.surname||''}`.trim() : 'Guest'}</span>
+                      {g.room && <span style={{ fontSize:'11px', color:'#9CA3AF' }}>· Room {g.room}</span>}
                       <span style={{ marginLeft:'auto', fontSize:'10px', fontWeight:'700', padding:'1px 6px', borderRadius:'4px', background:'#FEE2E2', color:'#DC2626' }}>NEEDS REPLY</span>
                     </div>
-                    <div style={{ fontSize:'11px', color:'#6B7280', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{preview}</div>
+                    <div style={{ fontSize:'11px', color:'#6B7280', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{lastMsg?.content?.slice(0,50) || 'No messages'}</div>
                   </div>
                 </div>
               )
             })}
           </div>
+        )}
 
-          {/* Open tickets */}
-          <div style={{ borderBottom:'0.5px solid var(--border)' }}>
-            {sh('Open tickets', `${issues.length} need action`, issues.length > 0)}
-            {issues.length === 0 ? (
-              <div style={{ padding:'16px', textAlign:'center', color:'#9CA3AF', fontSize:'13px' }}>All clear ✓</div>
-            ) : issues.map(t => (
-              <DesktopTicketRow
-                key={t.id}
-                t={t}
-                session={session}
-                conversations={conversations}
-                onSelectConv={setSelectedConv}
-                onSetCentreMode={setCentreMode}
-                onReload={loadData}
-              />
-            ))}
-          </div>
+        {/* Sub-tab switcher */}
+        <div style={{ display:'flex', borderBottom:'0.5px solid var(--border)', background:'white', flexShrink:0 }}>
+          {[
+            { key:'tickets',  label:'Open Tickets',     count: issues.length },
+            { key:'bookings', label:'Booking Requests', count: upcoming.length },
+          ].map(tab => (
+            <button key={tab.key} onClick={() => setAlertTab(tab.key)}
+              style={{ flex:1, padding:'9px 6px', fontSize:'12px', fontWeight:'600', border:'none', borderBottom: alertTab===tab.key ? '2px solid #1C3D2E' : '2px solid transparent', background:'white', color: alertTab===tab.key ? '#1C3D2E' : '#9CA3AF', cursor:'pointer', fontFamily:'var(--font)', display:'flex', alignItems:'center', justifyContent:'center', gap:'5px', transition:'all .15s' }}>
+              {tab.label}
+              {tab.count > 0 && (
+                <span style={{ fontSize:'10px', fontWeight:'700', padding:'1px 6px', borderRadius:'20px', background: alertTab===tab.key ? '#1C3D2E' : '#F3F4F6', color: alertTab===tab.key ? 'white' : '#6B7280' }}>{tab.count}</span>
+              )}
+            </button>
+          ))}
+        </div>
 
-          {/* Upcoming */}
-          <div style={{ borderBottom:'0.5px solid var(--border)' }}>
-            {sh('Upcoming', 'today & tomorrow')}
-            {upcoming.length === 0 ? (
-              <div style={{ padding:'16px', textAlign:'center', color:'#9CA3AF', fontSize:'13px' }}>No upcoming bookings</div>
-            ) : upcoming.slice(0,8).map(b => (
-              <ExpandableBookingDesktop key={b.id} b={b} />
-            ))}
-          </div>
+        <div className="scrollable">
 
-          {/* Completed */}
-          <div>
-            {sh('Completed', `${completed.length} done`)}
-            {completed.length === 0 ? (
-              <div style={{ padding:'16px', textAlign:'center', color:'#9CA3AF', fontSize:'13px' }}>None yet today</div>
-            ) : completed.slice(0,6).map(b => {
-              const guest = b.guests || {}
-              const typeColors = { taxi:{l:'T'}, restaurant:{l:'R'}, activity:{l:'A'}, late_checkout:{l:'L'} }
-              const tc = typeColors[b.type] || {l:'?'}
-              return (
-                <div key={b.id} style={{ display:'flex', alignItems:'center', gap:'8px', padding:'10px 14px', borderBottom:'0.5px solid var(--border)' }}>
-                  <div style={{ width:'7px', height:'7px', borderRadius:'50%', background:'#D1D5DB', flexShrink:0 }}/>
-                  <div style={{ width:'22px', height:'22px', borderRadius:'5px', background:'#F3F4F6', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'10px', fontWeight:'700', color:'#9CA3AF', flexShrink:0 }}>{tc.l}</div>
-                  <div style={{ flex:1 }}>
-                    <div style={{ fontSize:'12px', color:'#6B7280' }}>{guest.name} · Room {guest.room || ''}</div>
-                    <div style={{ fontSize:'11px', color:'#9CA3AF', marginTop:'1px' }}>{b.partners?.name || b.type}</div>
+          {/* ── TAB: Open Tickets ── */}
+          {alertTab === 'tickets' && (
+            <div>
+              {issues.length === 0 ? (
+                <div style={{ padding:'24px', textAlign:'center', color:'#9CA3AF', fontSize:'13px' }}>All clear — no open tickets ✓</div>
+              ) : issues.map(t => (
+                <DesktopTicketRow
+                  key={t.id} t={t} session={session}
+                  conversations={conversations}
+                  onSelectConv={(conv) => { setSelectedConv(conv); setCentreMode('chat') }}
+                  onSetCentreMode={setCentreMode}
+                  onNavigateToGuest={onSelectGuest}
+                  onReload={loadData}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* ── TAB: Booking Requests ── */}
+          {alertTab === 'bookings' && (
+            <div>
+              {upcoming.length === 0 && (
+                <div style={{ padding:'24px', textAlign:'center', color:'#9CA3AF', fontSize:'13px' }}>No pending booking requests ✓</div>
+              )}
+
+              {/* ── Section: Facility Bookings ── */}
+              {(() => {
+                const facBookings = upcoming.filter(b => b.source === 'facility' || b.type === 'facility' || b._isFacility)
+                // Also show pending tickets that are facility_booking category
+                const facTickets = issues.filter(t => t.category === 'facility_booking')
+                const facItems = [...facBookings, ...facTickets]
+                return (
+                  <div>
+                    <button onClick={() => setFacBookingsOpen(o => !o)}
+                      style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 14px', background:'#F9FAFB', border:'none', borderBottom:'0.5px solid var(--border)', cursor:'pointer', fontFamily:'var(--font)' }}>
+                      <span style={{ fontSize:'12px', fontWeight:'600', color:'#374151', display:'flex', alignItems:'center', gap:'7px' }}>
+                        <span style={{ fontSize:'14px' }}>🏨</span> Facility Bookings
+                        {facItems.length > 0 && <span style={{ fontSize:'10px', fontWeight:'700', padding:'1px 7px', borderRadius:'20px', background:'#DCFCE7', color:'#14532D' }}>{facItems.length}</span>}
+                      </span>
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                        <path d={facBookingsOpen ? 'M1 8L6 3L11 8' : 'M1 4L6 9L11 4'} stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </button>
+                    {facBookingsOpen && (
+                      facItems.length === 0 ? (
+                        <div style={{ padding:'12px 14px', fontSize:'12px', color:'#9CA3AF', textAlign:'center' }}>No facility bookings pending</div>
+                      ) : facItems.map(item => (
+                        item.category === 'facility_booking'
+                          ? <DesktopTicketRow key={item.id} t={item} session={session} conversations={conversations}
+                              onSelectConv={(conv) => { setSelectedConv(conv); setCentreMode('chat') }}
+                              onSetCentreMode={setCentreMode}
+                              onNavigateToGuest={onSelectGuest}
+                              onReload={loadData} />
+                          : <ExpandableBookingDesktop key={item.id} b={item}
+                              conversations={conversations}
+                              onSelectConv={(conv) => { setSelectedConv(conv); setCentreMode('chat') }}
+                              onNavigateToGuest={onSelectGuest} />
+                      ))
+                    )}
                   </div>
-                  <div style={{ fontSize:'11px', color:'#9CA3AF' }}>
-                    {new Date(b.confirmed_at||b.created_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}
+                )
+              })()}
+
+              {/* ── Section: Partner Bookings ── */}
+              {(() => {
+                const partnerBookings = upcoming.filter(b => b.source !== 'facility' && b.type !== 'facility' && !b._isFacility && b.partner_id)
+                return (
+                  <div>
+                    <button onClick={() => setPartnerBookingsOpen(o => !o)}
+                      style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 14px', background:'#F9FAFB', border:'none', borderBottom:'0.5px solid var(--border)', cursor:'pointer', fontFamily:'var(--font)' }}>
+                      <span style={{ fontSize:'12px', fontWeight:'600', color:'#374151', display:'flex', alignItems:'center', gap:'7px' }}>
+                        <span style={{ fontSize:'14px' }}>🤝</span> Partner Bookings
+                        {partnerBookings.length > 0 && <span style={{ fontSize:'10px', fontWeight:'700', padding:'1px 7px', borderRadius:'20px', background:'#DBEAFE', color:'#1E3A5F' }}>{partnerBookings.length}</span>}
+                      </span>
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                        <path d={partnerBookingsOpen ? 'M1 8L6 3L11 8' : 'M1 4L6 9L11 4'} stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </button>
+                    {partnerBookingsOpen && (
+                      partnerBookings.length === 0 ? (
+                        <div style={{ padding:'12px 14px', fontSize:'12px', color:'#9CA3AF', textAlign:'center' }}>No partner bookings pending</div>
+                      ) : partnerBookings.map(b => (
+                        <ExpandableBookingDesktop key={b.id} b={b}
+                          conversations={conversations}
+                          onSelectConv={(conv) => { setSelectedConv(conv); setCentreMode('chat') }}
+                          onNavigateToGuest={onSelectGuest} />
+                      ))
+                    )}
                   </div>
+                )
+              })()}
+
+              {/* Completed today */}
+              {completed.length > 0 && (
+                <div style={{ marginTop:'4px' }}>
+                  {sh('Completed today', `${completed.length} done`)}
+                  {completed.slice(0,6).map(b => {
+                    const guest = b.guests || {}
+                    const typeEmoji = { taxi:'🚗', restaurant:'🍽️', activity:'⛵', late_checkout:'🕐' }
+                    return (
+                      <div key={b.id} style={{ display:'flex', alignItems:'center', gap:'8px', padding:'9px 14px', borderBottom:'0.5px solid var(--border)' }}>
+                        <div style={{ fontSize:'13px', flexShrink:0 }}>{typeEmoji[b.type] || '📋'}</div>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                            {guest.name || 'Guest'}{guest.room ? ` · Room ${guest.room}` : ''}
+                          </div>
+                          <div style={{ fontSize:'11px', color:'#9CA3AF' }}>{b.partners?.name || b.type}</div>
+                        </div>
+                        <span style={{ fontSize:'10px', fontWeight:'700', padding:'2px 6px', borderRadius:'4px', background:'#DCFCE7', color:'#14532D', flexShrink:0 }}>done</span>
+                      </div>
+                    )
+                  })}
                 </div>
-              )
-            })}
-          </div>
-
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
