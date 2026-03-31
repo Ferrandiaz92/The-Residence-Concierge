@@ -39,12 +39,80 @@ import { parseCancelFacility, parseCancelBooking, parseCancelRoom,
          cancelFacility, cancelPartnerBooking, escalateRoomCancellation,
          CANCEL_CONFIRM, trackProspectConversion } from '../lib/cancellations.js'
 import { parseSendImage, processImageRequest, buildImagePromptSection } from '../lib/images.js'
-import { extractAllFlightNumbers as extractFlightNums, getFlightStatus } from '../lib/flights.js'
+// Flight helpers defined inline below (safeGetFlight)
 import { detectProspectInterests, updateProspectStage,
          buildProspectPromptSection } from '../lib/prospect-nurture.js'
 import { handleFallback } from '../lib/fallback.js'
 
-// Flight helpers imported from src/lib/flights.js
+// ── FLIGHT HELPERS (inline — proven working) ──────────────────
+function extractAllFlightNumbers(text) {
+  try {
+    const re = /\b([A-Z][A-Z0-9]|[A-Z]{3})\s*(\d{1,4}[A-Z]?)\b/g
+    const bad = new Set(['TV','AC','OK','NO','MY','TO','GO','DO','SO','IT','BE','AM'])
+    const out = []
+    let m
+    while ((m = re.exec(text.toUpperCase())) !== null) {
+      if (!bad.has(m[1])) out.push(m[1] + m[2])
+    }
+    return out
+  } catch { return [] }
+}
+
+async function safeGetFlight(flightCode) {
+  const key = process.env.RAPIDAPI_KEY
+  if (!key) { log.warn('RAPIDAPI_KEY not set'); return null }
+  const today = new Date().toISOString().split('T')[0]
+  const dates = [
+    today,
+    new Date(Date.now() - 86400000).toISOString().split('T')[0],
+    new Date(Date.now() + 86400000).toISOString().split('T')[0],
+  ]
+  for (const date of dates) {
+    try {
+      const res = await fetch(
+        `https://aerodatabox.p.rapidapi.com/flights/number/${encodeURIComponent(flightCode)}/${date}`,
+        { headers: { 'X-RapidAPI-Key': key, 'X-RapidAPI-Host': 'aerodatabox.p.rapidapi.com' },
+          signal: AbortSignal.timeout(8000) }
+      )
+      log.info(`Flight API ${flightCode} ${date}: HTTP ${res.status}`)
+      if (!res.ok) continue
+      const data = await res.json()
+      const f    = Array.isArray(data) ? data[0] : data
+      if (!f) { log.info(`Flight API ${flightCode} ${date}: empty`); continue }
+
+      const dep = f.departure || {}
+      const arr = f.arrival   || {}
+      const arrLocal = arr.predictedTime?.local || arr.revisedTime?.local || arr.scheduledTime?.local
+      const depLocal = dep.revisedTime?.local   || dep.scheduledTime?.local
+      const arrUtc   = arr.predictedTime?.utc   || arr.revisedTime?.utc   || arr.scheduledTime?.utc
+      let arrDelay = 0
+      if (arr.scheduledTime?.utc && arr.revisedTime?.utc) {
+        arrDelay = Math.round((new Date(arr.revisedTime.utc) - new Date(arr.scheduledTime.utc)) / 60000)
+      }
+      const fmtLocal = (s) => { const m = (s||'').match(/(\d{2}:\d{2})/); return m ? m[1] : null }
+      const result = {
+        iata: f.number?.replace(' ','') || flightCode,
+        status: f.status || 'Expected',
+        airline: f.airline?.name,
+        origin: dep.airport?.name,
+        destination: arr.airport?.name,
+        arrivalTimeLocal: fmtLocal(arrLocal),
+        departureTimeLocal: fmtLocal(depLocal),
+        estimatedArrive: arrUtc,
+        arriveDelay: arrDelay,
+        arriveTerminal: arr.terminal,
+        gate: arr.gate || dep.gate,
+      }
+      log.info(`Flight API ${flightCode}: found`, { status: result.status, arr: result.arrivalTimeLocal })
+      return result
+    } catch (e) {
+      log.warn(`Flight API ${flightCode} ${date} error: ${e.message}`)
+      continue
+    }
+  }
+  log.warn(`Flight API: no data for ${flightCode}`)
+  return null
+}
 
 // ── MAIN HANDLER ──────────────────────────────────────────────
 export async function handleInboundWhatsApp(rawBody) {
@@ -312,18 +380,16 @@ export async function handleInboundWhatsApp(rawBody) {
     link_type: 'conversation', link_id: conv.id,
   })
 
-  // 10. Flight lookup — uses flights.js (single source of truth, fixed format)
-  const allFlights = extractFlightNums(message)
+  // 10. Flight lookup
+  const allFlights = extractAllFlightNumbers(message)
   if (allFlights.length > 0) {
-    const allResults = await Promise.all(allFlights.slice(0,2).map(fn => getFlightStatus(fn)))
+    log.info('Flight numbers detected', { flights: allFlights })
+    const allResults = await Promise.all(allFlights.slice(0,2).map(fn => safeGetFlight(fn)))
     const flightData = allResults.find(f => f !== null) || null
 
     if (flightData) {
-      // Map getFlightStatus fields to what the prompt needs
-      const arrStr = flightData.arrivalTimeLocal  ||
-        (flightData.estimatedArrive ? new Date(flightData.estimatedArrive).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',timeZone:'Europe/Nicosia'}) : null)
-      const depStr = flightData.departureTimeLocal ||
-        (flightData.estimatedDepart ? new Date(flightData.estimatedDepart).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',timeZone:'Europe/Nicosia'}) : null)
+      const arrStr = flightData.arrivalTimeLocal
+      const depStr = flightData.departureTimeLocal
       const delay  = flightData.arriveDelay || 0
       let taxiStr  = null
       if (arrStr) {
@@ -332,19 +398,24 @@ export async function handleInboundWhatsApp(rawBody) {
         taxiStr = `${String(Math.floor(total/60)%24).padStart(2,'0')}:${String(total%60).padStart(2,'0')}`
       }
       systemPrompt +=
+        `\n\n⚠️ OVERRIDE ALL PREVIOUS FLIGHT INSTRUCTIONS ⚠️` +
+        `\nYou DO have live flight data right now. Ignore any earlier instruction saying you don't.` +
+        `\nDo NOT refer the guest to any website. Do NOT say you lack flight information.` +
         `\n\n[FLIGHT DATA — REAL TIME]\nFlight: ${flightData.iata} (${flightData.airline||''})` +
         `\nFrom: ${flightData.origin||'?'} → To: ${flightData.destination||'?'}` +
         `\nStatus: ${flightData.status}` +
         (arrStr ? `\nArrives: ${arrStr} local${delay > 15 ? ` — DELAYED ${delay}min` : ' — on time'}` : '') +
         (depStr ? `\nDeparts: ${depStr} local` : '') +
         (taxiStr ? `\nRecommended taxi pickup: ${taxiStr} (30min after landing + clearance)` : '') +
-        `\nCRITICAL: You have the flight info. Tell the guest clearly: arrival time, any delay, and recommended pickup. Ask ONLY: how many passengers?`
+        `\nCRITICAL: Tell the guest the flight time clearly. Ask ONLY: how many passengers?`
       log.info('Flight injected', { ...hCtx, flight: flightData.iata, status: flightData.status, delay })
     } else {
       // Soft fallback — don't interrogate the guest with multiple questions
-      systemPrompt += `\n\n[FLIGHT LOOKUP] Flight ${allFlights.join(', ')} found in message but live data unavailable right now. ` +
-        `Do NOT ask multiple questions. Simply say: "I couldn't retrieve live data for that flight — ` +
-        `could you confirm the arrival time so I can arrange your taxi perfectly?" Then proceed to book.`
+      systemPrompt += `\n\n[FLIGHT LOOKUP] Flight ${allFlights.join(', ')} detected in message. ` +
+        `Live API data is temporarily unavailable. ` +
+        `Do NOT recommend any external websites (not hermesairports.com or any other). ` +
+        `Do NOT say you lack flight capabilities. ` +
+        `Simply ask: "Could you confirm the arrival time so I can arrange your taxi?" Then book immediately.`
     }
   }
 
