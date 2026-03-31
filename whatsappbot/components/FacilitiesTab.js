@@ -25,7 +25,7 @@ const DEPT_COLORS = {
 }
 const CAT_EMOJI = {
   court: '🎾', pool: '🏊', spa: '💆', gym: '🏋️', conference: '💼',
-  restaurant: '🍽️', rooftop: '🌅', beach: '🏖️', other: '🏨',
+  restaurant: '🍽️', rooftop: '🌅', beach: '🏖️', other: '🛎️',
 }
 const STATUS_CONFIG = {
   all:         { bg: '#F1F5F9', color: '#334155', label: 'All' },
@@ -51,7 +51,7 @@ function BookingCard({ booking, session, onAction, isMobile }) {
   const guest   = booking.guests   || {}
   const fac     = booking.facilities || {}
   const sc      = STATUS_CONFIG[booking.status] || STATUS_CONFIG.pending
-  const emoji   = CAT_EMOJI[fac.category] || '🏨'
+  const emoji   = CAT_EMOJI[fac.category] || '🛎️'
   const isPending = booking.status === 'pending'
 
   async function act(action) {
@@ -178,7 +178,7 @@ function BookingCard({ booking, session, onAction, isMobile }) {
 // ── FACILITY CARD ─────────────────────────────────────────────
 function FacilityCard({ facility, session, onEdit, isMobile }) {
   const dc    = DEPT_COLORS[facility.department] || DEPT_COLORS.other
-  const emoji = CAT_EMOJI[facility.category] || '🏨'
+  const emoji = CAT_EMOJI[facility.category] || '🛎️'
 
   return (
     <div style={{

@@ -9,7 +9,7 @@ import { useState, useEffect } from 'react'
 const SERVICE_TYPES = [
   { key:'all',           label:'All',             icon:'' },
   { key:'partner',       label:'Partner Services', icon:'🤝' },
-  { key:'hotel_service', label:'Hotel Services',   icon:'🏨' },
+  { key:'hotel_service', label:'Hotel Services',   icon:'🛎️' },
 ]
 
 // Categories — used within each service type
@@ -24,7 +24,7 @@ const CATEGORIES = [
   { key:'birthday',        label:'Birthday Party',     icon:'🎂',  type:'hotel_service' },
   { key:'celebration',     label:'Special Celebration',icon:'🥂',  type:'hotel_service' },
   { key:'membership',      label:'Membership',         icon:'⭐',  type:'hotel_service' },
-  { key:'hotel_other',     label:'Other Hotel Service',icon:'🏨',  type:'hotel_service' },
+  { key:'hotel_other',     label:'Other Hotel Service',icon:'🛎️',  type:'hotel_service' },
 ]
 
 const S = {
@@ -171,7 +171,7 @@ function ProductForm({ product, partners, hotelId, onSave, onCancel }) {
         const isHotelService = CATEGORIES.find(cat => cat.key === form.category)?.type === 'hotel_service'
         if (isHotelService) return (
           <div style={{ padding:'10px 14px', background:'#F0FDF4', borderRadius:'9px', border:'0.5px solid #86EFAC', fontSize:'12px', color:'#14532D' }}>
-            🏨 <strong>Hotel Service</strong> — no partner or commission needed. This service is provided directly by the hotel.
+            🛎️ <strong>Hotel Service</strong> — no partner or commission needed. This service is provided directly by the hotel.
           </div>
         )
         return (

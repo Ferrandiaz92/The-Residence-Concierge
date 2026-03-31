@@ -73,13 +73,24 @@ function getSessionOrders(conv, orders) {
     o.conversation_id === conv.id ||
     (o.guest_id === conv.guests?.id && o.conversation_session === conv.session_id)
   )
+  // Deduplicate by order ID — keep latest status
   const byId = {}
   for (const o of raw) {
     if (!byId[o.id] || new Date(o.updated_at||o.created_at) > new Date(byId[o.id].updated_at||byId[o.id].created_at)) {
       byId[o.id] = o
     }
   }
-  return Object.values(byId)
+  const deduped = Object.values(byId)
+  // If an order is paid, suppress any other order for the same product that is still pending
+  // (handles the case where the API returns both states in the same response)
+  const paidProducts = new Set(
+    deduped.filter(o => o.status === 'paid').map(o => o.product_id || o.product_name || o.description)
+  )
+  return deduped.filter(o => {
+    if (o.status === 'paid') return true
+    const key = o.product_id || o.product_name || o.description
+    return !paidProducts.has(key)  // suppress pending if paid version exists
+  })
 }
 
 const canReply   = (role) => ['receptionist','manager','admin','supervisor'].includes(role)
@@ -117,7 +128,7 @@ function ExpandableBookingDesktop({ b, conversations, onSelectConv, onNavigateTo
     for (const [key, em] of Object.entries(FACILITY_EMOJI_MAP)) {
       if (src.includes(key)) return em
     }
-    return '🏨'
+    return '🛎️'
   }
   const isFacility = b.type === 'facility' || b.source === 'facility' || b._isFacility
   const tc = isFacility
@@ -216,7 +227,7 @@ function DesktopTicketRow({ t, session, conversations, onSelectConv, onSetCentre
   function getFacilityEmoji(desc) {
     const lower = (desc || '').toLowerCase()
     for (const [key, em] of Object.entries(FACILITY_EMOJI)) { if (lower.includes(key)) return em }
-    return '🏨'
+    return '🛎️'
   }
   const tc = t.category === 'facility_booking'
     ? { label:'Facility', bg:'#DCFCE7', color:'#14532D', emoji: getFacilityEmoji(t.description) }
@@ -1009,7 +1020,7 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
                     <button onClick={() => setFacBookingsOpen(o => !o)}
                       style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 14px', background:'#F9FAFB', border:'none', borderBottom:'0.5px solid var(--border)', cursor:'pointer', fontFamily:'var(--font)' }}>
                       <span style={{ fontSize:'12px', fontWeight:'600', color:'#374151', display:'flex', alignItems:'center', gap:'7px' }}>
-                        <span style={{ fontSize:'14px' }}>🏨</span> Facility Bookings
+                        <span style={{ fontSize:'14px' }}>🛎️</span> Facility Bookings
                         {facItems.length > 0 && <span style={{ fontSize:'10px', fontWeight:'700', padding:'1px 7px', borderRadius:'20px', background:'#DCFCE7', color:'#14532D' }}>{facItems.length}</span>}
                       </span>
                       <svg width="12" height="12" viewBox="0 0 12 12" fill="none">

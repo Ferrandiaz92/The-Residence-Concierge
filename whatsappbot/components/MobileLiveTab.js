@@ -70,7 +70,15 @@ function getSessionOrders(conv, orders) {
       byId[o.id] = o
     }
   }
-  return Object.values(byId)
+  const deduped = Object.values(byId)
+  const paidProducts = new Set(
+    deduped.filter(o => o.status === 'paid').map(o => o.product_id || o.product_name || o.description)
+  )
+  return deduped.filter(o => {
+    if (o.status === 'paid') return true
+    const key = o.product_id || o.product_name || o.description
+    return !paidProducts.has(key)
+  })
 }
 
 const canReply   = (role) => ['receptionist','manager','admin','supervisor'].includes(role)
@@ -115,89 +123,79 @@ function GuestChip({ conv }) {
 // ════════════════════════════════════════════════════════════
 //  CONVERSATIONS LIST
 // ════════════════════════════════════════════════════════════
+// ── TOP-LEVEL conv row — must NOT be nested inside another component ──
+function ConvRowMobile({ conv, selectedConvId, onOpenThread, orders }) {
+  const g       = conv.guests || {}
+  const msgs    = conv.messages || []
+  const last    = msgs[msgs.length - 1]
+  const lc      = LANG_COLORS[g.language || 'en'] || LANG_COLORS.en
+  const isEsc   = conv.status === 'escalated'
+  const isActive= selectedConvId === conv.id
+  const mins    = Math.floor((Date.now() - new Date(conv.last_message_at)) / 60000)
+  const time    = mins === 0 ? 'now' : mins < 60 ? `${mins}m` : mins < 1440 ? `${Math.floor(mins/60)}h` : `${Math.floor(mins/1440)}d`
+  const room    = g.room || g.guest_room || null
+
+  const stayStatus  = g.stay_status || 'prospect'
+  const statusBorder = isEsc             ? '3px solid #DC2626'
+    : isActive                           ? '3px solid #C9A84C'
+    : stayStatus === 'active'            ? '3px solid #16A34A'
+    : stayStatus === 'checked_out'       ? '3px solid #D1D5DB'
+    : stayStatus === 'pre_arrival'       ? '3px solid #60A5FA'
+    : '3px solid transparent'
+  const statusBg = isActive ? 'rgba(28,61,46,0.04)'
+    : isEsc                              ? 'rgba(220,38,38,0.02)'
+    : stayStatus === 'checked_out'       ? '#FAFAFA'
+    : 'white'
+
+  return (
+    <div
+      onClick={() => onOpenThread(conv)}
+      style={{ padding:'14px 16px', background: statusBg, borderBottom:'1px solid #F3F4F6', borderLeft: statusBorder, cursor:'pointer', display:'flex', gap:'12px', alignItems:'flex-start' }}>
+      <div style={{ width:'40px', height:'40px', borderRadius:'50%', background:'#1C3D2E', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'14px', color:'#C9A84C', fontWeight:'700', flexShrink:0 }}>
+        {(g.name?.[0]||'?').toUpperCase()}{(g.surname?.[0]||'').toUpperCase()}
+      </div>
+      <div style={{ flex:1, minWidth:0 }}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'2px' }}>
+          <span style={{ fontSize:'14px', fontWeight:'600', color:'#111827' }}>{g.name||'Guest'} {g.surname||''}</span>
+          <span style={{ fontSize:'11px', color:'#9CA3AF', flexShrink:0, marginLeft:'8px' }}>{time}</span>
+        </div>
+        <div style={{ fontSize:'12px', color:'#6B7280', marginBottom:'4px', display:'flex', alignItems:'center', gap:'5px', flexWrap:'wrap' }}>
+          {stayStatus === 'prospect' && <span>New visitor</span>}
+          {stayStatus === 'pre_arrival' && <>
+            <span>{g.check_in ? `Arriving ${new Date(g.check_in).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}` : 'Arriving soon'}</span>
+            <span style={{ fontSize:'9px', fontWeight:'700', padding:'1px 5px', borderRadius:'3px', background:'#DBEAFE', color:'#1E3A5F' }}>ARRIVING</span>
+          </>}
+          {stayStatus === 'active' && <>
+            {room && <span>Room {room}</span>}
+            {g.check_out && <span style={{ color:'#9CA3AF' }}>· Out {new Date(g.check_out).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</span>}
+          </>}
+          {stayStatus === 'checked_out' && <>
+            {room && <span>Room {room}</span>}
+            <span style={{ fontSize:'9px', fontWeight:'700', padding:'1px 5px', borderRadius:'3px', background:'#F3F4F6', color:'#6B7280' }}>CHECKED OUT</span>
+          </>}
+        </div>
+        <div style={{ fontSize:'12px', color: isEsc ? '#DC2626' : '#9CA3AF', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', fontWeight: isEsc ? '600' : '400' }}>
+          {isEsc ? '↩ Reply needed' : (last?.content || 'No messages')}
+        </div>
+        {(() => { const ps = getConvPaymentStatus(conv, orders); return ps ? (
+          <div style={{ marginTop:'4px' }}>
+            <span style={{ fontSize:'10px', fontWeight:'700', padding:'2px 8px', borderRadius:'5px', background:ps.bg, color:ps.color }}>{ps.label}</span>
+          </div>
+        ) : null })()}
+        <div style={{ marginTop:'5px' }}>
+          <span style={{ fontSize:'10px', fontWeight:'600', padding:'2px 7px', borderRadius:'5px', background:lc.bg, color:lc.color }}>{lc.name}</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function ConversationsList({ conversations, selectedConvId, onOpenThread, orders = [] }) {
-  const [pastOpen, setPastOpen] = React.useState(false)
+  const [pastOpen, setPastOpen] = useState(false)
   const escalated = conversations.filter(c => c.status === 'escalated')
   const cutoff    = Date.now() - 72 * 60 * 60 * 1000
   const recent    = conversations.filter(c => new Date(c.last_message_at).getTime() >= cutoff)
   const past      = conversations.filter(c => new Date(c.last_message_at).getTime() <  cutoff)
-
-  // Render a single conversation row
-  function ConvRowMobile({ conv }) {
-        const g       = conv.guests || {}
-        const msgs    = conv.messages || []
-        const last    = msgs[msgs.length - 1]
-        const lc      = LANG_COLORS[g.language || 'en'] || LANG_COLORS.en
-        const isEsc   = conv.status === 'escalated'
-        const isActive= selectedConvId === conv.id
-        const mins    = Math.floor((Date.now() - new Date(conv.last_message_at)) / 60000)
-        const time    = mins === 0 ? 'now' : mins < 60 ? `${mins}m` : `${Math.floor(mins/60)}h`
-        const room    = g.room || g.guest_room || null
-
-        // Stay status color coding
-        const stayStatus  = g.stay_status || 'prospect'
-        const statusBorder = isEsc       ? '3px solid #DC2626'
-          : isActive                     ? '3px solid #C9A84C'
-          : stayStatus === 'active'      ? '3px solid #16A34A'
-          : stayStatus === 'checked_out' ? '3px solid #D1D5DB'
-          : stayStatus === 'pre_arrival' ? '3px solid #60A5FA'
-          : '3px solid transparent'  // prospect
-        const statusBg = isActive ? 'rgba(28,61,46,0.04)'
-          : isEsc                        ? 'rgba(220,38,38,0.02)'
-          : stayStatus === 'checked_out' ? '#FAFAFA'
-          : 'white'
-
-        return (
-          <div key={conv.id}
-            onClick={() => onOpenThread(conv)}
-            style={{
-              padding:'14px 16px', background: statusBg,
-              borderBottom:'1px solid #F3F4F6',
-              borderLeft: statusBorder,
-              cursor:'pointer', display:'flex', gap:'12px', alignItems:'flex-start',
-            }}>
-            <div style={{ width:'40px', height:'40px', borderRadius:'50%', background:'#1C3D2E', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'14px', color:'#C9A84C', fontWeight:'700', flexShrink:0 }}>
-              {(g.name?.[0]||'?').toUpperCase()}{(g.surname?.[0]||'').toUpperCase()}
-            </div>
-            <div style={{ flex:1, minWidth:0 }}>
-              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'2px' }}>
-                <span style={{ fontSize:'14px', fontWeight:'600', color:'#111827' }}>{g.name||'Guest'} {g.surname||''}</span>
-                <span style={{ fontSize:'11px', color:'#9CA3AF', flexShrink:0, marginLeft:'8px' }}>{time}</span>
-              </div>
-              <div style={{ fontSize:'12px', color:'#6B7280', marginBottom:'4px', display:'flex', alignItems:'center', gap:'5px', flexWrap:'wrap' }}>
-                {/* Prospect — no room, just label */}
-                {stayStatus === 'prospect' && <span>New visitor</span>}
-                {/* Pre-arrival — show check-in date, no room yet */}
-                {stayStatus === 'pre_arrival' && <>
-                  <span>{g.check_in ? `Arriving ${new Date(g.check_in).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}` : 'Arriving soon'}</span>
-                  <span style={{ fontSize:'9px', fontWeight:'700', padding:'1px 5px', borderRadius:'3px', background:'#DBEAFE', color:'#1E3A5F' }}>ARRIVING</span>
-                </>}
-                {/* Active — room + check-out date */}
-                {stayStatus === 'active' && <>
-                  {room && <span>Room {room}</span>}
-                  {g.check_out && <span style={{ color:'#9CA3AF' }}>· Out {new Date(g.check_out).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</span>}
-                </>}
-                {/* Checked out — room + badge */}
-                {stayStatus === 'checked_out' && <>
-                  {room && <span>Room {room}</span>}
-                  <span style={{ fontSize:'9px', fontWeight:'700', padding:'1px 5px', borderRadius:'3px', background:'#F3F4F6', color:'#6B7280' }}>CHECKED OUT</span>
-                </>}
-              </div>
-              <div style={{ fontSize:'12px', color: isEsc ? '#DC2626' : '#9CA3AF', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', fontWeight: isEsc ? '600' : '400' }}>
-                {isEsc ? '↩ Reply needed' : (last?.content || 'No messages')}
-              </div>
-              {(() => { const ps = getConvPaymentStatus(conv, orders); return ps ? (
-                <div style={{ marginTop:'4px' }}>
-                  <span style={{ fontSize:'10px', fontWeight:'700', padding:'2px 8px', borderRadius:'5px', background:ps.bg, color:ps.color }}>{ps.label}</span>
-                </div>
-              ) : null })()}
-              <div style={{ marginTop:'5px' }}>
-                <span style={{ fontSize:'10px', fontWeight:'600', padding:'2px 7px', borderRadius:'5px', background:lc.bg, color:lc.color }}>{lc.name}</span>
-              </div>
-            </div>
-          </div>
-        )
-  }
 
   return (
     <div style={{ flex:1, overflowY:'auto', background:'#F9FAFB' }}>
@@ -209,11 +207,7 @@ function ConversationsList({ conversations, selectedConvId, onOpenThread, orders
       {conversations.length === 0 && (
         <div style={{ padding:'48px 24px', textAlign:'center', color:'#9CA3AF', fontSize:'13px' }}>No active conversations</div>
       )}
-
-      {/* Recent <72h — always visible */}
-      {recent.map(conv => <ConvRowMobile key={conv.id} conv={conv} />)}
-
-      {/* Past >72h — collapsed with count badge */}
+      {recent.map(conv => <ConvRowMobile key={conv.id} conv={conv} selectedConvId={selectedConvId} onOpenThread={onOpenThread} orders={orders} />)}
       {past.length > 0 && (
         <>
           <button onClick={() => setPastOpen(o => !o)}
@@ -226,7 +220,7 @@ function ConversationsList({ conversations, selectedConvId, onOpenThread, orders
               <path d={pastOpen ? 'M1 7L5 3L9 7' : 'M1 3L5 7L9 3'} stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
           </button>
-          {pastOpen && past.map(conv => <ConvRowMobile key={conv.id} conv={conv} />)}
+          {pastOpen && past.map(conv => <ConvRowMobile key={conv.id} conv={conv} selectedConvId={selectedConvId} onOpenThread={onOpenThread} orders={orders} />)}
         </>
       )}
     </div>
@@ -987,7 +981,7 @@ function IssuesPanel({ tickets, bookings, conversations = [], onOpenThread, onNa
             <button onClick={() => setFacOpen(o => !o)}
               style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'space-between', padding:'11px 16px', background:'#F9FAFB', border:'none', borderBottom:'1px solid #E5E7EB', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
               <span style={{ fontSize:'13px', fontWeight:'600', color:'#374151', display:'flex', alignItems:'center', gap:'7px' }}>
-                🏨 Facility Bookings
+                🛎️ Facility Bookings
                 {(facTickets.length + facBookings.length) > 0 && (
                   <span style={{ fontSize:'10px', fontWeight:'700', padding:'1px 7px', borderRadius:'20px', background:'#DCFCE7', color:'#14532D' }}>
                     {facTickets.length + facBookings.length}
@@ -1061,7 +1055,7 @@ function IssuesPanel({ tickets, bookings, conversations = [], onOpenThread, onNa
                 <SectionHeader title="Completed today" divider />
                 {done.slice(0,6).map(b => {
                   const g = b.guests || {}
-                  const typeEmoji = { taxi:'🚗', restaurant:'🍽️', activity:'⛵', facility:'🏨' }
+                  const typeEmoji = { taxi:'🚗', restaurant:'🍽️', activity:'⛵', facility:'🛎️' }
                   return (
                     <div key={b.id} style={{ padding:'12px 16px', background:'white', borderBottom:'1px solid #F3F4F6', display:'flex', alignItems:'center', gap:'10px' }}>
                       <span style={{ fontSize:'16px' }}>{typeEmoji[b.type] || '📋'}</span>
@@ -1098,7 +1092,7 @@ function MobileExpandableBooking({ booking: b, guest: g, tc, matchConv, onOpenTh
   function getFacilityEmoji(b) {
     const src = ((b.facility?.name||'') + ' ' + (b.facility?.category||'') + ' ' + (b.details?.facility_name||'')).toLowerCase()
     for (const [key, em] of Object.entries(FACILITY_EMOJI_MAP)) { if (src.includes(key)) return em }
-    return '🏨'
+    return '🛎️'
   }
   const typeEmoji = { taxi:'🚗', restaurant:'🍽️', activity:'⛵', late_checkout:'🕐' }
   const isFacility = b.type === 'facility' || b.source === 'facility' || b._isFacility
