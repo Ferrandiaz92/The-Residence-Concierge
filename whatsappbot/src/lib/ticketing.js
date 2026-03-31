@@ -172,48 +172,172 @@ export async function createTicket({
   return ticket
 }
 
-// ── SEND TO SUPERVISOR ────────────────────────────────────────
+// ── SHIFT HELPERS ─────────────────────────────────────────────
 
-async function sendToSupervisor(ticket, guest, hotel) {
-  // Get supervisor for this department
-  const { data: supervisor } = await supabase
+// Returns the on-duty supervisor(s) for a department right now.
+// Queries the shifts table (workers + shift_patterns + shift_overrides)
+// to find staff whose shift covers the current time today.
+// Falls back to all supervisors + managers if nobody is on duty.
+async function getOnDutySupervisors(hotelId, department) {
+  const now       = new Date()
+  const todayDay  = now.getDay()           // 0=Sun … 6=Sat
+  const todayDate = now.toISOString().split('T')[0]
+  const nowMins   = now.getHours() * 60 + now.getMinutes()
+
+  // Helper: "HH:MM" → total minutes since midnight
+  const toMins = (t) => {
+    if (!t) return null
+    const [h, m] = t.split(':').map(Number)
+    return h * 60 + m
+  }
+
+  // Helper: does a shift interval cover nowMins? Handles overnight shifts.
+  const coversNow = (start, end) => {
+    const s = toMins(start)
+    const e = toMins(end)
+    if (s === null || e === null) return false
+    if (e > s) return nowMins >= s && nowMins < e        // same-day shift
+    return nowMins >= s || nowMins < e                    // overnight shift
+  }
+
+  // 1. Load all supervisor workers for this hotel+department
+  const { data: workers } = await supabase
+    .from('workers')
+    .select('id, name, phone, department_contacts_id')
+    .eq('hotel_id', hotelId)
+    .eq('active', true)
+
+  if (!workers || workers.length === 0) return []
+
+  // 2. Filter to supervisors via department_contacts
+  const { data: supervisorContacts } = await supabase
     .from('department_contacts')
-    .select('*')
-    .eq('hotel_id', hotel.id)
-    .eq('department', ticket.department)
+    .select('id, phone, name')
+    .eq('hotel_id', hotelId)
+    .eq('department', department)
     .eq('role', 'supervisor')
     .eq('active', true)
-    .single()
 
-  if (!supervisor) {
-    console.warn(`No supervisor found for ${ticket.department} — sending to team directly`)
-    await sendToTeam(ticket, guest, hotel)
+  if (!supervisorContacts || supervisorContacts.length === 0) return []
+
+  const supContactIds = new Set(supervisorContacts.map(c => c.id))
+  const supervisorWorkers = workers.filter(w => supContactIds.has(w.department_contacts_id))
+
+  if (supervisorWorkers.length === 0) return supervisorContacts // fallback
+
+  // 3. For each supervisor worker, check overrides first, then weekly pattern
+  const onDuty = []
+  for (const worker of supervisorWorkers) {
+    // Check day override first
+    const { data: override } = await supabase
+      .from('shift_overrides')
+      .select('*')
+      .eq('worker_id', worker.id)
+      .eq('date', todayDate)
+      .single()
+
+    if (override) {
+      if (override.is_off) continue        // day marked off — skip
+      if (coversNow(override.start_time, override.end_time)) {
+        onDuty.push(worker)
+        continue
+      }
+      continue // override exists but doesn't cover now
+    }
+
+    // Fall back to weekly pattern
+    const { data: pattern } = await supabase
+      .from('shift_patterns')
+      .select('*')
+      .eq('worker_id', worker.id)
+      .eq('day_of_week', todayDay)
+      .eq('active', true)
+      .single()
+
+    if (pattern && !pattern.is_off && coversNow(pattern.start_time, pattern.end_time)) {
+      onDuty.push(worker)
+    }
+  }
+
+  return onDuty
+}
+
+// Returns all manager/admin department_contacts for a hotel
+async function getManagerContacts(hotelId) {
+  const { data } = await supabase
+    .from('department_contacts')
+    .select('*')
+    .eq('hotel_id', hotelId)
+    .in('role', ['manager', 'admin'])
+    .eq('active', true)
+  return data || []
+}
+
+// ── SEND TO SUPERVISOR (shift-aware) ──────────────────────────
+
+async function sendToSupervisor(ticket, guest, hotel) {
+  // 1. Find on-duty supervisors for this department right now
+  const onDuty = await getOnDutySupervisors(hotel.id, ticket.department)
+
+  // 2. Fallback: no on-duty supervisor → alert ALL supervisors + managers
+  if (!onDuty || onDuty.length === 0) {
+    console.warn(
+      `Ticket #${ticket.ticket_number} — no on-duty supervisor for ${ticket.department} · alerting all supervisors + managers`
+    )
+    await logEvent(ticket.id, 'escalation_note', 'system',
+      `No on-duty supervisor found for ${ticket.department} — sending to all supervisors and managers`)
+
+    const { data: allSups } = await supabase
+      .from('department_contacts')
+      .select('*')
+      .eq('hotel_id', hotel.id)
+      .eq('department', ticket.department)
+      .eq('role', 'supervisor')
+      .eq('active', true)
+
+    const managers = await getManagerContacts(hotel.id)
+    const fallback = [...(allSups || []), ...managers]
+
+    if (fallback.length === 0) {
+      console.error(`No supervisors or managers found for hotel ${hotel.id}`)
+      return
+    }
+
+    const message = formatTicketAlert(ticket, guest, hotel, 'Team')
+    await Promise.all(fallback.map(c => sendWhatsApp(c.phone, message).catch(() => {})))
+
+    const timeoutMin  = ESCALATION[ticket.priority]?.supervisor_timeout_min || 10
+    const escalateDue = new Date(Date.now() + timeoutMin * 60 * 1000)
+    await supabase.from('internal_tickets').update({
+      escalation_level:  0,
+      escalation_due_at: escalateDue.toISOString(),
+    }).eq('id', ticket.id)
+
     return
   }
 
-  const message = formatTicketAlert(ticket, guest, hotel, supervisor.name)
-  const sent    = await sendWhatsApp(supervisor.phone, message)
-
-  // Calculate when to escalate
+  // 3. Alert all on-duty supervisors (usually 1, could be 2 on overlapping shifts)
+  const message    = formatTicketAlert(ticket, guest, hotel, onDuty.map(w => w.name).join(' / '))
   const timeoutMin = ESCALATION[ticket.priority]?.supervisor_timeout_min || 10
   const escalateDue = new Date(Date.now() + timeoutMin * 60 * 1000)
 
-  // Update ticket with escalation timer
-  await supabase
-    .from('internal_tickets')
-    .update({
-      assigned_to_name:  supervisor.name,
-      assigned_to_phone: supervisor.phone,
-      escalation_level:  0,
-      escalation_due_at: escalateDue.toISOString(),
-      alert_sid:         sent.sid,
-    })
-    .eq('id', ticket.id)
+  await Promise.all(onDuty.map(w => sendWhatsApp(w.phone, message).catch(() => {})))
+
+  // Record first on-duty supervisor as primary assignee
+  const primary = onDuty[0]
+  await supabase.from('internal_tickets').update({
+    assigned_to_name:  onDuty.map(w => w.name).join(' / '),
+    assigned_to_phone: primary.phone,
+    escalation_level:  0,
+    escalation_due_at: escalateDue.toISOString(),
+  }).eq('id', ticket.id)
 
   await logEvent(ticket.id, 'alert_sent', 'system',
-    `Alert sent to supervisor ${supervisor.name} · escalates at ${escalateDue.toLocaleTimeString()}`)
+    `Alert sent to on-duty supervisor(s): ${onDuty.map(w => w.name).join(', ')} · escalates in ${timeoutMin}min`)
 
-  console.log(`Ticket #${ticket.ticket_number} → supervisor ${supervisor.name} · escalates in ${timeoutMin}min`)
+  console.log(
+    `Ticket #${ticket.ticket_number} → on-duty supervisor(s): ${onDuty.map(w => w.name).join(', ')} · escalates in ${timeoutMin}min`
+  )
 }
 
 // ── SEND TO TEAM ──────────────────────────────────────────────
@@ -261,36 +385,30 @@ async function sendToTeam(ticket, guest, hotel) {
 // ── SEND TO MANAGER ───────────────────────────────────────────
 
 async function sendToManager(ticket, guest, hotel) {
-  const { data: manager } = await supabase
-    .from('department_contacts')
-    .select('*')
-    .eq('hotel_id', hotel.id)
-    .eq('department', ticket.department)
-    .eq('role', 'manager')
-    .eq('active', true)
-    .single()
+  // Alert ALL managers/admins simultaneously — not just one
+  const managers = await getManagerContacts(hotel.id)
 
-  if (!manager) {
-    console.error(`No manager found for hotel ${hotel.id} — ticket #${ticket.ticket_number} unassigned`)
+  if (!managers || managers.length === 0) {
+    console.error(`No managers found for hotel ${hotel.id} — ticket #${ticket.ticket_number} unassigned`)
+    await logEvent(ticket.id, 'escalation_error', 'system', 'No manager contacts found — ticket unattended')
     return
   }
 
   const message = formatManagerAlert(ticket, guest, hotel)
-  await sendWhatsApp(manager.phone, message)
+  await Promise.all(managers.map(m => sendWhatsApp(m.phone, message).catch(() => {})))
 
   await supabase
     .from('internal_tickets')
     .update({
       escalation_level:  2,
-      escalation_due_at: null, // No more escalation after manager
+      escalation_due_at: null,   // no further escalation after manager
       status:            'escalated',
     })
     .eq('id', ticket.id)
 
-  await logEvent(ticket.id, 'escalated', 'system',
-    `Escalated to General Manager ${manager.name}`)
-
-  console.log(`Ticket #${ticket.ticket_number} → General Manager ${manager.name}`)
+  const names = managers.map(m => m.name).join(', ')
+  await logEvent(ticket.id, 'escalated', 'system', `Escalated to manager(s): ${names}`)
+  console.log(`Ticket #${ticket.ticket_number} → manager(s): ${names}`)
 }
 
 // ── HANDLE STAFF REPLY ────────────────────────────────────────

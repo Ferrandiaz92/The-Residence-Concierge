@@ -82,14 +82,63 @@ export async function markRetrySucceeded(bookingId) {
 
 // ── PROCESS PENDING RETRIES ───────────────────────────────────
 // Called by /api/cron/partner-retries every 5 minutes.
+// Also sends a one-time guest holding message after 10 min pending.
 // Returns a summary of what was processed.
 export async function processPendingRetries() {
   const supabase = getSupabase()
   const client   = getTwilio()
   const now      = new Date().toISOString()
-  const results  = { attempted: 0, succeeded: 0, failed: 0, exhausted: 0 }
+  const results  = { attempted: 0, succeeded: 0, failed: 0, exhausted: 0, holding_sent: 0 }
 
-  // Fetch retries that are due
+  // ── STEP 1: Send one-time holding messages to guests waiting >10 min ──
+  // Find bookings that are: pending, partner alerted, no holding message sent yet,
+  // and older than 10 minutes.
+  const holdingCutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString()
+  const { data: pendingBookings } = await supabase
+    .from('bookings')
+    .select('*, guests(name, phone, language, room, guest_type), partners(name, type)')
+    .eq('status', 'pending')
+    .eq('holding_sent', false)
+    .not('partner_alert_sid', 'is', null)  // partner has been alerted
+    .lt('created_at', holdingCutoff)
+
+  if (pendingBookings && pendingBookings.length > 0) {
+    for (const booking of pendingBookings) {
+      const guest = booking.guests
+      if (!guest?.phone) continue
+
+      const holdingMsg = buildHoldingMessage(booking, guest)
+      const toPhone    = guest.phone.startsWith('whatsapp:') ? guest.phone : `whatsapp:${guest.phone}`
+
+      try {
+        await client.messages.create({
+          from: process.env.TWILIO_WHATSAPP_NUMBER,
+          to:   toPhone,
+          body: holdingMsg,
+        })
+
+        // Mark holding message sent so we never send it again for this booking
+        await supabase
+          .from('bookings')
+          .update({ holding_sent: true, holding_sent_at: new Date().toISOString() })
+          .eq('id', booking.id)
+
+        results.holding_sent++
+        log.info('Guest holding message sent', {
+          bookingId: booking.id,
+          guestName: guest.name,
+          type:      booking.type,
+        })
+      } catch (err) {
+        log.warn('Failed to send guest holding message', {
+          bookingId: booking.id,
+          error: err.message,
+        })
+      }
+    }
+  }
+
+  // ── STEP 2: Retry failed partner alerts (existing logic) ──
   const { data: retries } = await supabase
     .from('partner_alert_retries')
     .select('*, bookings(status, type, guests(name, room))')
@@ -204,4 +253,51 @@ export async function processPendingRetries() {
   }
 
   return results
+}
+
+// ── HOLDING MESSAGE BUILDER ───────────────────────────────────
+// Sent to the guest after 10 min of no partner reply.
+// One message per booking, never repeated.
+function buildHoldingMessage(booking, guest) {
+  const lang = guest?.language || 'en'
+  const type = booking.type || 'service'
+
+  const emoji = {
+    taxi:       '🚗',
+    restaurant: '🍽️',
+    activity:   '⛵',
+  }[type] || '📋'
+
+  const messages = {
+    taxi: {
+      en: `We're confirming your taxi booking ${emoji} — our partner is being contacted and we'll update you shortly. Thank you for your patience!`,
+      ru: `Мы подтверждаем ваш заказ такси ${emoji} — связываемся с партнёром и скоро сообщим вам результат. Спасибо за ожидание!`,
+      he: `אנו מאשרים את הזמנת המונית שלך ${emoji} — אנחנו בקשר עם השותף ונעדכן אותך בקרוב. תודה על סבלנותך!`,
+      de: `Wir bestätigen Ihre Taxibuchung ${emoji} — unser Partner wird kontaktiert und wir melden uns gleich. Danke für Ihre Geduld!`,
+      fr: `Nous confirmons votre réservation de taxi ${emoji} — notre partenaire est contacté et nous vous informerons bientôt. Merci de votre patience !`,
+      es: `Estamos confirmando su reserva de taxi ${emoji} — estamos contactando al socio y le informaremos pronto. ¡Gracias por su paciencia!`,
+      it: `Stiamo confermando la sua prenotazione taxi ${emoji} — stiamo contattando il partner e la aggiorneremo a breve. Grazie per la pazienza!`,
+      zh: `我们正在确认您的出租车预订 ${emoji} — 正在联系合作伙伴，稍后将为您更新。感谢您的耐心！`,
+      ar: `نحن نؤكد حجز سيارة الأجرة ${emoji} — يتم الاتصال بشريكنا وسنخبرك قريبًا. شكرًا لصبرك!`,
+      el: `Επιβεβαιώνουμε την κράτηση ταξί σας ${emoji} — επικοινωνούμε με τον συνεργάτη και θα σας ενημερώσουμε σύντομα. Ευχαριστούμε για την υπομονή σας!`,
+    },
+    restaurant: {
+      en: `We're confirming your table reservation ${emoji} — the restaurant is being contacted and we'll update you shortly. Thank you!`,
+      ru: `Мы подтверждаем вашу бронь стола ${emoji} — связываемся с рестораном и скоро сообщим вам. Спасибо!`,
+      he: `אנו מאשרים את הזמנת השולחן שלך ${emoji} — אנחנו בקשר עם המסעדה ונעדכן אותך בקרוב. תודה!`,
+      de: `Wir bestätigen Ihre Tischreservierung ${emoji} — das Restaurant wird kontaktiert und wir melden uns bald. Danke!`,
+      fr: `Nous confirmons votre réservation de table ${emoji} — le restaurant est contacté et nous vous informerons bientôt. Merci !`,
+      el: `Επιβεβαιώνουμε την κράτηση τραπεζιού σας ${emoji} — επικοινωνούμε με το εστιατόριο και θα σας ενημερώσουμε σύντομα. Ευχαριστούμε!`,
+    },
+    activity: {
+      en: `We're confirming your activity booking ${emoji} — our partner is being contacted and we'll update you shortly. Thank you for your patience!`,
+      ru: `Мы подтверждаем вашу активность ${emoji} — связываемся с партнёром и скоро сообщим вам. Спасибо!`,
+      he: `אנו מאשרים את הזמנת הפעילות שלך ${emoji} — ניצור קשר עם השותף ונחזור אליך בקרוב. תודה!`,
+      el: `Επιβεβαιώνουμε την κράτηση δραστηριότητάς σας ${emoji} — επικοινωνούμε με τον συνεργάτη και θα σας ενημερώσουμε σύντομα. Ευχαριστούμε!`,
+    },
+  }
+
+  const typeMsgs = messages[type] || messages.taxi
+  return (typeMsgs[lang] || typeMsgs.en)
+
 }
