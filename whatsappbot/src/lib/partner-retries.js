@@ -195,7 +195,7 @@ export async function processPendingRetries() {
       results.failed++
 
       if (newAttemptCount >= retry.max_attempts) {
-        // Exhausted — notify reception and give up
+        // Exhausted — mark partner inactive, alert manager, notify staff to rebook manually
         await supabase.from('partner_alert_retries')
           .update({
             status:        'failed',
@@ -204,28 +204,66 @@ export async function processPendingRetries() {
           })
           .eq('id', retry.id)
 
-        // Mark booking as needing manual intervention
+        // Mark booking as failed
         await supabase.from('bookings')
-          .update({ details: { ...retry.bookings?.details, _alert_failed: true } })
+          .update({ status: 'declined', details: { ...retry.bookings?.details, _alert_failed: true, _failure_reason: 'partner_unreachable' } })
           .eq('id', retry.booking_id)
           .catch(() => {})
 
-        // Alert reception — this needs human action
+        // Mark partner as inactive (unreachable)
+        await supabase.from('partners')
+          .update({ active: false, details: supabase.rpc ? undefined : undefined, _unreachable_at: new Date().toISOString() })
+          .eq('id', retry.partner_id)
+          .catch(() => {})
+
+        // Better: use a dedicated unreachable flag column
+        await supabase.from('partners')
+          .update({ unreachable: true, unreachable_since: new Date().toISOString() })
+          .eq('id', retry.partner_id)
+          .catch(() => {})
+
+        // Load partner + hotel info for the alert
+        const { data: partner } = await supabase.from('partners').select('name, phone').eq('id', retry.partner_id).single().catch(() => ({ data: null }))
+        const { data: hotel }   = await supabase.from('hotels').select('name, config').eq('id', retry.hotel_id).single().catch(() => ({ data: null }))
+        const guestName  = retry.bookings?.guests?.name || 'Guest'
+        const guestRoom  = retry.bookings?.guests?.room || '?'
+        const bookingType = retry.bookings?.type || 'booking'
+        const partnerName = partner?.name || 'Partner'
+
+        // Dashboard notification — urgent, for manager
         await supabase.from('notifications').insert({
           hotel_id:  retry.hotel_id,
-          type:      'partner_alert_failed',
-          title:     `⚠️ Partner not reachable — manual action needed`,
-          body:      `Could not reach partner for ${retry.bookings?.type || 'booking'} (${retry.bookings?.guests?.name || 'guest'} · Room ${retry.bookings?.guests?.room || '?'}). Please contact them directly.`,
+          type:      'partner_unreachable',
+          title:     `🔴 ${partnerName} unreachable — rebook manually`,
+          body:      `3 failed attempts. ${guestName} · Room ${guestRoom} needs a ${bookingType}. Please contact an alternative partner and WhatsApp the guest directly.`,
           link_type: 'booking',
           link_id:   retry.booking_id,
+          urgent:    true,
         }).catch(() => {})
 
+        // WhatsApp alert to manager phone (if configured)
+        const managerPhone = hotel?.config?.staff_digest_phone || hotel?.config?.manager_phone
+        if (managerPhone) {
+          try {
+            const client = getTwilio()
+            const to = managerPhone.startsWith('whatsapp:') ? managerPhone : `whatsapp:${managerPhone}`
+            await client.messages.create({
+              from: process.env.TWILIO_WHATSAPP_NUMBER,
+              to,
+              body: `🔴 *PARTNER UNREACHABLE — Action needed*\n\nPartner: ${partnerName}\nGuest: ${guestName} · Room ${guestRoom}\nBooking: ${bookingType}\n\n3 alert attempts failed. Partner has been marked inactive.\n\nPlease arrange an alternative and message the guest directly.\n\nReactivate partner in Settings once resolved.`,
+            })
+          } catch(whatsappErr) {
+            log.warn('Manager WhatsApp alert failed', { error: whatsappErr.message })
+          }
+        }
+
         results.exhausted++
-        await log.critical('Partner alert exhausted all retries — reception notified', err, {
-          hotelId:   retry.hotel_id,
-          bookingId: retry.booking_id,
-          partnerId: retry.partner_id,
-          attempts:  newAttemptCount,
+        await log.critical('Partner unreachable — marked inactive, manager alerted', err, {
+          hotelId:     retry.hotel_id,
+          bookingId:   retry.booking_id,
+          partnerId:   retry.partner_id,
+          partnerName,
+          attempts:    newAttemptCount,
         })
 
       } else {
