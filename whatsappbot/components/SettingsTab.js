@@ -310,25 +310,47 @@ export default function SettingsTab({ hotelId, session, isMobile = false }) {
         {section === 'partners' && (
           <div style={{ maxWidth:'720px' }}>
             <div style={{ fontSize:'14px', fontWeight:'700', color:'#111827', marginBottom:'4px' }}>Partner management</div>
-            <div style={{ fontSize:'12px', color:'#6B7280', marginBottom:'16px' }}>{partners.filter(p=>p.active).length} active partners · changes go live immediately</div>
+            <div style={{ fontSize:'12px', color:'#6B7280', marginBottom:'16px' }}>
+              {partners.filter(p=>p.active && !p.unreachable).length} active partners · changes go live immediately
+              {partners.filter(p=>p.unreachable).length > 0 && (
+                <span style={{ marginLeft:'8px', fontWeight:'600', color:'#DC2626' }}>
+                  · {partners.filter(p=>p.unreachable).length} unreachable
+                </span>
+              )}
+            </div>
 
             <div style={{ display:'flex', flexDirection:'column', gap:'10px', marginBottom:'16px' }}>
-              {partners.filter(p=>p.active).map(p => {
+              {partners.filter(p=>p.active || p.unreachable).map(p => {
                 const isEditing = editingPartner?.id === p.id
                 return (
                   <div key={p.id} style={{ background:'white', border:'0.5px solid #E5E7EB', borderRadius:'12px', overflow:'hidden' }}>
                     <div style={{ padding:'14px 16px', display:'flex', alignItems:'center', gap:'12px' }}>
                       <div style={{ flex:1 }}>
-                        <div style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'3px' }}>
-                          <div style={{ fontSize:'14px', fontWeight:'600', color:'#111827' }}>{p.name}</div>
+                        <div style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'3px', flexWrap:'wrap' }}>
+                          <div style={{ fontSize:'14px', fontWeight:'600', color: p.unreachable ? '#DC2626' : '#111827' }}>{p.name}</div>
                           <div style={{ fontSize:'11px', fontWeight:'600', padding:'2px 8px', borderRadius:'5px', background:'#F0FDF4', color:'#14532D' }}>{p.type}</div>
+                          {p.unreachable && (
+                            <span style={{ fontSize:'11px', fontWeight:'700', padding:'2px 8px', borderRadius:'5px', background:'#FEE2E2', color:'#DC2626' }}>
+                              🔴 Unreachable
+                            </span>
+                          )}
                         </div>
                         {p.contact_name && (
                           <div style={{ fontSize:'12px', color:'#6B7280', marginBottom:'2px' }}>Contact: <strong>{p.contact_name}</strong></div>
                         )}
                         <div style={{ fontSize:'12px', color:'#9CA3AF' }}>{p.phone} · {p.commission_rate}% commission</div>
                       </div>
-                      <div style={{ display:'flex', gap:'6px' }}>
+                      <div style={{ display:'flex', gap:'6px', flexWrap:'wrap' }}>
+                        {p.unreachable && (
+                          <button onClick={async () => {
+                            await fetch('/api/partners', { method:'PATCH', headers:{'Content-Type':'application/json'},
+                              body: JSON.stringify({ partnerId: p.id, unreachable: false, active: true }) })
+                            loadPartners()
+                          }}
+                            style={{ padding:'6px 14px', background:'#DCFCE7', border:'0.5px solid #86EFAC', borderRadius:'8px', fontSize:'12px', color:'#14532D', cursor:'pointer', fontFamily:'var(--font)', fontWeight:'600' }}>
+                            ✓ Mark as reachable
+                          </button>
+                        )}
                         <button onClick={() => setEditingPartner(isEditing ? null : {...p})}
                           style={{ padding:'6px 14px', background:'white', border:'0.5px solid #D1D5DB', borderRadius:'8px', fontSize:'12px', color:'#374151', cursor:'pointer', fontFamily:'var(--font)' }}>
                           {isEditing ? 'Cancel' : 'Edit'}

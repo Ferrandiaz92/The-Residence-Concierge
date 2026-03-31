@@ -46,6 +46,7 @@ export default function BotQA({ hotelId }) {
   const [flagType, setFlagType]           = useState('wrong_answer')
   const [flagNote, setFlagNote]           = useState('')
   const [saving, setSaving]               = useState(false)
+  const [correctAnswer, setCorrectAnswer]  = useState('')
   const [month, setMonth]                 = useState(() => {
     const now = new Date()
     return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`
@@ -72,9 +73,9 @@ export default function BotQA({ hotelId }) {
     try {
       await fetch('/api/flag', {
         method:'POST', headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({ hotelId, conversationId:conv.id, messageIndex:msgIdx, messageContent:msgContent, flagType, note:flagNote }),
+        body:JSON.stringify({ hotelId, conversationId:conv.id, messageIndex:msgIdx, messageContent:msgContent, flagType, note:flagNote, correctAnswer }),
       })
-      setFlagging(null); setFlagNote('')
+      setFlagging(null); setFlagNote(''); setCorrectAnswer('')
       loadData()
     } finally { setSaving(false) }
   }
@@ -263,9 +264,13 @@ export default function BotQA({ hotelId }) {
                             <div style={{ padding:'10px 14px', borderRadius:isBot?'4px 14px 14px 14px':'14px 4px 14px 14px', background:isBot?'white':'#1C3D2E', color:isBot?'#111827':'white', fontSize:'13px', lineHeight:'1.6', border:isBot?`1px solid ${isFlagged?'#FCA5A5':'#E5E7EB'}`:'none' }}>
                               {msg.content}
                               {isFlagged && (
-                                <div style={{ marginTop:'6px', fontSize:'12px', color:'#DC2626', fontWeight:'600' }}>
-                                  🚩 {FLAG_TYPES.find(f=>f.key===msgFlag?.flag_type)?.label || 'Flagged'}
-                                  {msgFlag?.note && ` — ${msgFlag.note}`}
+                                <div style={{ marginTop:'6px', fontSize:'12px', color:'#DC2626', fontWeight:'600', display:'flex', flexDirection:'column', gap:'3px' }}>
+                                  <span>🚩 {FLAG_TYPES.find(f=>f.key===msgFlag?.flag_type)?.label || 'Flagged'}{msgFlag?.note && ` — ${msgFlag.note}`}</span>
+                                  {msgFlag?.correct_answer && (
+                                    <span style={{ fontSize:'12px', color:'#16A34A', fontWeight:'600', background:'#DCFCE7', borderRadius:'6px', padding:'4px 8px', marginTop:'3px' }}>
+                                      ✓ Correct answer: {msgFlag.correct_answer}
+                                    </span>
+                                  )}
                                 </div>
                               )}
                             </div>
@@ -312,11 +317,16 @@ export default function BotQA({ hotelId }) {
             </div>
             <div style={{ fontSize:'13px', fontWeight:'600', color:'#374151', marginBottom:'6px' }}>Note (optional)</div>
             <textarea value={flagNote} onChange={e=>setFlagNote(e.target.value)}
-              placeholder="What was wrong? What should the bot have said?"
-              style={{ width:'100%', height:'72px', padding:'10px 12px', border:'1px solid #D1D5DB', borderRadius:'10px', fontSize:'13px', fontFamily:"'DM Sans',sans-serif", resize:'none', outline:'none', marginBottom:'16px' }}
+              placeholder="What was wrong with this response?"
+              style={{ width:'100%', height:'56px', padding:'10px 12px', border:'1px solid #D1D5DB', borderRadius:'10px', fontSize:'13px', fontFamily:"'DM Sans',sans-serif", resize:'none', outline:'none', marginBottom:'12px' }}
+            />
+            <div style={{ fontSize:'13px', fontWeight:'600', color:'#16A34A', marginBottom:'6px' }}>Correct answer (optional but valuable)</div>
+            <textarea value={correctAnswer} onChange={e=>setCorrectAnswer(e.target.value)}
+              placeholder="What should the bot have said instead? This trains future responses."
+              style={{ width:'100%', height:'72px', padding:'10px 12px', border:'1px solid #86EFAC', borderRadius:'10px', fontSize:'13px', fontFamily:"'DM Sans',sans-serif", resize:'none', outline:'none', marginBottom:'16px', background:'#F0FDF4' }}
             />
             <div style={{ display:'flex', gap:'10px', justifyContent:'flex-end' }}>
-              <button onClick={() => { setFlagging(null); setFlagNote('') }}
+              <button onClick={() => { setFlagging(null); setFlagNote(''); setCorrectAnswer('') }}
                 style={{ padding:'9px 18px', background:'white', border:'1px solid #D1D5DB', borderRadius:'10px', fontSize:'13px', fontWeight:'600', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", color:'#374151' }}>
                 Cancel
               </button>
