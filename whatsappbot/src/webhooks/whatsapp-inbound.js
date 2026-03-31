@@ -576,6 +576,9 @@ export async function handleInboundWhatsApp(rawBody) {
 
   // 15. Parse booking + product tags
   const { hasBooking, booking, cleanResponse: afterBooking } = parseBookingRequest(aiResponse)
+  // Check for cash payment intent in the ORIGINAL aiResponse (before tag stripping)
+  const hasCashIntent = /\b(cash|pay.?on.?site|pay.?at.?(hotel|arrival|reception)|onsite|on.?arrival)\b/i.test(message) &&
+    /\b(cash|pay.?cash|prefer.?cash|want.?to.?pay.?cash|paying.?cash)\b/i.test(message)
   const { hasOrder, order: productOrder, cleanResponse: finalReply } = parseProductOrder(afterBooking || aiResponse)
 
   const replyText = finalReply || afterBooking || aiResponse
@@ -596,7 +599,7 @@ export async function handleInboundWhatsApp(rawBody) {
   }
 
   if (hasOrder && productOrder) {
-    await processProductOrder(productOrder, hotel, guest, conv.id, products, from)
+    await processProductOrder(productOrder, hotel, guest, conv.id, products, from, hasCashIntent)
       .catch(e => log.critical('processProductOrder failed', e, { ...hCtx, ...gCtx }))
   }
 }
@@ -720,16 +723,67 @@ async function _sendToPartner(partner, booking, hotel, guest, source, lowConfide
   }
 }
 
-async function processProductOrder(orderData, hotel, guest, convId, products, guestPhone) {
+async function processProductOrder(orderData, hotel, guest, convId, products, guestPhone, cashPayment = false) {
   const product = products.find(p => p.id === orderData.product_id)
   const tier    = product && (product.tiers||[]).find(t => t.name.toLowerCase() === orderData.tier_name.toLowerCase())
   if (!product || !tier) { log.warn('Product or tier not found', { productId: orderData.product_id }); return }
 
   const quantity = orderData.quantity || 1
+  const total    = (tier.price * quantity).toFixed(0)
 
+  if (cashPayment) {
+    // ── CASH ON ARRIVAL flow ─────────────────────────────────
+    // Create order record with cash_pending status (no Stripe session)
+    try {
+      const { data: order } = await supabase.from('guest_orders').insert({
+        hotel_id:         hotel.id,
+        guest_id:         guest.id,
+        product_id:       product.id,
+        partner_id:       product.partner_id || null,
+        conversation_id:  convId,
+        tier_name:        tier.name,
+        quantity,
+        unit_price:       tier.price,
+        total_amount:     tier.price * quantity,
+        amount_eur:       tier.price * quantity,
+        product_name:     product.name,
+        commission_rate:  product.commission_rate || 15,
+        commission_amount: +((tier.price * quantity) * (product.commission_rate || 15) / 100).toFixed(2),
+        status:           'cash_pending',
+      }).select().single()
+
+      // Determine which department to notify based on product category
+      const deptMap = {
+        spa_treatment: 'wellness', wellness: 'wellness',
+        activity: 'concierge',    transport: 'concierge',
+        dining: 'fnb',            birthday: 'fnb',
+        celebration: 'fnb',       membership: 'concierge',
+      }
+      const dept = deptMap[product.category] || 'concierge'
+
+      // Notify the relevant department
+      const guestName = `${guest.name||''} ${guest.surname||''}`.trim() || 'Guest'
+      await supabase.from('notifications').insert({
+        hotel_id:  hotel.id,
+        type:      'cash_order',
+        title:     `💵 Cash on arrival — ${product.name}`,
+        body:      `${guestName} · Room ${guest.room||'?'} — ${quantity > 1 ? quantity + '× ' : ''}${tier.name} — €${total} — CASH ON ARRIVAL. Please confirm with guest directly.`,
+        link_type: 'order',
+        link_id:   order?.id || null,
+        urgent:    true,
+        department: dept,
+      }).catch(()=>{})
+
+      log.info('Cash order created + dept notified', { ...hotelCtx(hotel), dept, total, product: product.name })
+    } catch(e) {
+      await log.critical('Cash order creation failed', e, { ...hotelCtx(hotel), ...guestCtx(guest) })
+    }
+    return
+  }
+
+  // ── STRIPE payment link flow (existing) ─────────────────────
   try {
     const { order, paymentUrl } = await createGuestOrder({ hotelId: hotel.id, guestId: guest.id, convId, product, tier, quantity, hotel, guest })
-    const total = (tier.price * quantity).toFixed(0)
     const paymentMsg = [`💳 *${product.name} — ${quantity > 1 ? `${quantity}× ` : ''}${tier.name}*`, `Total: €${total}`, ``, `Your secure payment link:`, paymentUrl, ``, `⏱ Valid for 24 hours. Once paid I'll send your confirmation immediately.`].join('\n')
     await sendWhatsApp(guestPhone, paymentMsg)
     await appendMessage(convId, 'assistant', paymentMsg, { sent_by: 'payment_bot' })
