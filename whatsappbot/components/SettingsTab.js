@@ -344,7 +344,7 @@ export default function SettingsTab({ hotelId, session, isMobile = false }) {
                         {p.unreachable && (
                           <button onClick={async () => {
                             await fetch('/api/partners', { method:'PATCH', headers:{'Content-Type':'application/json'},
-                              body: JSON.stringify({ partnerId: p.id, unreachable: false, active: true }) })
+                              body: JSON.stringify({ id: p.id, unreachable: false, active: true, unreachable_since: null }) })
                             loadPartners()
                           }}
                             style={{ padding:'6px 14px', background:'#DCFCE7', border:'0.5px solid #86EFAC', borderRadius:'8px', fontSize:'12px', color:'#14532D', cursor:'pointer', fontFamily:'var(--font)', fontWeight:'600' }}>
