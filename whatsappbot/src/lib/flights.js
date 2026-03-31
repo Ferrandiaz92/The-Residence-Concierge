@@ -54,20 +54,39 @@ function getDateOffset(days) {
   return d.toISOString().split('T')[0]
 }
 
+// Format a raw extracted flight code into the IATA designator AeroDataBox expects.
+// e.g. 'W67837' → 'W6 7837'  |  'BA123' → 'BA 123'  |  'EZY1234' → 'EZY 1234'
+// AeroDataBox requires airline prefix + space + numeric part in the URL.
+function formatFlightDesignator(raw) {
+  // Match 2-letter or 3-letter airline prefix followed by digits
+  const m = raw.match(/^([A-Z]{1,3}(?:\d(?=[A-Z]))?)(\d+[A-Z]?)$/)
+  if (!m) return raw   // can't parse — send as-is
+  return `${m[1]} ${m[2]}`
+}
+
 async function fetchAeroDataBox(key, flightIata, date) {
+  const designator = formatFlightDesignator(flightIata)
   try {
-    const url = `https://aerodatabox.p.rapidapi.com/flights/number/${encodeURIComponent(flightIata)}/${date}`
+    const url = `https://aerodatabox.p.rapidapi.com/flights/number/${encodeURIComponent(designator)}/${date}`
     const res = await fetch(url, {
       headers: {
         'X-RapidAPI-Key':  key,
         'X-RapidAPI-Host': 'aerodatabox.p.rapidapi.com',
       },
-      signal: AbortSignal.timeout(4000),
+      signal: AbortSignal.timeout(8000),
     })
-    if (!res.ok) return null
+    if (!res.ok) {
+      console.log(`AeroDataBox ${designator} ${date}: HTTP ${res.status}`)
+      return null
+    }
     const data = await res.json()
+    if (Array.isArray(data) && data.length === 0) {
+      console.log(`AeroDataBox ${designator} ${date}: empty response — flight not operating this date`)
+      return null
+    }
     return parseAeroDataBox(flightIata, data)
-  } catch {
+  } catch (e) {
+    console.warn(`AeroDataBox ${designator} ${date} error: ${e.message}`)
     return null
   }
 }
@@ -121,46 +140,50 @@ export async function getFlightStatus(flightIata) {
     return null
   }
 
+  const designator = formatFlightDesignator(flightIata)
   try {
-    // AeroDataBox needs today's date for active flights
-    const today = new Date().toISOString().split('T')[0]  // YYYY-MM-DD
-    const url   = `https://aerodatabox.p.rapidapi.com/flights/number/${encodeURIComponent(flightIata)}/${today}`
+    // Try today first, then ±1 day (handles late-night/early-morning edge cases)
+    const today = new Date().toISOString().split('T')[0]
+    const url   = `https://aerodatabox.p.rapidapi.com/flights/number/${encodeURIComponent(designator)}/${today}`
 
     const res = await fetch(url, {
       headers: {
         'X-RapidAPI-Key':  key,
         'X-RapidAPI-Host': 'aerodatabox.p.rapidapi.com',
       },
-      signal: AbortSignal.timeout(4000),
+      signal: AbortSignal.timeout(8000),
     })
 
-    console.log(`AeroDataBox ${flightIata} ${today}: status=${res.status}`)
+    console.log(`AeroDataBox ${designator} ${today}: status=${res.status}`)
 
-    if (res.status === 404) {
-      console.log(`AeroDataBox: trying yesterday/tomorrow for ${flightIata}`)
-      const results = await Promise.all([
+    // Try adjacent dates on 404 OR on empty 200 response
+    if (res.status === 404 || res.status === 200) {
+      const data = res.ok ? await res.json().catch(() => null) : null
+      if (data && !(Array.isArray(data) && data.length === 0)) {
+        // Got real data for today
+        const parsed = parseAeroDataBox(flightIata, data)
+        if (parsed) {
+          console.log(`AeroDataBox found: ${designator} — ${parsed.status}`)
+          return parsed
+        }
+      }
+      // Fall through to adjacent dates
+      console.log(`AeroDataBox ${designator}: trying ±1 day`)
+      const [yesterday, tomorrow] = await Promise.all([
         fetchAeroDataBox(key, flightIata, getDateOffset(-1)),
         fetchAeroDataBox(key, flightIata, getDateOffset(1)),
       ])
-      const found = results.find(r => r !== null)
-      console.log(`AeroDataBox fallback result:`, found ? 'found' : 'not found')
+      const found = yesterday || tomorrow
+      console.log(`AeroDataBox ±1 day result for ${designator}:`, found ? `found (${found.status})` : 'not found')
       return found || null
     }
 
-    if (!res.ok) {
-      const errText = await res.text().catch(() => '')
-      console.error(`AeroDataBox error: ${res.status} — ${errText.slice(0,200)}`)
-      return null
-    }
-
-    const data = await res.json()
-    console.log(`AeroDataBox raw data:`, JSON.stringify(data).slice(0, 300))
-    const parsed = parseAeroDataBox(flightIata, data)
-    console.log(`AeroDataBox parsed:`, JSON.stringify(parsed).slice(0, 200))
-    return parsed
+    const errText = await res.text().catch(() => '')
+    console.error(`AeroDataBox error: ${res.status} — ${errText.slice(0,200)}`)
+    return null
 
   } catch (err) {
-    console.error('AeroDataBox fetch failed:', err.message)
+    console.error(`AeroDataBox fetch failed for ${designator}: ${err.message}`)
     return null
   }
 }
