@@ -16,7 +16,11 @@ function getSupabase() {
 
 export async function GET(request, { params }) {
   const session = getSession()
-  if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!session) {
+    const { searchParams } = new URL(request.url)
+    console.warn(JSON.stringify({ level:'warn', event:'auth_failure', route: new URL(request.url).pathname, hotelId: searchParams.get('hotelId') || null, ts: new Date().toISOString() }))
+    return Response.json({ error: 'Unauthorized' }, { status: 401 })
+  }
   try {
     const supabase = getSupabase()
     const { data: stays } = await supabase
