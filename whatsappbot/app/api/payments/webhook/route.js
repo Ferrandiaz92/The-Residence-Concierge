@@ -32,9 +32,27 @@ function sendWhatsApp(to, body) {
 }
 
 // ── RICH CONFIRMATION BUILDER ─────────────────────────────────
-function buildRichConfirmation(lang, { productName, tierName, quantity, total, meetingPoint, durationText, whatToBring, cancellationPolicy, partnerContact, bookingRef }) {
-  const qStr   = quantity > 1 ? `${quantity}× ` : ''
-  const refStr = bookingRef ? `\n\n🎫 Ref: #${bookingRef.slice(-6).toUpperCase()}` : ''
+function buildRichConfirmation(lang, { productName, tierName, quantity, total, meetingPoint, durationText, whatToBring, cancellationPolicy, partnerContact, bookingRef, guestName }) {
+  const qStr    = quantity > 1 ? `${quantity}× ` : ''
+  const ref     = bookingRef ? bookingRef.slice(-6).toUpperCase() : null
+  // ID verification block — shown in all languages below the reference
+  const idBlock = {
+    en: (name) => `\n\n🎫 *Ref: #${ref}*\n👤 Guest: ${name}\n\n_Please keep this reference safe. At check-in, show this reference and a valid photo ID (passport or national ID) matching the name above. This helps us verify your booking quickly._`,
+    ru: (name) => `\n\n🎫 *Ref: #${ref}*\n👤 Гость: ${name}\n\n_Сохраните этот номер. При заезде предъявите его вместе с документом, удостоверяющим личность._`,
+    he: (name) => `\n\n🎫 *Ref: #${ref}*\n👤 אורח: ${name}\n\n_שמרו את מספר ההפניה. בעת הגעה, הציגו אותו עם תעודת זהות או דרכון._`,
+    de: (name) => `\n\n🎫 *Ref: #${ref}*\n👤 Gast: ${name}\n\n_Bitte bewahren Sie diese Referenz sicher auf. Zeigen Sie beim Check-in diese Referenz und einen Lichtbildausweis vor._`,
+    fr: (name) => `\n\n🎫 *Ref: #${ref}*\n👤 Client: ${name}\n\n_Conservez cette référence. À l'arrivée, présentez-la avec une pièce d'identité avec photo au nom indiqué._`,
+    es: (name) => `\n\n🎫 *Ref: #${ref}*\n👤 Huésped: ${name}\n\n_Conserve esta referencia. Al llegar, preséntela junto con un documento de identidad con foto a nombre del titular._`,
+    it: (name) => `\n\n🎫 *Ref: #${ref}*\n👤 Ospite: ${name}\n\n_Conserva questo riferimento. All'arrivo, mostralo insieme a un documento d'identità con foto intestato al titolare._`,
+    pt: (name) => `\n\n🎫 *Ref: #${ref}*\n👤 Hóspede: ${name}\n\n_Guarde esta referência. Na chegada, apresente-a com um documento de identificação com foto em nome do titular._`,
+    zh: (name) => `\n\n🎫 *预订编号: #${ref}*\n👤 宾客: ${name}\n\n_请保存此编号。到达时请出示此编号及与预订姓名一致的有效身份证件。_`,
+    ar: (name) => `\n\n🎫 *المرجع: #${ref}*\n👤 الضيف: ${name}\n\n_يرجى الاحتفاظ بهذا الرقع المرجعي. عند الوصول، أبرزه مع هوية شخصية تحمل صورة باسم المسجّل._`,
+    nl: (name) => `\n\n🎫 *Ref: #${ref}*\n👤 Gast: ${name}\n\n_Bewaar deze referentie. Toon bij aankomst deze referentie en een geldig identiteitsbewijs op naam van de gast._`,
+    el: (name) => `\n\n🎫 *Ref: #${ref}*\n👤 Επισκέπτης: ${name}\n\n_Κρατήστε αυτή την αναφορά. Κατά την άφιξη, δείξτε την μαζί με ταυτότητα ή διαβατήριο στο όνομα του επισκέπτη._`,
+  }
+  const refStr = ref && guestName
+    ? (idBlock[lang] || idBlock.en)(guestName)
+    : ref ? `\n\n🎫 *Ref: #${ref}*` : ''
 
   function logisticsBlock(labels) {
     const lines = []
@@ -72,16 +90,19 @@ function buildRichConfirmation(lang, { productName, tierName, quantity, total, m
 function buildPartnerAlert({ productName, tierName, quantity, guestName, guestRoom, total, payout, orderId }) {
   const ref = orderId.slice(-6).toUpperCase()
   return [
-    `🎟 New booking — ${productName}`,
-    `Ref: #${ref}`,
+    `🎟 New booking from The Residence Concierge`,
     ``,
+    `📋 ${productName}`,
     `Tier: ${tierName}${quantity > 1 ? ` × ${quantity}` : ''}`,
-    `Guest: ${guestName || 'Guest'}${guestRoom ? ` · Room ${guestRoom}` : ''}`,
-    `Total paid: €${total}`,
-    `Your payout: €${payout}`,
     ``,
-    `Reply ✅ to confirm availability.`,
-    `Contact hotel reception if any issues.`,
+    `🎫 *Ref: #${ref}*`,
+    `👤 Guest: ${guestName || 'Guest'}${guestRoom ? ` · Room ${guestRoom}` : ''}`,
+    ``,
+    `💳 Total paid: €${total}`,
+    `💰 Your payout: €${payout}`,
+    ``,
+    `Guest will present this reference + photo ID on arrival.`,
+    `Reply ✅ to confirm you have received this booking.`,
   ].join('\n')
 }
 
@@ -165,6 +186,7 @@ export async function POST(request) {
       const total       = order.total_amount.toFixed(0)
 
       // ── Rich confirmation → guest ─────────────────────────
+      const fullGuestName = [guest.name, order.guests?.surname].filter(Boolean).join(' ') || 'Guest'
       const confirmMsg = buildRichConfirmation(guest.language || 'en', {
         productName,
         tierName:           order.tier_name,
@@ -176,9 +198,30 @@ export async function POST(request) {
         cancellationPolicy: product.cancellation_policy || null,
         partnerContact:     product.partner_contact     || null,
         bookingRef:         orderId,
+        guestName:          fullGuestName,
       })
 
       await sendWhatsApp(guest.phone, confirmMsg)
+
+      // ── Fulfilment push → relevant department ─────────────
+      // After payment, the relevant department needs to know to prepare
+      const deptMap = {
+        spa_treatment: 'wellness', wellness: 'wellness', spa: 'wellness',
+        activity:      'concierge', transport: 'concierge', tour: 'concierge',
+        dining:        'fnb', birthday: 'fnb', celebration: 'fnb',
+      }
+      const productCategory = order.partner_products?.category || 'concierge'
+      const dept = deptMap[productCategory] || 'concierge'
+      await supabase.from('notifications').insert({
+        hotel_id:   hotelId,
+        type:       'fulfillment_needed',
+        title:      `🎟 Paid & confirmed — ${productName}`,
+        body:       `${fullGuestName}${order.guests?.room ? ' · Room ' + order.guests.room : ''} · Ref #${orderId.slice(-6).toUpperCase()} · €${total} received. Please prepare for guest arrival.`,
+        link_type:  'order',
+        link_id:    orderId,
+        urgent:     true,
+        department: dept,
+      }).catch(() => {})
 
       // ── Internal notification → dashboard ────────────────
       await supabase.from('notifications').insert({
