@@ -1002,8 +1002,8 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
         {/* Sub-tab switcher */}
         <div style={{ display:'flex', borderBottom:'0.5px solid var(--border)', background:'white', flexShrink:0 }}>
           {[
-            { key:'tickets',  label:'Open Tickets',     count: issues.length },
-            { key:'bookings', label:'Booking Requests', count: upcoming.length },
+            { key:'tickets',  label:'Open Tickets',     count: issues.filter(t => t.category !== 'facility_booking').length },
+            { key:'bookings', label:'Booking Requests', count: upcoming.length + issues.filter(t => t.category === 'facility_booking').length },
           ].map(tab => (
             <button key={tab.key} onClick={() => setAlertTab(tab.key)}
               style={{ flex:1, padding:'9px 6px', fontSize:'12px', fontWeight:'600', border:'none', borderBottom: alertTab===tab.key ? '2px solid #1C3D2E' : '2px solid transparent', background:'white', color: alertTab===tab.key ? '#1C3D2E' : '#9CA3AF', cursor:'pointer', fontFamily:'var(--font)', display:'flex', alignItems:'center', justifyContent:'center', gap:'5px', transition:'all .15s' }}>
@@ -1020,9 +1020,9 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
           {/* ── TAB: Open Tickets ── */}
           {alertTab === 'tickets' && (
             <div>
-              {issues.length === 0 ? (
+              {issues.filter(t => t.category !== 'facility_booking').length === 0 ? (
                 <div style={{ padding:'24px', textAlign:'center', color:'#9CA3AF', fontSize:'13px' }}>All clear — no open tickets ✓</div>
-              ) : issues.map(t => (
+              ) : issues.filter(t => t.category !== 'facility_booking').map(t => (
                 <DesktopTicketRow
                   key={t.id} t={t} session={session}
                   conversations={conversations}

@@ -757,7 +757,7 @@ function ExpandableBooking({ booking: b, guest: g, tc }) {
           <div style={{ fontSize:'12px', color:'#374151', display:'flex', flexDirection:'column', gap:'5px' }}>
             {b.details?.destination && <div>📍 <strong>To:</strong> {b.details.destination}</div>}
             {b.details?.pax         && <div>👥 <strong>Passengers:</strong> {b.details.pax}</div>}
-            {b.details?.date        && <div>📅 <strong>Date:</strong> {b.details.date}</div>}
+            {b.details?.date        && <div>📅 <strong>Date:</strong> {b.details.date?.includes('-') ? b.details.date.split('-').reverse().join('/') : b.details.date}</div>}
             {b.details?.time        && <div>🕐 <strong>Time:</strong> {b.details.time}</div>}
             {b.details?.notes       && <div>📝 <strong>Notes:</strong> {b.details.notes}</div>}
             {b.commission_amount > 0 && <div>💰 <strong>Commission:</strong> €{b.commission_amount}</div>}
@@ -986,7 +986,7 @@ function IssuesPanel({ tickets, bookings, conversations = [], onOpenThread, onNa
       <div style={{ display:'flex', background:'white', borderBottom:'1px solid #E5E7EB', flexShrink:0 }}>
         {[
           { key:'tickets',  label:'Open Tickets',     count: internalIssues.length },
-          { key:'bookings', label:'Booking Requests', count: upcoming.length },
+          { key:'bookings', label:'Booking Requests', count: upcoming.length + facTickets.length },
         ].map(tab => (
           <button key={tab.key} onClick={() => setAlertTab(tab.key)}
             style={{ flex:1, padding:'10px 4px', fontSize:'12px', fontWeight:'600', border:'none', borderBottom: alertTab===tab.key ? '2px solid #1C3D2E' : '2px solid transparent', background:'white', color: alertTab===tab.key ? '#1C3D2E' : '#9CA3AF', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", display:'flex', alignItems:'center', justifyContent:'center', gap:'5px' }}>
@@ -1160,7 +1160,7 @@ function MobileExpandableBooking({ booking: b, guest: g, tc, matchConv, onOpenTh
           <div style={{ fontSize:'12px', color:'#374151', display:'flex', flexDirection:'column', gap:'4px', marginBottom:'8px' }}>
             {b.details?.destination && <div>📍 <strong>To:</strong> {b.details.destination}</div>}
             {b.details?.pax         && <div>👥 <strong>Passengers:</strong> {b.details.pax}</div>}
-            {b.details?.date        && <div>📅 <strong>Date:</strong> {b.details.date}</div>}
+            {b.details?.date        && <div>📅 <strong>Date:</strong> {b.details.date?.includes('-') ? b.details.date.split('-').reverse().join('/') : b.details.date}</div>}
             {b.details?.time        && <div>🕐 <strong>Time:</strong> {b.details.time}</div>}
             {b.details?.notes       && <div>📝 <strong>Notes:</strong> {b.details.notes}</div>}
             {b.commission_amount > 0 && <div>💰 <strong>Commission:</strong> €{b.commission_amount}</div>}

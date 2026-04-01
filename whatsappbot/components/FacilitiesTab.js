@@ -97,13 +97,13 @@ function BookingCard({ booking, session, onAction, isMobile }) {
           </div>
           <div style={{ fontSize: '11px', color: '#6B7280' }}>
             {guest.name ? `${guest.name}${guest.room ? ` · Room ${guest.room}` : ''}` : 'No guest'}
-            {booking.date ? ` · ${booking.date}` : ''}
+            {booking.date ? ` · ${fmtDate(booking.date)}` : ''}
             {booking.time ? ` at ${booking.time}` : ''}
             {booking.guests_count > 1 ? ` · ${booking.guests_count} people` : ''}
           </div>
           {booking.status === 'alternative' && booking.alternative_time && (
             <div style={{ fontSize: '11px', color: '#2563EB', marginTop: '2px' }}>
-              Alternative offered: {booking.alternative_time}{booking.alternative_date ? ` on ${booking.alternative_date}` : ''}
+              Alternative offered: {booking.alternative_time}{booking.alternative_date ? ` on ${fmtDate(booking.alternative_date)}` : ''}
             </div>
           )}
         </div>
@@ -306,6 +306,13 @@ function FacilityForm({ facility, hotelId, onSave, onCancel }) {
 }
 
 // ── MAIN COMPONENT ────────────────────────────────────────────
+
+const fmtDate = (d) => {
+  if (!d) return ''
+  if (d.includes('-') && d.length === 10) return d.split('-').reverse().join('/')  // yyyy-mm-dd → dd/mm/yyyy
+  return d
+}
+
 export default function FacilitiesTab({ hotelId, session, isMobile = false }) {
   const [bookings,   setBookings]   = useState([])
   const [facilities, setFacilities] = useState([])
