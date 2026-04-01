@@ -188,10 +188,10 @@ export async function handleInboundWhatsApp(rawBody) {
       }
 
     // Latin language switching FROM another Latin language (e.g. ES → EN, or EN → ES):
-    // Update after just 1 message with 4+ words — don't require 2 consecutive messages
+    // Update after just 1 message with 2+ words — lower threshold than initial detection
     // This fixes the case where a guest starts in English then switches to Spanish
     } else {
-      if (wordCount >= 4) {
+      if (wordCount >= 2) {
         await updateGuest(guest.id, { language: detectedLang })
         guest.language = detectedLang
         log.info('Guest language updated', { ...guestCtx(guest), from: guest.language, to: detectedLang })
