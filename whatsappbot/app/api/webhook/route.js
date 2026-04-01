@@ -12,6 +12,29 @@
 
 import twilio from 'twilio'
 
+// Simple in-memory rate limiter — limits per phone number
+// Prevents a single number from flooding the webhook
+const rateLimitMap = new Map()
+const RATE_LIMIT_WINDOW_MS = 60_000  // 1 minute
+const RATE_LIMIT_MAX       = 30      // max 30 messages per minute per number
+
+function isRateLimited(phone) {
+  const now    = Date.now()
+  const record = rateLimitMap.get(phone) || { count: 0, windowStart: now }
+  if (now - record.windowStart > RATE_LIMIT_WINDOW_MS) {
+    // Reset window
+    rateLimitMap.set(phone, { count: 1, windowStart: now })
+    return false
+  }
+  record.count++
+  rateLimitMap.set(phone, record)
+  if (record.count > RATE_LIMIT_MAX) {
+    console.warn(JSON.stringify({ level:'warn', event:'rate_limited', phone: phone.slice(-4), count: record.count, ts: new Date().toISOString() }))
+    return true
+  }
+  return false
+}
+
 export async function POST(request) {
   const text = await request.text()
 
@@ -49,6 +72,13 @@ export async function POST(request) {
   // ─────────────────────────────────────────────────────────
 
   console.log('=== WEBHOOK HIT ===')
+  // Rate limit — max 30 messages/min per sender
+  const senderPhone = rawBody.From || ''
+  if (senderPhone && isRateLimited(senderPhone)) {
+    console.warn(JSON.stringify({ level:'warn', event:'rate_limited', phone: senderPhone.slice(-6), ts: new Date().toISOString() }))
+    return new Response('Too Many Requests', { status: 429 })
+  }
+
   console.log('From:', rawBody.From)
   console.log('To:',   rawBody.To)
   console.log('Body:', rawBody.Body)
