@@ -986,7 +986,7 @@ function IssuesPanel({ tickets, bookings, conversations = [], onOpenThread, onNa
       <div style={{ display:'flex', background:'white', borderBottom:'1px solid #E5E7EB', flexShrink:0 }}>
         {[
           { key:'tickets',  label:'Open Tickets',     count: internalIssues.length },
-          { key:'bookings', label:'Booking Requests', count: facTickets.length + partnerBkgs.length },
+          { key:'bookings', label:'Booking Requests', count: facTickets.length + partnerBkgs.filter(b => b.status === 'pending').length },
         ].map(tab => (
           <button key={tab.key} onClick={() => setAlertTab(tab.key)}
             style={{ flex:1, padding:'10px 4px', fontSize:'12px', fontWeight:'600', border:'none', borderBottom: alertTab===tab.key ? '2px solid #1C3D2E' : '2px solid transparent', background:'white', color: alertTab===tab.key ? '#1C3D2E' : '#9CA3AF', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", display:'flex', alignItems:'center', justifyContent:'center', gap:'5px' }}>
@@ -1057,36 +1057,59 @@ function IssuesPanel({ tickets, bookings, conversations = [], onOpenThread, onNa
             )}
 
             {/* Partner Bookings section */}
-            <button onClick={() => setPartnerOpen(o => !o)}
-              style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'space-between', padding:'11px 16px', background:'#F9FAFB', border:'none', borderBottom:'1px solid #E5E7EB', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-              <span style={{ fontSize:'13px', fontWeight:'600', color:'#374151', display:'flex', alignItems:'center', gap:'7px' }}>
-                🤝 Partner Bookings
-                {partnerBkgs.length > 0 && (
-                  <span style={{ fontSize:'10px', fontWeight:'700', padding:'1px 7px', borderRadius:'20px', background:'#DBEAFE', color:'#1E3A5F' }}>
-                    {partnerBkgs.length}
-                  </span>
-                )}
-              </span>
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                <path d={partnerOpen ? 'M1 8L6 3L11 8' : 'M1 4L6 9L11 4'} stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </button>
-            {partnerOpen && (
-              partnerBkgs.length === 0
-                ? <EmptyRow text="No partner bookings pending" />
-                : partnerBkgs.map(b => {
-                    const g = b.guests || {}
-                    const typeColors = { taxi:{bg:'#DCFCE7',color:'#14532D'}, restaurant:{bg:'#DBEAFE',color:'#1E3A5F'}, activity:{bg:'#FEF3C7',color:'#78350F'} }
-                    const tc = typeColors[b.type] || { bg:'#F1F5F9', color:'#334155' }
-                    const matchConv = conversations.find(c => c.guests?.id === g.id || c.guests?.phone === g.phone)
-                    return (
-                      <MobileExpandableBooking key={b.id} booking={b} guest={g} tc={tc}
-                        matchConv={matchConv}
-                        onOpenThread={onOpenThread}
-                        onNavigateToGuest={onNavigateToGuest} />
-                    )
-                  })
-            )}
+            {(() => {
+              const awaitingConf = partnerBkgs.filter(b => b.status === 'pending')
+              const confirmed    = partnerBkgs.filter(b => b.status === 'confirmed')
+              return (
+                <>
+                  <button onClick={() => setPartnerOpen(o => !o)}
+                    style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'space-between', padding:'11px 16px', background:'#F9FAFB', border:'none', borderBottom:'1px solid #E5E7EB', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                    <span style={{ fontSize:'13px', fontWeight:'600', color:'#374151', display:'flex', alignItems:'center', gap:'6px' }}>
+                      🤝 Partner Bookings
+                      {awaitingConf.length > 0 && <span style={{ fontSize:'9px', fontWeight:'700', padding:'1px 6px', borderRadius:'20px', background:'#FEF3C7', color:'#78350F' }}>⏳ {awaitingConf.length}</span>}
+                      {confirmed.length > 0 && <span style={{ fontSize:'9px', fontWeight:'700', padding:'1px 6px', borderRadius:'20px', background:'#DCFCE7', color:'#14532D' }}>✅ {confirmed.length}</span>}
+                    </span>
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                      <path d={partnerOpen ? 'M1 8L6 3L11 8' : 'M1 4L6 9L11 4'} stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </button>
+                  {partnerOpen && (
+                    partnerBkgs.length === 0
+                      ? <EmptyRow text="No partner bookings pending" />
+                      : <div>
+                          {awaitingConf.length > 0 && (
+                            <div>
+                              <div style={{ padding:'5px 16px', fontSize:'10px', fontWeight:'700', color:'#78350F', background:'#FFFBEB', borderBottom:'0.5px solid #FDE68A', textTransform:'uppercase', letterSpacing:'0.05em' }}>
+                                ⏳ Awaiting confirmation
+                              </div>
+                              {awaitingConf.map(b => {
+                                const g = b.guests || {}
+                                const typeColors = { taxi:{bg:'#DCFCE7',color:'#14532D'}, restaurant:{bg:'#DBEAFE',color:'#1E3A5F'}, activity:{bg:'#FEF3C7',color:'#78350F'} }
+                                const tc = typeColors[b.type] || { bg:'#F1F5F9', color:'#334155' }
+                                const matchConv = conversations.find(c => c.guests?.id === g.id || c.guests?.phone === g.phone)
+                                return <MobileExpandableBooking key={b.id} booking={b} guest={g} tc={tc} matchConv={matchConv} onOpenThread={onOpenThread} onNavigateToGuest={onNavigateToGuest} />
+                              })}
+                            </div>
+                          )}
+                          {confirmed.length > 0 && (
+                            <div>
+                              <div style={{ padding:'5px 16px', fontSize:'10px', fontWeight:'700', color:'#14532D', background:'#F0FDF4', borderBottom:'0.5px solid #86EFAC', borderTop: awaitingConf.length > 0 ? '0.5px solid #E5E7EB' : 'none', textTransform:'uppercase', letterSpacing:'0.05em' }}>
+                                ✅ Confirmed — no action needed
+                              </div>
+                              {confirmed.map(b => {
+                                const g = b.guests || {}
+                                const typeColors = { taxi:{bg:'#DCFCE7',color:'#14532D'}, restaurant:{bg:'#DBEAFE',color:'#1E3A5F'}, activity:{bg:'#FEF3C7',color:'#78350F'} }
+                                const tc = typeColors[b.type] || { bg:'#F1F5F9', color:'#334155' }
+                                const matchConv = conversations.find(c => c.guests?.id === g.id || c.guests?.phone === g.phone)
+                                return <MobileExpandableBooking key={b.id} booking={b} guest={g} tc={tc} matchConv={matchConv} onOpenThread={onOpenThread} onNavigateToGuest={onNavigateToGuest} />
+                              })}
+                            </div>
+                          )}
+                        </div>
+                  )}
+                </>
+              )
+            })()}
 
 
           </div>

@@ -1005,7 +1005,7 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
             { key:'tickets',  label:'Open Tickets',     count: issues.filter(t => t.category !== 'facility_booking').length },
             { key:'bookings', label:'Booking Requests', count:
                 issues.filter(t => t.category === 'facility_booking').length +
-                upcoming.filter(b => b.source !== 'facility' && b.type !== 'facility' && !b._isFacility && b.partner_id).length
+                upcoming.filter(b => b.source !== 'facility' && b.type !== 'facility' && !b._isFacility && b.partner_id && b.status === 'pending').length
               },
           ].map(tab => (
             <button key={tab.key} onClick={() => setAlertTab(tab.key)}
@@ -1085,28 +1085,57 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
 
               {/* ── Section: Partner Bookings ── */}
               {(() => {
-                const partnerBookings = upcoming.filter(b => b.source !== 'facility' && b.type !== 'facility' && !b._isFacility && b.partner_id)
+                const allPartner  = upcoming.filter(b => b.source !== 'facility' && b.type !== 'facility' && !b._isFacility && b.partner_id)
+                const awaitingConf = allPartner.filter(b => b.status === 'pending')
+                const confirmed    = allPartner.filter(b => b.status === 'confirmed')
                 return (
                   <div>
                     <button onClick={() => setPartnerBookingsOpen(o => !o)}
                       style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 14px', background:'#F9FAFB', border:'none', borderBottom:'0.5px solid var(--border)', cursor:'pointer', fontFamily:'var(--font)' }}>
                       <span style={{ fontSize:'12px', fontWeight:'600', color:'#374151', display:'flex', alignItems:'center', gap:'7px' }}>
                         <span style={{ fontSize:'14px' }}>🤝</span> Partner Bookings
-                        {partnerBookings.length > 0 && <span style={{ fontSize:'10px', fontWeight:'700', padding:'1px 7px', borderRadius:'20px', background:'#DBEAFE', color:'#1E3A5F' }}>{partnerBookings.length}</span>}
+                        {awaitingConf.length > 0 && <span style={{ fontSize:'10px', fontWeight:'700', padding:'1px 7px', borderRadius:'20px', background:'#FEF3C7', color:'#78350F' }}>⏳ {awaitingConf.length} awaiting</span>}
+                        {confirmed.length > 0 && <span style={{ fontSize:'10px', fontWeight:'700', padding:'1px 7px', borderRadius:'20px', background:'#DCFCE7', color:'#14532D' }}>✅ {confirmed.length} confirmed</span>}
                       </span>
                       <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
                         <path d={partnerBookingsOpen ? 'M1 8L6 3L11 8' : 'M1 4L6 9L11 4'} stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                       </svg>
                     </button>
                     {partnerBookingsOpen && (
-                      partnerBookings.length === 0 ? (
+                      allPartner.length === 0 ? (
                         <div style={{ padding:'12px 14px', fontSize:'12px', color:'#9CA3AF', textAlign:'center' }}>No partner bookings pending</div>
-                      ) : partnerBookings.map(b => (
-                        <ExpandableBookingDesktop key={b.id} b={b}
-                          conversations={conversations}
-                          onSelectConv={(conv) => { setSelectedConv(conv); setCentreMode('chat') }}
-                          onNavigateToGuest={onSelectGuest} />
-                      ))
+                      ) : (
+                        <div>
+                          {/* Awaiting confirmation — needs action */}
+                          {awaitingConf.length > 0 && (
+                            <div>
+                              <div style={{ padding:'6px 14px', fontSize:'10px', fontWeight:'700', color:'#78350F', background:'#FFFBEB', borderBottom:'0.5px solid #FDE68A', letterSpacing:'0.05em', textTransform:'uppercase' }}>
+                                ⏳ Awaiting partner confirmation
+                              </div>
+                              {awaitingConf.map(b => (
+                                <ExpandableBookingDesktop key={b.id} b={b}
+                                  conversations={conversations}
+                                  onSelectConv={(conv) => { setSelectedConv(conv); setCentreMode('chat') }}
+                                  onNavigateToGuest={onSelectGuest} />
+                              ))}
+                            </div>
+                          )}
+                          {/* Confirmed — no action needed, just visibility */}
+                          {confirmed.length > 0 && (
+                            <div>
+                              <div style={{ padding:'6px 14px', fontSize:'10px', fontWeight:'700', color:'#14532D', background:'#F0FDF4', borderBottom:'0.5px solid #86EFAC', borderTop: awaitingConf.length > 0 ? '0.5px solid var(--border)' : 'none', letterSpacing:'0.05em', textTransform:'uppercase' }}>
+                                ✅ Confirmed — no action needed
+                              </div>
+                              {confirmed.map(b => (
+                                <ExpandableBookingDesktop key={b.id} b={b}
+                                  conversations={conversations}
+                                  onSelectConv={(conv) => { setSelectedConv(conv); setCentreMode('chat') }}
+                                  onNavigateToGuest={onSelectGuest} />
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )
                     )}
                   </div>
                 )
