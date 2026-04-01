@@ -1,5 +1,6 @@
 // app/api/guests/[id]/route.js
 import { getGuestProfile } from '../../../../lib/dashboard.js'
+import { requireSession, serverError } from '../../../../lib/route-helpers.js'
 import { cookies } from 'next/headers'
 
 function getSession() {
@@ -7,12 +8,8 @@ function getSession() {
 }
 
 export async function GET(request, { params }) {
-  const session = getSession()
-  if (!session) {
-    const { searchParams } = new URL(request.url)
-    console.warn(JSON.stringify({ level:'warn', event:'auth_failure', route: new URL(request.url).pathname, hotelId: searchParams.get('hotelId') || null, ts: new Date().toISOString() }))
-    return Response.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const { session, error: authErr } = requireSession(request)
+  if (authErr) return authErr
   try {
     const profile = await getGuestProfile(params.id)
     return Response.json(profile)
