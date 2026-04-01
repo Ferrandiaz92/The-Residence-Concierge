@@ -92,9 +92,13 @@ export async function GET(request) {
     convs = convs.filter(c => c.guests?.language === language)
   }
 
-  // Filter by month
+  // Filter by month — use last_message_at so active conversations
+  // show in the month they were last active, not when they started
   if (month && month !== 'all') {
-    convs = convs.filter(c => c.created_at?.startsWith(month))
+    convs = convs.filter(c =>
+      c.last_message_at?.startsWith(month) ||
+      c.created_at?.startsWith(month)
+    )
   }
 
   if (convs.length === 0) {
