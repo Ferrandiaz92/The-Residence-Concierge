@@ -57,7 +57,7 @@ export async function GET(request) {
 
   let query = supabase
     .from('internal_tickets')
-    .select('*, guests(name, surname, room, phone)')
+    .select('*, guests(id, name, surname, room, phone)')
     .eq('hotel_id', hotelId)
     .order('created_at', { ascending: false })
     .limit(100)
