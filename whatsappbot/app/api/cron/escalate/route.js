@@ -20,6 +20,9 @@ export async function GET(request) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  const cronName = request.url.split('/api/cron/')[1]?.split('?')[0] || 'unknown'
+  const runId    = Date.now()
+  console.log(JSON.stringify({ level:'info', cron: cronName, runId, event:'cron_start', ts: new Date().toISOString() }))
   try {
     await checkEscalations()
     return Response.json({
