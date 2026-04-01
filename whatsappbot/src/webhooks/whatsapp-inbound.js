@@ -24,6 +24,7 @@ import {
 } from '../lib/supabase.js'
 import { sendWhatsApp, parseIncomingMessage } from '../lib/twilio.js'
 import { detectLanguage, parseBookingRequest, formatPartnerAlert, buildSystemPrompt } from '../lib/language.js'
+import { logKnowledgeGap, detectHedging } from '../lib/knowledge-gaps.js'
 import { callClaude } from '../lib/claude.js'
 import { handleTicketReply } from '../lib/ticketing.js'
 import { getKnowledgeBase, formatKnowledgeForPrompt } from '../lib/knowledge.js'
@@ -631,6 +632,19 @@ export async function handleInboundWhatsApp(rawBody) {
   const replyText = finalReply || afterBooking || aiResponse
   await sendWhatsApp(from, replyText)
   await appendMessage(conv.id, 'assistant', replyText)
+
+  // ── Knowledge gap detection ───────────────────────────────
+  // Log questions the bot couldn't answer confidently
+  const wasEscalated = processedResponse.includes('[ESCALATE]') || conv.status === 'escalated'
+  const hasHedging   = detectHedging(replyText)
+  if (wasEscalated || hasHedging) {
+    logKnowledgeGap(hotel.id, {
+      questionText:    message,
+      detectionSource: wasEscalated ? 'escalation' : 'hedging',
+      language:        guest.language || 'en',
+      conversationId:  conv.id,
+    }).catch(() => {})
+  }
 
   if (hasBooking && booking) {
     await processBooking(booking, hotel, guest, partners, isRespondingToUpsell ? 'upsell' : 'guest_request')
