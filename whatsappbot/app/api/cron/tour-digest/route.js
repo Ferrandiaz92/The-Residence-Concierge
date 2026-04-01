@@ -36,7 +36,8 @@ export async function GET(request) {
     .select('id, name, config')
     .eq('active', true)
 
-  if (!hotels?.length) return Response.json({ status: 'ok', sent: 0 })
+  if (!hotels?.length) console.log(JSON.stringify({ level:'info', cron: cronName, runId, event:'cron_done', ts: new Date().toISOString() }))
+    return Response.json({ status: 'ok', sent: 0 })
 
   let totalSent = 0
 
@@ -95,7 +96,10 @@ export async function GET(request) {
     msg += `─────────────────────\n`
     msg += `${totalOrders} experience${totalOrders !== 1 ? 's' : ''} · ${totalGuests} guest${totalGuests !== 1 ? 's' : ''} · €${totalRev.toFixed(0)}`
 
-    try {
+    const cronName = request.url.split('/api/cron/')[1]?.split('?')[0] || 'unknown'
+  const runId    = Date.now()
+  console.log(JSON.stringify({ level:'info', cron: cronName, runId, event:'cron_start', ts: new Date().toISOString() }))
+  try {
       await sendWhatsApp(digestPhone, msg)
       totalSent++
       console.log(`Tour digest sent for ${hotel.name}`)
