@@ -1501,8 +1501,8 @@ function ReceptionView({ hotelId, session }) {
           tickets={tickets} bookings={bookings} conversations={conversations}
           onOpenThread={openThread}
           onNavigateToGuest={(guest) => {
-            // Switch to Guests tab by passing guest up — same pattern as desktop
             setThreadOpen(false)
+            if (onSelectGuest && guest?.id) onSelectGuest(guest)
           }}
           session={session} hotelId={hotelId} />
       )}
@@ -1524,7 +1524,7 @@ function ReceptionView({ hotelId, session }) {
 // ════════════════════════════════════════════════════════════
 //  EXPORT
 // ════════════════════════════════════════════════════════════
-export default function MobileLiveTab({ hotelId, session }) {
+export default function MobileLiveTab({ hotelId, session, onSelectGuest }) {
   if (DEPT_ROLES.includes(session?.role)) {
     return <DeptQueue hotelId={hotelId} session={session} />
   }

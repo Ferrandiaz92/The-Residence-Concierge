@@ -365,14 +365,14 @@ export default function GuestsTab({ hotelId, selectedGuest }) {
             {/* KPIs */}
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'8px' }}>
               {(isDayVisit ? [
-                { label:'Total visits', value: guest.visit_count_day || 0, gold: true },
+                { label:'Times visited', value: guest.visit_count_day || 0, gold: true },
                 { label:'Bookings made', value: bookings.length },
               ] : [
                 { label:'Messages', value: allMessages.length },
-                { label:'Bookings', value: bookings.length },
+                { label:'Bookings this stay', value: bookings.length },
                 ...(isReturning ? [
-                  { label:'Total visits', value: guest.visit_count || 1, gold: true },
-                  { label:'All bookings', value: guest.total_bookings || bookings.length },
+                  { label:'Total stays', value: guest.visit_count || 1, gold: true },
+                  { label:'All-time bookings', value: guest.total_bookings || bookings.length },
                 ] : [])
               ]).map(s => (
                 <div key={s.label} style={{ background:s.gold?'rgba(201,168,76,0.08)':'#F9FAFB', borderRadius:'10px', padding:'12px 14px', border:s.gold?'1px solid rgba(201,168,76,0.2)':'none' }}>
@@ -420,29 +420,78 @@ export default function GuestsTab({ hotelId, selectedGuest }) {
               </div>
             )}
 
-            {/* Bookings */}
-            {bookings.length > 0 && (
-              <div>
-                <div style={{ fontSize:'13px', fontWeight:'700', color:'#111827', marginBottom:'8px' }}>
-                  {isDayVisit ? 'All bookings' : 'This stay — bookings'}
-                </div>
-                <div style={{ display:'flex', flexDirection:'column', gap:'5px' }}>
-                  {bookings.map(b => {
-                    const tc = TYPE_COLORS[b.type]||{bg:'#F1F5F9',color:'#334155',label:'?'}
-                    const isDone = ['confirmed','resolved','completed'].includes(b.status)
-                    return (
-                      <div key={b.id} style={{ display:'flex', alignItems:'center', gap:'10px', padding:'9px 12px', background:'#F9FAFB', borderRadius:'8px' }}>
-                        <div style={{ width:'22px', height:'22px', borderRadius:'5px', background:tc.bg, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'10px', fontWeight:'700', color:tc.color, flexShrink:0 }}>{tc.label}</div>
-                        <div style={{ flex:1, fontSize:'13px', color:'#374151', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                          {b.partners?.name||b.type} · {(() => { try { return new Date(b.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'}) } catch { return '' } })()}
+            {/* Bookings — split Upcoming / Past with expand arrows */}
+            {bookings.length > 0 && (() => {
+              const upcoming = bookings.filter(b => ['pending','confirmed'].includes(b.status))
+              const past     = bookings.filter(b => ['completed','resolved','declined','cancelled'].includes(b.status))
+              const typeEmoji = { taxi:'🚗', restaurant:'🍽️', activity:'⛵', facility:'🛎️', late_checkout:'🕐' }
+
+              function BookingRow({ b }) {
+                const [open, setOpen] = React.useState(false)
+                const tc      = TYPE_COLORS[b.type]||{bg:'#F1F5F9',color:'#334155',label:'?'}
+                const isPending   = b.status === 'pending'
+                const isConfirmed = b.status === 'confirmed'
+                const emoji   = typeEmoji[b.type] || tc.label
+                const dateStr = (() => { try { return new Date(b.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'}) } catch { return '' } })()
+                return (
+                  <div style={{ background:'#F9FAFB', borderRadius:'8px', overflow:'hidden', border:'0.5px solid #E5E7EB' }}>
+                    <div onClick={() => setOpen(o=>!o)} style={{ display:'flex', alignItems:'center', gap:'10px', padding:'9px 12px', cursor:'pointer' }}>
+                      <div style={{ width:'7px', height:'7px', borderRadius:'50%', background: isConfirmed?'#16A34A':isPending?'#F59E0B':'#9CA3AF', flexShrink:0 }}/>
+                      <div style={{ width:'22px', height:'22px', borderRadius:'5px', background:tc.bg, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'12px', flexShrink:0 }}>{emoji}</div>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:'13px', fontWeight:'600', color:'#374151', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                          {b.partners?.name || b.type}
                         </div>
-                        <div style={{ fontSize:'12px', fontWeight:'600', color:isDone?'#9CA3AF':'#C9A84C', flexShrink:0 }}>{isDone?'Done':'upcoming'}</div>
+                        <div style={{ fontSize:'11px', color:'#9CA3AF' }}>{dateStr}</div>
                       </div>
-                    )
-                  })}
+                      <div style={{ fontSize:'11px', fontWeight:'700', color: isConfirmed?'#14532D':isPending?'#78350F':'#9CA3AF', flexShrink:0 }}>
+                        {isConfirmed?'✅ Confirmed':isPending?'⏳ Pending':'Done'}
+                      </div>
+                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                        <path d={open?'M1 7L5 3L9 7':'M1 3L5 7L9 3'} stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </div>
+                    {open && (
+                      <div style={{ padding:'0 12px 10px 39px', display:'flex', flexDirection:'column', gap:'3px', fontSize:'12px', color:'#374151' }}>
+                        {b.details?.destination && <div>📍 {b.details.destination}</div>}
+                        {b.details?.time        && <div>🕐 {b.details.time}</div>}
+                        {b.details?.date        && <div>📅 {b.details.date?.includes('-') ? b.details.date.split('-').reverse().join('/') : b.details.date}</div>}
+                        {b.details?.passengers  && <div>👥 {b.details.passengers} passengers</div>}
+                        {b.commission_amount > 0 && <div>💰 Commission: €{b.commission_amount}</div>}
+                        {b.id && <div style={{ color:'#9CA3AF', fontSize:'11px' }}>Ref: #{b.id.slice(-6).toUpperCase()}</div>}
+                      </div>
+                    )}
+                  </div>
+                )
+              }
+
+              return (
+                <div>
+                  {upcoming.length > 0 && (
+                    <div style={{ marginBottom:'10px' }}>
+                      <div style={{ fontSize:'12px', fontWeight:'700', color:'#78350F', marginBottom:'6px', display:'flex', alignItems:'center', gap:'6px' }}>
+                        <span style={{ width:'6px', height:'6px', borderRadius:'50%', background:'#F59E0B', display:'inline-block' }}/>
+                        Upcoming & confirmed
+                      </div>
+                      <div style={{ display:'flex', flexDirection:'column', gap:'5px' }}>
+                        {upcoming.map(b => <BookingRow key={b.id} b={b} />)}
+                      </div>
+                    </div>
+                  )}
+                  {past.length > 0 && (
+                    <div>
+                      <div style={{ fontSize:'12px', fontWeight:'700', color:'#6B7280', marginBottom:'6px', display:'flex', alignItems:'center', gap:'6px' }}>
+                        <span style={{ width:'6px', height:'6px', borderRadius:'50%', background:'#9CA3AF', display:'inline-block' }}/>
+                        Past bookings
+                      </div>
+                      <div style={{ display:'flex', flexDirection:'column', gap:'5px' }}>
+                        {past.map(b => <BookingRow key={b.id} b={b} />)}
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
-            )}
+              )
+            })()}
 
             {/* Staff notes */}
             <div>
