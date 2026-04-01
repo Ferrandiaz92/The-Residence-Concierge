@@ -3,6 +3,7 @@
 // Used by staff portal and settings tab
 
 import { createClient } from '@supabase/supabase-js'
+import { checkCsrf } from '../../../lib/csrf.js'
 
 function getSupabase() {
   return createClient(
@@ -36,6 +37,8 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
+  const csrf = checkCsrf(request)
+  if (csrf) return csrf
   try {
     const { hotelId, type, item } = await request.json()
     // type = 'partner_type' | 'department'
@@ -53,6 +56,8 @@ export async function POST(request) {
 }
 
 export async function PATCH(request) {
+  const csrf = checkCsrf(request)
+  if (csrf) return csrf
   try {
     const { type, id, updates } = await request.json()
     const supabase = getSupabase()
@@ -67,6 +72,8 @@ export async function PATCH(request) {
 }
 
 export async function DELETE(request) {
+  const csrf = checkCsrf(request)
+  if (csrf) return csrf
   try {
     const { searchParams } = new URL(request.url)
     const type = searchParams.get('type')
