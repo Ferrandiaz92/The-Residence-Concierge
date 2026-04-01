@@ -2,6 +2,7 @@
 // Read orders + commission summary for the dashboard
 
 import { createClient } from '@supabase/supabase-js'
+import { requireSession, requireHotel, serverError } from '../../../lib/route-helpers.js'
 import { cookies }      from 'next/headers'
 
 function getSupabase() {
@@ -12,14 +13,13 @@ function getSession() {
 }
 
 export async function GET(request) {
+  const { session, error: authErr } = requireSession(request)
+  if (authErr) return authErr
+  const { hotelId, error: hotelErr } = requireHotel(request, session)
+  if (hotelErr) return hotelErr
   try {
-    const session = getSession()
-    if (!session) return Response.json({ error:'Unauthorized' }, { status:401 })
-
     const { searchParams } = new URL(request.url)
-    const hotelId = searchParams.get('hotelId')
     const period  = searchParams.get('period') || '30' // days
-    if (!hotelId) return Response.json({ orders:[], summary:{} })
 
     const supabase = getSupabase()
     const since    = new Date(Date.now() - parseInt(period) * 86400000).toISOString()
