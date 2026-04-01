@@ -54,6 +54,7 @@ export async function GET(request) {
 
   if (!staleGuests || staleGuests.length === 0) {
     console.log('checkout-sync: nothing to fix today')
+    console.log(JSON.stringify({ level:'info', cron: cronName, runId, event:'cron_done', ts: new Date().toISOString() }))
     return Response.json({ status: 'ok', fixed: 0, date: today })
   }
 
@@ -64,7 +65,10 @@ export async function GET(request) {
   const errors = []
 
   for (const guest of staleGuests) {
-    try {
+    const cronName = request.url.split('/api/cron/')[1]?.split('?')[0] || 'unknown'
+  const runId    = Date.now()
+  console.log(JSON.stringify({ level:'info', cron: cronName, runId, event:'cron_start', ts: new Date().toISOString() }))
+  try {
       // 1. Update stay_status
       await supabase
         .from('guests')
