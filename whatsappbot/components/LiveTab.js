@@ -704,16 +704,49 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
             ) : (
               <>
                 <div className="scrollable" style={{ padding:'16px', display:'flex', flexDirection:'column', gap:'8px' }}>
-                  {(selectedConv.messages || []).map((msg, idx) => {
-                    const isOut = msg.role === 'user'
+                  {(selectedConv.messages || []).map((msg, idx, arr) => {
+                    const isOut  = msg.role === 'user'
+                    const msgDate = msg.ts ? new Date(msg.ts) : null
+                    
+                    // Date divider logic
+                    const prevMsg     = arr[idx - 1]
+                    const prevDate    = prevMsg?.ts ? new Date(prevMsg.ts) : null
+                    const isNewDay    = !prevDate || msgDate?.toDateString() !== prevDate?.toDateString()
+                    
+                    const formatDividerDate = (d) => {
+                      if (!d) return ''
+                      const now   = new Date()
+                      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+                      const yesterday = new Date(today - 86400000)
+                      const msgDay    = new Date(d.getFullYear(), d.getMonth(), d.getDate())
+                      if (msgDay.getTime() === today.getTime())     return 'Today'
+                      if (msgDay.getTime() === yesterday.getTime()) return 'Yesterday'
+                      const diffDays = Math.floor((today - msgDay) / 86400000)
+                      if (diffDays < 7) return d.toLocaleDateString('en-GB', { weekday:'long' })
+                      if (d.getFullYear() === now.getFullYear())
+                        return d.toLocaleDateString('en-GB', { day:'numeric', month:'long' })
+                      return d.toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' })
+                    }
+
                     return (
-                      <div key={idx} style={{ display:'flex', gap:'8px', flexDirection:isOut?'row-reverse':'row', alignItems:'flex-end' }}>
-                        <div style={{ maxWidth:'70%', padding:'10px 13px', borderRadius:isOut?'14px 4px 14px 14px':'4px 14px 14px 14px', background:isOut?'var(--green-800)':'white', color:isOut?'white':'#111827', fontSize:'12px', lineHeight:'1.6', border:isOut?'none':'0.5px solid #E5E7EB' }}>
-                          {msg.content}
-                          {msg.sent_by && <div style={{ fontSize:'10px', opacity:0.6, marginTop:'3px' }}>— {msg.sent_by}</div>}
-                        </div>
-                        <div style={{ fontSize:'10px', color:'#9CA3AF', flexShrink:0, paddingBottom:'3px' }}>
-                          {new Date(msg.ts).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}
+                      <div key={idx}>
+                        {isNewDay && msgDate && (
+                          <div style={{ display:'flex', alignItems:'center', gap:'10px', margin:'8px 0 4px' }}>
+                            <div style={{ flex:1, height:'0.5px', background:'#E5E7EB' }}/>
+                            <div style={{ fontSize:'11px', fontWeight:'600', color:'#9CA3AF', whiteSpace:'nowrap', padding:'2px 10px', background:'#F9FAFB', borderRadius:'10px', border:'0.5px solid #E5E7EB' }}>
+                              {formatDividerDate(msgDate)}
+                            </div>
+                            <div style={{ flex:1, height:'0.5px', background:'#E5E7EB' }}/>
+                          </div>
+                        )}
+                        <div style={{ display:'flex', gap:'8px', flexDirection:isOut?'row-reverse':'row', alignItems:'flex-end' }}>
+                          <div style={{ maxWidth:'70%', padding:'10px 13px', borderRadius:isOut?'14px 4px 14px 14px':'4px 14px 14px 14px', background:isOut?'var(--green-800)':'white', color:isOut?'white':'#111827', fontSize:'12px', lineHeight:'1.6', border:isOut?'none':'0.5px solid #E5E7EB' }}>
+                            {msg.content}
+                            {msg.sent_by && <div style={{ fontSize:'10px', opacity:0.6, marginTop:'3px' }}>— {msg.sent_by}</div>}
+                          </div>
+                          <div style={{ fontSize:'10px', color:'#9CA3AF', flexShrink:0, paddingBottom:'3px' }}>
+                            {msgDate ? msgDate.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}) : ''}
+                          </div>
                         </div>
                       </div>
                     )

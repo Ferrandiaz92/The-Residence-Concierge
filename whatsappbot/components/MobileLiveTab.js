@@ -305,24 +305,53 @@ function ChatThread({ conv, session, onBack, onReload, orders = [] }) {
             No messages yet
           </div>
         )}
-        {messages.map((msg, i) => {
-          const isOut = msg.role === 'user'
+        {messages.map((msg, i, arr) => {
+          const isOut   = msg.role === 'user'
+          const msgDate = msg.ts ? new Date(msg.ts) : null
+          const prevDate = arr[i-1]?.ts ? new Date(arr[i-1].ts) : null
+          const isNewDay = !prevDate || msgDate?.toDateString() !== prevDate?.toDateString()
+
+          const fmtDivider = (d) => {
+            if (!d) return ''
+            const now   = new Date()
+            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+            const yest  = new Date(today - 86400000)
+            const day   = new Date(d.getFullYear(), d.getMonth(), d.getDate())
+            if (day.getTime() === today.getTime()) return 'Today'
+            if (day.getTime() === yest.getTime())  return 'Yesterday'
+            const diff = Math.floor((today - day) / 86400000)
+            if (diff < 7) return d.toLocaleDateString('en-GB', { weekday:'long' })
+            if (d.getFullYear() === now.getFullYear()) return d.toLocaleDateString('en-GB', { day:'numeric', month:'long' })
+            return d.toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' })
+          }
+
           return (
-            <div key={i} style={{ display:'flex', flexDirection: isOut ? 'row-reverse' : 'row', gap:'8px', alignItems:'flex-end' }}>
-              <div style={{
-                maxWidth:'78%', padding:'10px 14px',
-                borderRadius: isOut ? '14px 4px 14px 14px' : '4px 14px 14px 14px',
-                background: isOut ? '#1C3D2E' : 'white',
-                color: isOut ? 'white' : '#111827',
-                fontSize:'13px', lineHeight:'1.55',
-                border: isOut ? 'none' : '1px solid #E5E7EB',
-                wordBreak: 'break-word',
-              }}>
-                {msg.content}
-                {msg.sent_by && <div style={{ fontSize:'10px', opacity:0.5, marginTop:'4px' }}>— {msg.sent_by}</div>}
-              </div>
-              <div style={{ fontSize:'10px', color:'#9CA3AF', paddingBottom:'3px', flexShrink:0 }}>
-                {new Date(msg.ts).toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' })}
+            <div key={i}>
+              {isNewDay && msgDate && (
+                <div style={{ display:'flex', alignItems:'center', gap:'8px', margin:'8px 0 4px' }}>
+                  <div style={{ flex:1, height:'0.5px', background:'#E5E7EB' }}/>
+                  <div style={{ fontSize:'11px', fontWeight:'600', color:'#9CA3AF', whiteSpace:'nowrap', padding:'2px 10px', background:'#F3F4F6', borderRadius:'10px', border:'0.5px solid #E5E7EB' }}>
+                    {fmtDivider(msgDate)}
+                  </div>
+                  <div style={{ flex:1, height:'0.5px', background:'#E5E7EB' }}/>
+                </div>
+              )}
+              <div style={{ display:'flex', flexDirection: isOut ? 'row-reverse' : 'row', gap:'8px', alignItems:'flex-end' }}>
+                <div style={{
+                  maxWidth:'78%', padding:'10px 14px',
+                  borderRadius: isOut ? '14px 4px 14px 14px' : '4px 14px 14px 14px',
+                  background: isOut ? '#1C3D2E' : 'white',
+                  color: isOut ? 'white' : '#111827',
+                  fontSize:'13px', lineHeight:'1.55',
+                  border: isOut ? 'none' : '1px solid #E5E7EB',
+                  wordBreak: 'break-word',
+                }}>
+                  {msg.content}
+                  {msg.sent_by && <div style={{ fontSize:'10px', opacity:0.5, marginTop:'4px' }}>— {msg.sent_by}</div>}
+                </div>
+                <div style={{ fontSize:'10px', color:'#9CA3AF', paddingBottom:'3px', flexShrink:0 }}>
+                  {msgDate ? msgDate.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' }) : ''}
+                </div>
               </div>
             </div>
           )
