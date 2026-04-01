@@ -21,7 +21,10 @@ export default function AnalyticsTab({ hotelId }) {
   const [stats, setStats]         = useState(null)
   const [loading, setLoading]     = useState(true)
   const [exporting, setExporting] = useState(false)
-  const [activeSection, setActiveSection] = useState('overview')
+  const [activeSection, setActiveSection] = useState('qa')
+  const [gaps, setGaps]                   = useState([])
+  const [gapsLoading, setGapsLoading]     = useState(false)
+  const [gapResolved, setGapResolved]     = useState({})
   const [exportMonth, setExportMonth] = useState(() => {
     const now = new Date()
     return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`
@@ -34,6 +37,15 @@ export default function AnalyticsTab({ hotelId }) {
       .then(d => { setStats(d); setLoading(false) })
       .catch(() => setLoading(false))
   }, [hotelId])
+
+  useEffect(() => {
+    if (!hotelId || activeSection !== 'gaps') return
+    setGapsLoading(true)
+    fetch(`/api/knowledge-gaps?hotelId=${hotelId}`)
+      .then(r => r.json())
+      .then(d => { setGaps(d.gaps || []); setGapsLoading(false) })
+      .catch(() => setGapsLoading(false))
+  }, [hotelId, activeSection])
 
   async function handleExport() {
     setExporting(true)
@@ -162,11 +174,12 @@ export default function AnalyticsTab({ hotelId }) {
   return (
     <div style={{ height:'100%', overflow:'hidden', display:'flex', flexDirection:'column', fontFamily:"'DM Sans',sans-serif" }}>
 
-      {/* Section tabs — Bot QA first, then Overview */}
+      {/* Section tabs */}
       <div style={{ display:'flex', background:'white', borderBottom:'1px solid #E5E7EB', flexShrink:0 }}>
         {[
-          { key:'qa',       label:'Bot QA',  badge: true  },
-          { key:'overview', label:'Overview', badge: false },
+          { key:'qa',       label:'Bot QA'         },
+          { key:'gaps',     label:'Knowledge Gaps'  },
+          { key:'overview', label:'Overview'        },
         ].map(sec => (
           <button key={sec.key} onClick={() => setActiveSection(sec.key)}
             style={{ padding:'12px 24px', fontSize:'14px', fontWeight:activeSection===sec.key?'700':'500', color:activeSection===sec.key?GREEN:'#9CA3AF', background:'none', border:'none', borderBottom:activeSection===sec.key?`3px solid ${GREEN}`:'3px solid transparent', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", display:'flex', alignItems:'center', gap:'7px' }}>
@@ -176,6 +189,75 @@ export default function AnalyticsTab({ hotelId }) {
       </div>
 
       {activeSection === 'qa'       && <BotQA hotelId={hotelId} />}
+
+      {activeSection === 'gaps' && (
+        <div className="scrollable" style={{ padding:'18px', background:'#F9FAFB' }}>
+          <div style={{ marginBottom:'16px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+            <div>
+              <div style={{ fontSize:'15px', fontWeight:'700', color:'#111827' }}>Knowledge Gaps</div>
+              <div style={{ fontSize:'12px', color:'#6B7280', marginTop:'2px' }}>
+                Questions the bot couldn't answer confidently — add these to your knowledge base
+              </div>
+            </div>
+            <button onClick={() => {
+              setGapsLoading(true)
+              fetch(`/api/knowledge-gaps?hotelId=${hotelId}`)
+                .then(r => r.json())
+                .then(d => { setGaps(d.gaps || []); setGapsLoading(false) })
+                .catch(() => setGapsLoading(false))
+            }} style={{ fontSize:'12px', fontWeight:'600', padding:'6px 14px', borderRadius:'8px', border:'1px solid #D1D5DB', background:'white', color:'#374151', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+              ↻ Refresh
+            </button>
+          </div>
+
+          {gapsLoading ? (
+            <div style={{ textAlign:'center', padding:'40px', color:'#9CA3AF', fontSize:'14px' }}>Loading...</div>
+          ) : gaps.length === 0 ? (
+            <div style={{ textAlign:'center', padding:'40px', color:'#9CA3AF', fontSize:'14px' }}>
+              ✅ No knowledge gaps detected yet — the bot is answering everything confidently!
+            </div>
+          ) : (
+            <div style={{ display:'flex', flexDirection:'column', gap:'8px' }}>
+              {gaps.map(gap => (
+                <div key={gap.id} style={{ background:'white', border:`1px solid ${gapResolved[gap.id] ? '#86EFAC' : '#E5E7EB'}`, borderRadius:'12px', padding:'14px 16px', opacity: gapResolved[gap.id] ? 0.6 : 1 }}>
+                  <div style={{ display:'flex', alignItems:'flex-start', gap:'12px' }}>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:'13px', fontWeight:'600', color:'#111827', marginBottom:'4px', lineHeight:'1.4' }}>
+                        "{gap.question_text}"
+                      </div>
+                      <div style={{ display:'flex', gap:'8px', alignItems:'center', flexWrap:'wrap' }}>
+                        <span style={{ fontSize:'11px', fontWeight:'700', padding:'2px 8px', borderRadius:'20px',
+                          background: gap.times_seen >= 3 ? '#FEE2E2' : '#FEF3C7',
+                          color:      gap.times_seen >= 3 ? '#DC2626'  : '#78350F' }}>
+                          Asked {gap.times_seen}×
+                        </span>
+                        <span style={{ fontSize:'11px', padding:'2px 8px', borderRadius:'20px', background:'#F3F4F6', color:'#6B7280' }}>
+                          {gap.detection_source === 'escalation' ? '📞 escalated' : '💬 hedging'}
+                        </span>
+                        <span style={{ fontSize:'11px', color:'#9CA3AF' }}>
+                          {gap.language?.toUpperCase()} · Last: {new Date(gap.last_seen_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}
+                        </span>
+                      </div>
+                    </div>
+                    <div style={{ display:'flex', gap:'6px', flexShrink:0 }}>
+                      <button onClick={() => window.open('/dashboard?tab=knowledge', '_blank')}
+                        style={{ fontSize:'11px', fontWeight:'600', padding:'5px 10px', borderRadius:'7px', border:'1px solid #93C5FD', background:'#DBEAFE', color:'#1E3A5F', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", whiteSpace:'nowrap' }}>
+                        + Add to KB
+                      </button>
+                      <button onClick={async () => {
+                        await fetch('/api/knowledge-gaps', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id: gap.id, resolved: true }) })
+                        setGapResolved(r => ({...r, [gap.id]: true}))
+                      }} style={{ fontSize:'11px', fontWeight:'600', padding:'5px 10px', borderRadius:'7px', border:'1px solid #86EFAC', background:'#DCFCE7', color:'#14532D', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                        ✓ Resolved
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {activeSection === 'overview' && (
         <div className="scrollable" style={{ padding:'18px', background:'#F9FAFB' }}>
