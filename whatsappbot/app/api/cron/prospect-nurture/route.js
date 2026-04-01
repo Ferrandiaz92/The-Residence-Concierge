@@ -14,6 +14,9 @@ export async function GET(request) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  const cronName = request.url.split('/api/cron/')[1]?.split('?')[0] || 'unknown'
+  const runId    = Date.now()
+  console.log(JSON.stringify({ level:'info', cron: cronName, runId, event:'cron_start', ts: new Date().toISOString() }))
   try {
     const supabase = createClient(
       process.env.SUPABASE_URL,
@@ -36,6 +39,7 @@ export async function GET(request) {
       }
     }
 
+    console.log(JSON.stringify({ level:'info', cron: cronName, runId, event:'cron_done', ts: new Date().toISOString() }))
     return Response.json({ status: 'ok', summary })
   } catch (err) {
     await log.error('Prospect nurture cron failed', err, {})
