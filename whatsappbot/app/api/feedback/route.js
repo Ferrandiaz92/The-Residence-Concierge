@@ -1,5 +1,6 @@
 // app/api/feedback/route.js
 import { createClient } from '@supabase/supabase-js'
+import { requireSession, requireHotel, serverError } from '../../../lib/route-helpers.js'
 import { cookies } from 'next/headers'
 
 function getSession() {
@@ -15,12 +16,12 @@ function getSupabase() {
 }
 
 export async function GET(request) {
-  const session = getSession()
-  if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+  const { session, error: authErr } = requireSession(request)
+  if (authErr) return authErr
+  const { hotelId, error: hotelErr } = requireHotel(request, session)
+  if (hotelErr) return hotelErr
   try {
     const { searchParams } = new URL(request.url)
-    const hotelId = searchParams.get('hotelId')
-    if (!hotelId) return Response.json({ error: 'hotelId required' }, { status: 400 })
 
     const supabase = getSupabase()
 
