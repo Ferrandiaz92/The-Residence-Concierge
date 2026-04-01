@@ -9,6 +9,10 @@ function getSupabase() {
   return createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY, { auth: { persistSession: false } })
 }
 
+function getSession() {
+  try { const c = cookies().get('session'); return c ? JSON.parse(c.value) : null } catch { return null }
+}
+
 export async function GET(request) {
   const session = getSession()
   if (!session) {
