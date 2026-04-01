@@ -47,6 +47,8 @@ export default function BotQA({ hotelId }) {
   const [flagNote, setFlagNote]           = useState('')
   const [saving, setSaving]               = useState(false)
   const [correctAnswer, setCorrectAnswer]  = useState('')
+  const [translating, setTranslating]      = useState({})   // { convId: true/false }
+  const [translations, setTranslations]    = useState({})   // { convId: [{role,content,ts}] }
   const [month, setMonth]                 = useState(() => {
     const now = new Date()
     return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`
@@ -78,6 +80,57 @@ export default function BotQA({ hotelId }) {
       setFlagging(null); setFlagNote(''); setCorrectAnswer('')
       loadData()
     } finally { setSaving(false) }
+  }
+
+  async function translateConversation(conv) {
+    if (translations[conv.id]) {
+      // Toggle off if already translated
+      setTranslations(t => { const n = {...t}; delete n[conv.id]; return n })
+      return
+    }
+    setTranslating(t => ({ ...t, [conv.id]: true }))
+    try {
+      const msgs = conv.messages || []
+      const lang = conv.guests?.language || 'en'
+      if (lang === 'en') {
+        setTranslations(t => ({ ...t, [conv.id]: msgs }))
+        return
+      }
+      // Build a compact transcript for Claude to translate
+      const transcript = msgs.map((m, i) =>
+        `[${i}] ${m.role === 'assistant' ? 'BOT' : 'GUEST'}: ${m.content}`
+      ).join('\n\n')
+
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 4000,
+          messages: [{
+            role: 'user',
+            content: `Translate the following hotel conversation from ${lang} to English. Keep the [N] BOT/GUEST prefixes exactly as they are. Only translate the message content after the colon. Return ONLY the translated transcript, nothing else.\n\n${transcript}`
+          }]
+        })
+      })
+      const data = await res.json()
+      const translated = data.content?.[0]?.text || ''
+
+      // Parse translated lines back into message objects
+      const lines = translated.split('\n\n').filter(Boolean)
+      const translatedMsgs = msgs.map((orig, i) => {
+        const line = lines.find(l => l.startsWith(`[${i}]`))
+        if (!line) return orig
+        const colonIdx = line.indexOf(':')
+        const translatedContent = colonIdx > -1 ? line.slice(colonIdx + 1).trim() : orig.content
+        return { ...orig, content: translatedContent }
+      })
+      setTranslations(t => ({ ...t, [conv.id]: translatedMsgs }))
+    } catch(e) {
+      console.error('Translation failed:', e)
+    } finally {
+      setTranslating(t => { const n = {...t}; delete n[conv.id]; return n })
+    }
   }
 
   function isMsgFlagged(conv, idx) {
@@ -252,8 +305,26 @@ export default function BotQA({ hotelId }) {
 
                 {/* Thread */}
                 {isOpen && (
-                  <div style={{ borderTop:'1px solid #F3F4F6', padding:'16px 18px', background:'#F9FAFB', display:'flex', flexDirection:'column', gap:'8px' }}>
-                    {msgs.map((msg, idx) => {
+                  <div style={{ borderTop:'1px solid #F3F4F6', background:'#F9FAFB' }}>
+
+                    {/* Thread toolbar */}
+                    <div style={{ padding:'8px 18px', display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:'0.5px solid #E5E7EB' }}>
+                      <span style={{ fontSize:'12px', color:'#9CA3AF' }}>{msgs.length} messages</span>
+                      <div style={{ display:'flex', gap:'8px', alignItems:'center' }}>
+                        {(conv.guests?.language && conv.guests.language !== 'en') && (
+                          <button
+                            onClick={() => translateConversation(conv)}
+                            disabled={!!translating[conv.id]}
+                            style={{ fontSize:'12px', fontWeight:'600', padding:'4px 12px', borderRadius:'7px', border:'0.5px solid #93C5FD', background: translations[conv.id] ? '#DBEAFE' : 'white', color:'#1E3A5F', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", display:'flex', alignItems:'center', gap:'5px' }}>
+                            {translating[conv.id] ? '⏳ Translating...' : translations[conv.id] ? '🌐 EN · Hide' : '🌐 Translate to English'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Scrollable message list */}
+                    <div style={{ padding:'16px 18px', display:'flex', flexDirection:'column', gap:'8px', maxHeight:'520px', overflowY:'auto' }}>
+                    {(translations[conv.id] || msgs).map((msg, idx) => {
                       const isBot    = msg.role === 'assistant'
                       const isFlagged = isMsgFlagged(conv, idx)
                       const msgFlag  = getMsgFlag(conv, idx)
@@ -290,6 +361,7 @@ export default function BotQA({ hotelId }) {
                         </div>
                       )
                     })}
+                    </div>
                   </div>
                 )}
               </div>
