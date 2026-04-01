@@ -3,6 +3,7 @@
 // Returns HTML that the browser can print/save as PDF
 
 import { createClient } from '@supabase/supabase-js'
+import { requireSession, requireHotel, serverError } from '../../../lib/route-helpers.js'
 import { cookies } from 'next/headers'
 
 function getSupabase() {
@@ -14,15 +15,12 @@ function getSession() {
 }
 
 export async function GET(request) {
-  const session = getSession()
-  if (!session) {
-    const { searchParams } = new URL(request.url)
-    console.warn(JSON.stringify({ level:'warn', event:'auth_failure', route: new URL(request.url).pathname, hotelId: searchParams.get('hotelId') || null, ts: new Date().toISOString() }))
-    return Response.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const { session, error: authErr } = requireSession(request)
+  if (authErr) return authErr
+  const { hotelId, error: hotelErr } = requireHotel(request, session)
+  if (hotelErr) return hotelErr
   try {
     const { searchParams } = new URL(request.url)
-    const hotelId = searchParams.get('hotelId')
     const month   = searchParams.get('month') // e.g. '2026-03'
 
     if (!hotelId || !month) {
