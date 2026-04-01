@@ -2,6 +2,7 @@
 // Staff send a WhatsApp message to a guest directly from the dashboard
 
 import { createClient } from '@supabase/supabase-js'
+import { checkCsrf } from '../../../lib/csrf.js'
 import { cookies } from 'next/headers'
 import twilio from 'twilio'
 
@@ -17,6 +18,8 @@ function getSession() {
 }
 
 export async function POST(request) {
+  const csrf = checkCsrf(request)
+  if (csrf) return csrf
   try {
     const session = getSession()
     if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 })
