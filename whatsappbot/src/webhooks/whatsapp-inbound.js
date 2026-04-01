@@ -168,32 +168,34 @@ export async function handleInboundWhatsApp(rawBody) {
 
   const isRestricted = abuseCheck.action === 'restrict'
 
-  // 4. Language detection
+  // 4. Language detection — always update when confident
   const detectedLang = detectLanguage(message)
   if (detectedLang !== guest.language) {
-    const NON_LATIN = ['ru','he','ar','zh','el','uk']
-    if (NON_LATIN.includes(detectedLang)) {
+    const NON_LATIN  = ['ru','he','ar','zh','el','uk']
+    const wordCount  = message.trim().split(/\s+/).length
+    const isNonLatin = NON_LATIN.includes(detectedLang)
+
+    // Non-Latin scripts: always update immediately — single character is definitive
+    if (isNonLatin) {
       await updateGuest(guest.id, { language: detectedLang })
       guest.language = detectedLang
+
+    // Latin language switching from null/en: update after 3+ words
     } else if (!guest.language || guest.language === 'en') {
-      if (message.trim().split(/\s+/).length >= 3) {
+      if (wordCount >= 3) {
         await updateGuest(guest.id, { language: detectedLang })
         guest.language = detectedLang
       }
+
+    // Latin language switching FROM another Latin language (e.g. ES → EN, or EN → ES):
+    // Update after just 1 message with 4+ words — don't require 2 consecutive messages
+    // This fixes the case where a guest starts in English then switches to Spanish
     } else {
-      try {
-        const { data: lastConvRow } = await supabase
-          .from('conversations').select('id').eq('guest_id', guest.id)
-          .order('created_at', { ascending: false }).limit(1).single()
-        if (lastConvRow) {
-          const { data: lastMsgs } = await supabase
-            .from('messages').select('content').eq('conversation_id', lastConvRow.id)
-            .eq('role', 'user').order('created_at', { ascending: false }).limit(2)
-          const allNewLang = (lastMsgs||[]).length >= 2 &&
-            lastMsgs.every(m => detectLanguage(m.content||'') === detectedLang)
-          if (allNewLang) { await updateGuest(guest.id, { language: detectedLang }); guest.language = detectedLang }
-        }
-      } catch {}
+      if (wordCount >= 4) {
+        await updateGuest(guest.id, { language: detectedLang })
+        guest.language = detectedLang
+        log.info('Guest language updated', { ...guestCtx(guest), from: guest.language, to: detectedLang })
+      }
     }
   }
 
