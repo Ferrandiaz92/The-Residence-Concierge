@@ -93,7 +93,12 @@ export default function BotQA({ hotelId }) {
     try {
       const msgs = conv.messages || []
       const lang = conv.guests?.language || 'en'
-      if (lang === 'en') {
+      const sampleText = msgs.filter(m => m.role === 'user').slice(-3).map(m => m.content || '').join(' ')
+      const sampleHasNonEnglish = /[àáâãäåæçèéêëìíîïðñòóôõöùúûüýþÿЀ-ӿ֐-׿؀-ۿ一-鿿Ͱ-Ͽ]/i.test(sampleText) ||
+        /(hola|gracias|buenos|bonjour|merci|bitte|danke|ciao|grazie|olá|obrigado)/i.test(sampleText)
+      // If stored as English but button was shown (content detection triggered),
+      // still attempt translation — Claude will return as-is if already English
+      if (lang === 'en' && !sampleHasNonEnglish) {
         setTranslations(t => ({ ...t, [conv.id]: msgs }))
         return
       }
@@ -102,20 +107,15 @@ export default function BotQA({ hotelId }) {
         `[${i}] ${m.role === 'assistant' ? 'BOT' : 'GUEST'}: ${m.content}`
       ).join('\n\n')
 
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
+      // Route through server API — browser can't call Anthropic directly (CORS + key exposure)
+      const res = await fetch('/api/translate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 4000,
-          messages: [{
-            role: 'user',
-            content: `Translate the following hotel conversation from ${lang} to English. Keep the [N] BOT/GUEST prefixes exactly as they are. Only translate the message content after the colon. Return ONLY the translated transcript, nothing else.\n\n${transcript}`
-          }]
-        })
+        body: JSON.stringify({ transcript, lang })
       })
+      if (!res.ok) throw new Error(`Translation API error: ${res.status}`)
       const data = await res.json()
-      const translated = data.content?.[0]?.text || ''
+      const translated = data.translated || ''
 
       // Parse translated lines back into message objects
       const lines = translated.split('\n\n').filter(Boolean)
