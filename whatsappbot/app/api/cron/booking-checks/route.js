@@ -45,6 +45,7 @@ export async function GET(request) {
     .limit(20)
 
   if (!checks || checks.length === 0) {
+    console.log(JSON.stringify({ level:'info', cron: cronName, runId, event:'cron_done', ts: new Date().toISOString() }))
     return Response.json({ status: 'ok', sent: 0 })
   }
 
@@ -66,7 +67,10 @@ export async function GET(request) {
       continue
     }
 
-    try {
+    const cronName = request.url.split('/api/cron/')[1]?.split('?')[0] || 'unknown'
+  const runId    = Date.now()
+  console.log(JSON.stringify({ level:'info', cron: cronName, runId, event:'cron_start', ts: new Date().toISOString() }))
+  try {
       const msg     = STILL_CONFIRMING[check.guest_lang] || STILL_CONFIRMING.en
       const toPhone = check.guest_phone.startsWith('whatsapp:')
         ? check.guest_phone
