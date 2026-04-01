@@ -327,8 +327,16 @@ export default function BotQA({ hotelId }) {
                           {expandedConv === conv.id ? '⊡ Collapse' : '⊞ Expand'}
                         </button>
                         {(() => {
-                          const lang = conv.guests?.language
-                          const showTranslate = !lang || lang !== 'en'
+                          const storedLang = conv.guests?.language
+                          // Detect language from actual message content — more reliable than stored field
+                          // which may be stale (e.g. guest started in EN then switched to ES)
+                          const guestMsgs = msgs.filter(m => m.role === 'user').slice(-3)
+                          const sampleText = guestMsgs.map(m => m.content || '').join(' ')
+                          // Check for non-English markers: accented chars, non-Latin scripts, or common words
+                          const hasNonEnglish = /[àáâãäåæçèéêëìíîïðñòóôõöùúûüýþÿЀ-ӿ֐-׿؀-ۿ一-鿿Ͱ-Ͽ]/i.test(sampleText)
+                          const hasSpanish = /(hola|gracias|buenos|días|noches|por favor|cómo|cuándo|habitación|sí|también|quiero|necesito|puedo)/i.test(sampleText)
+                          const hasOtherLatin = /(bonjour|merci|bitte|danke|grazie|obrigado|hej|tack|proszę|dziękuję)/i.test(sampleText)
+                          const showTranslate = !storedLang || storedLang !== 'en' || hasNonEnglish || hasSpanish || hasOtherLatin
                           if (!showTranslate) return null
                           return (
                             <button
