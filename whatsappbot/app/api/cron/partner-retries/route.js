@@ -21,9 +21,13 @@ export async function GET(request) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  const cronName = request.url.split('/api/cron/')[1]?.split('?')[0] || 'unknown'
+  const runId    = Date.now()
+  console.log(JSON.stringify({ level:'info', cron: cronName, runId, event:'cron_start', ts: new Date().toISOString() }))
   try {
     const results = await processPendingRetries()
     log.info('Partner retry cron complete', results)
+    console.log(JSON.stringify({ level:'info', cron: cronName, runId, event:'cron_done', ts: new Date().toISOString() }))
     return Response.json({ status: 'ok', ...results })
   } catch (err) {
     await log.error('Partner retry cron failed', err, {})
