@@ -1,5 +1,11 @@
 // app/api/visitors/route.js (updated — includes prospects)
 import { createClient } from '@supabase/supabase-js'
+import { checkCsrf } from '../../../lib/csrf.js'
+import { cookies } from 'next/headers'
+
+function getSession() {
+  try { const c = cookies().get('session'); return c ? JSON.parse(c.value) : null } catch { return null }
+}
 
 function getSupabase() {
   return createClient(
@@ -10,6 +16,8 @@ function getSupabase() {
 }
 
 export async function GET(request) {
+  const session = getSession()
+  if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 })
   try {
     const { searchParams } = new URL(request.url)
     const hotelId = searchParams.get('hotelId')
@@ -147,6 +155,8 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
+  const csrf = checkCsrf(request)
+  if (csrf) return csrf
   try {
     const { hotelId, name, surname, phone, language, guestType, preferredServices, notes } = await request.json()
     if (!hotelId || !name || !phone) return Response.json({ error: 'hotelId, name and phone required' }, { status: 400 })
@@ -178,6 +188,8 @@ export async function POST(request) {
 }
 
 export async function PATCH(request) {
+  const csrf = checkCsrf(request)
+  if (csrf) return csrf
   try {
     const { id, logVisit, serviceType, serviceName, hotelId, ...updates } = await request.json()
     if (!id) return Response.json({ error: 'id required' }, { status: 400 })
