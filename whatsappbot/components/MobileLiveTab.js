@@ -101,7 +101,17 @@ function BackBtn({ onBack, label }) {
 function GuestChip({ conv }) {
   if (!conv) return null
   const g    = conv.guests || {}
-  const room = g.room || g.guest_room || '?'
+  const room = g.room || g.guest_room
+  const guestTypeLabelMap = {
+    stay:        'Stay guest',
+    day_visitor: 'Day Visitor',
+    event:       'Event Guest',
+    prospect:    'Prospect',
+    member:      'Member',
+  }
+  const subLabel = room
+    ? `Room ${room}`
+    : guestTypeLabelMap[g.guest_type] || g.stay_status === 'prospect' ? 'Visitor' : 'No room assigned'
   return (
     <div style={{ display:'flex', alignItems:'center', gap:'8px', flex:1, minWidth:0 }}>
       <div style={{ width:'30px', height:'30px', borderRadius:'50%', background:'#1C3D2E', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'11px', color:'#C9A84C', fontWeight:'700', flexShrink:0 }}>
@@ -111,7 +121,7 @@ function GuestChip({ conv }) {
         <div style={{ fontSize:'13px', fontWeight:'600', color:'#111827', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
           {g.name||'Guest'} {g.surname||''}
         </div>
-        <div style={{ fontSize:'11px', color:'#9CA3AF' }}>Room {room}</div>
+        <div style={{ fontSize:'11px', color:'#9CA3AF' }}>{subLabel}</div>
       </div>
       {conv.status === 'escalated' && (
         <span style={{ fontSize:'9px', fontWeight:'700', padding:'2px 6px', borderRadius:'4px', background:'#FEE2E2', color:'#DC2626', flexShrink:0, marginLeft:'4px' }}>Needs reply</span>

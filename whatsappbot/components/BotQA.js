@@ -49,6 +49,7 @@ export default function BotQA({ hotelId }) {
   const [correctAnswer, setCorrectAnswer]  = useState('')
   const [translating, setTranslating]      = useState({})   // { convId: true/false }
   const [translations, setTranslations]    = useState({})   // { convId: [{role,content,ts}] }
+  const [expandedConv, setExpandedConv]    = useState(null) // convId of full-screen expanded conv
   const [month, setMonth]                 = useState(() => {
     const now = new Date()
     return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`
@@ -153,8 +154,8 @@ export default function BotQA({ hotelId }) {
   return (
     <div style={{ fontFamily:"'DM Sans',sans-serif" }}>
 
-      {/* Stats row */}
-      {stats && (
+      {/* Stats row — hidden when a conv is expanded full-screen */}
+      {stats && !expandedConv && (
         <div style={{ display:'grid', gridTemplateColumns:'repeat(6,1fr)', gap:'10px', marginBottom:'18px' }}>
           {[
             { label:'Total conversations', value: s.totalConvs || 0 },
@@ -173,7 +174,7 @@ export default function BotQA({ hotelId }) {
       )}
 
       {/* Flag breakdown */}
-      {s.flagsByType && Object.keys(s.flagsByType).length > 0 && (
+      {!expandedConv && s.flagsByType && Object.keys(s.flagsByType).length > 0 && (
         <div style={{ display:'flex', gap:'8px', flexWrap:'wrap', marginBottom:'16px' }}>
           {Object.entries(s.flagsByType).map(([type, count]) => {
             const ft = FLAG_TYPES.find(f => f.key === type) || FLAG_TYPES[4]
@@ -278,11 +279,21 @@ export default function BotQA({ hotelId }) {
                   onMouseLeave={e=>e.currentTarget.style.background='white'}
                 >
                   <div style={{ width:'40px', height:'40px', borderRadius:'50%', background:'#F3F4F6', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'14px', color:'#6B7280', fontWeight:'700', flexShrink:0 }}>
-                    {guest.room || '?'}
+                    {guest.room || (guest.name?.[0] || '?').toUpperCase()}
                   </div>
                   <div style={{ flex:1 }}>
                     <div style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'4px' }}>
-                      <div style={{ fontSize:'14px', fontWeight:'700', color:'#111827' }}>Room {guest.room || '?'}</div>
+                      <div style={{ fontSize:'14px', fontWeight:'700', color:'#111827' }}>
+                        {guest.room
+                          ? `Room ${guest.room}`
+                          : guest.name
+                            ? guest.name + (guest.surname ? ' ' + guest.surname : '')
+                            : guest.guest_type === 'prospect' ? 'Prospect'
+                            : guest.guest_type === 'day_visitor' ? 'Day Visitor'
+                            : guest.guest_type === 'event' ? 'Event Guest'
+                            : 'Visitor'
+                        }
+                      </div>
                       <span style={{ fontSize:'11px', fontWeight:'700', padding:'2px 8px', borderRadius:'5px', background:lc.bg, color:lc.color }}>
                         {(guest.language||'EN').toUpperCase()}
                       </span>
@@ -311,19 +322,28 @@ export default function BotQA({ hotelId }) {
                     <div style={{ padding:'8px 18px', display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:'0.5px solid #E5E7EB' }}>
                       <span style={{ fontSize:'12px', color:'#9CA3AF' }}>{msgs.length} messages</span>
                       <div style={{ display:'flex', gap:'8px', alignItems:'center' }}>
-                        {(conv.guests?.language && conv.guests.language !== 'en') && (
-                          <button
-                            onClick={() => translateConversation(conv)}
-                            disabled={!!translating[conv.id]}
-                            style={{ fontSize:'12px', fontWeight:'600', padding:'4px 12px', borderRadius:'7px', border:'0.5px solid #93C5FD', background: translations[conv.id] ? '#DBEAFE' : 'white', color:'#1E3A5F', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", display:'flex', alignItems:'center', gap:'5px' }}>
-                            {translating[conv.id] ? '⏳ Translating...' : translations[conv.id] ? '🌐 EN · Hide' : '🌐 Translate to English'}
-                          </button>
-                        )}
+                        <button onClick={() => setExpandedConv(expandedConv === conv.id ? null : conv.id)}
+                          style={{ fontSize:'12px', fontWeight:'600', padding:'4px 10px', borderRadius:'7px', border:'0.5px solid #D1D5DB', background:'white', color:'#374151', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                          {expandedConv === conv.id ? '⊡ Collapse' : '⊞ Expand'}
+                        </button>
+                        {(() => {
+                          const lang = conv.guests?.language
+                          const showTranslate = !lang || lang !== 'en'
+                          if (!showTranslate) return null
+                          return (
+                            <button
+                              onClick={() => translateConversation(conv)}
+                              disabled={!!translating[conv.id]}
+                              style={{ fontSize:'12px', fontWeight:'600', padding:'4px 12px', borderRadius:'7px', border:'0.5px solid #93C5FD', background: translations[conv.id] ? '#DBEAFE' : 'white', color:'#1E3A5F', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", display:'flex', alignItems:'center', gap:'5px' }}>
+                              {translating[conv.id] ? '⏳ Translating...' : translations[conv.id] ? '🌐 EN · Hide' : '🌐 Translate to English'}
+                            </button>
+                          )
+                        })()}
                       </div>
                     </div>
 
                     {/* Scrollable message list */}
-                    <div style={{ padding:'16px 18px', display:'flex', flexDirection:'column', gap:'8px', maxHeight:'520px', overflowY:'auto' }}>
+                    <div style={{ padding:'16px 18px', display:'flex', flexDirection:'column', gap:'8px', maxHeight: expandedConv === conv.id ? 'calc(100vh - 180px)' : '420px', overflowY:'auto' }}>
                     {(translations[conv.id] || msgs).map((msg, idx) => {
                       const isBot    = msg.role === 'assistant'
                       const isFlagged = isMsgFlagged(conv, idx)
