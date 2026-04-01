@@ -373,6 +373,13 @@ export async function handleInboundWhatsApp(rawBody) {
     '[CANCEL_ROOM]\n\n' +
     'Place the tag at the END of your response. Only use ONE cancellation tag per response.'
 
+  // 8b. Quick ack — send ⏳ immediately for requests needing heavy processing
+  // Guest sees response within 1-2s instead of waiting 5-8s in silence
+  const needsAck = /\b(book|taxi|transfer|airport|restaurant|table|tour|cruise|spa|activity|flight|pay|order|room|reserve|arrange|help me|i need|i want)\b/i.test(message)
+  if (needsAck) {
+    sendQuickAck(from, guest.language).catch(() => {})  // fire-and-forget
+  }
+
   // 9. Save user message + notification
   await appendMessage(conv.id, 'user', message)
   await createNotification(hotel.id, {
