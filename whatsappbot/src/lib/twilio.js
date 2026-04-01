@@ -12,6 +12,22 @@ const FROM = process.env.TWILIO_WHATSAPP_NUMBER // e.g. 'whatsapp:+35799000001'
 
 // ── SEND MESSAGE ──────────────────────────────────────────────────────────────
 
+// ── QUICK ACK — sent immediately before heavy processing ─────
+// Gives the guest instant feedback that the bot received their message.
+// Use for requests that will take 3+ seconds (bookings, flights, payments).
+export async function sendQuickAck(to, lang = 'en') {
+  const acks = {
+    en: '⏳', ru: '⏳', he: '⏳', es: '⏳', de: '⏳',
+    fr: '⏳', it: '⏳', ar: '⏳', el: '⏳', zh: '⏳',
+  }
+  const dot = acks[lang] || '⏳'
+  try {
+    await sendWhatsApp(to, dot)
+  } catch {
+    // Don't throw — ack failure shouldn't break the main flow
+  }
+}
+
 export async function sendWhatsApp(to, body) {
   // Ensure number has whatsapp: prefix
   const toFormatted = to.startsWith('whatsapp:') ? to : `whatsapp:${to}`
