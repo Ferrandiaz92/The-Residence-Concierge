@@ -1003,7 +1003,10 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
         <div style={{ display:'flex', borderBottom:'0.5px solid var(--border)', background:'white', flexShrink:0 }}>
           {[
             { key:'tickets',  label:'Open Tickets',     count: issues.filter(t => t.category !== 'facility_booking').length },
-            { key:'bookings', label:'Booking Requests', count: upcoming.length + issues.filter(t => t.category === 'facility_booking').length },
+            { key:'bookings', label:'Booking Requests', count:
+                issues.filter(t => t.category === 'facility_booking').length +
+                upcoming.filter(b => b.source !== 'facility' && b.type !== 'facility' && !b._isFacility && b.partner_id).length
+              },
           ].map(tab => (
             <button key={tab.key} onClick={() => setAlertTab(tab.key)}
               style={{ flex:1, padding:'9px 6px', fontSize:'12px', fontWeight:'600', border:'none', borderBottom: alertTab===tab.key ? '2px solid #1C3D2E' : '2px solid transparent', background:'white', color: alertTab===tab.key ? '#1C3D2E' : '#9CA3AF', cursor:'pointer', fontFamily:'var(--font)', display:'flex', alignItems:'center', justifyContent:'center', gap:'5px', transition:'all .15s' }}>
@@ -1109,28 +1112,7 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
                 )
               })()}
 
-              {/* Completed today */}
-              {completed.length > 0 && (
-                <div style={{ marginTop:'4px' }}>
-                  {sh('Completed today', `${completed.length} done`)}
-                  {completed.slice(0,6).map(b => {
-                    const guest = b.guests || {}
-                    const typeEmoji = { taxi:'🚗', restaurant:'🍽️', activity:'⛵', late_checkout:'🕐' }
-                    return (
-                      <div key={b.id} style={{ display:'flex', alignItems:'center', gap:'8px', padding:'9px 14px', borderBottom:'0.5px solid var(--border)' }}>
-                        <div style={{ fontSize:'13px', flexShrink:0 }}>{typeEmoji[b.type] || '📋'}</div>
-                        <div style={{ flex:1, minWidth:0 }}>
-                          <div style={{ fontSize:'12px', fontWeight:'600', color:'#374151', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                            {guest.name || 'Guest'}{guest.room ? ` · Room ${guest.room}` : ''}
-                          </div>
-                          <div style={{ fontSize:'11px', color:'#9CA3AF' }}>{b.partners?.name || b.type}</div>
-                        </div>
-                        <span style={{ fontSize:'10px', fontWeight:'700', padding:'2px 6px', borderRadius:'4px', background:'#DCFCE7', color:'#14532D', flexShrink:0 }}>done</span>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
+
             </div>
           )}
         </div>

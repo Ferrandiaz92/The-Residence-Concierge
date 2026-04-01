@@ -986,7 +986,7 @@ function IssuesPanel({ tickets, bookings, conversations = [], onOpenThread, onNa
       <div style={{ display:'flex', background:'white', borderBottom:'1px solid #E5E7EB', flexShrink:0 }}>
         {[
           { key:'tickets',  label:'Open Tickets',     count: internalIssues.length },
-          { key:'bookings', label:'Booking Requests', count: upcoming.length + facTickets.length },
+          { key:'bookings', label:'Booking Requests', count: facTickets.length + partnerBkgs.length },
         ].map(tab => (
           <button key={tab.key} onClick={() => setAlertTab(tab.key)}
             style={{ flex:1, padding:'10px 4px', fontSize:'12px', fontWeight:'600', border:'none', borderBottom: alertTab===tab.key ? '2px solid #1C3D2E' : '2px solid transparent', background:'white', color: alertTab===tab.key ? '#1C3D2E' : '#9CA3AF', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", display:'flex', alignItems:'center', justifyContent:'center', gap:'5px' }}>
@@ -1088,28 +1088,7 @@ function IssuesPanel({ tickets, bookings, conversations = [], onOpenThread, onNa
                   })
             )}
 
-            {/* Completed today */}
-            {done.length > 0 && (
-              <>
-                <SectionHeader title="Completed today" divider />
-                {done.slice(0,6).map(b => {
-                  const g = b.guests || {}
-                  const typeEmoji = { taxi:'🚗', restaurant:'🍽️', activity:'⛵', facility:'🛎️' }
-                  return (
-                    <div key={b.id} style={{ padding:'12px 16px', background:'white', borderBottom:'1px solid #F3F4F6', display:'flex', alignItems:'center', gap:'10px' }}>
-                      <span style={{ fontSize:'16px' }}>{typeEmoji[b.type] || '📋'}</span>
-                      <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{ fontSize:'13px', fontWeight:'600', color:'#374151', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                          {g.name || 'Guest'}{g.room ? ` · Room ${g.room}` : ''}
-                        </div>
-                        <div style={{ fontSize:'11px', color:'#9CA3AF' }}>{b.partners?.name || b.type}</div>
-                      </div>
-                      <span style={{ fontSize:'10px', fontWeight:'700', padding:'2px 6px', borderRadius:'4px', background:'#DCFCE7', color:'#14532D', flexShrink:0 }}>done</span>
-                    </div>
-                  )
-                })}
-              </>
-            )}
+
           </div>
         )}
 
