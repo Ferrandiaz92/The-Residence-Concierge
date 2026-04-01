@@ -1,5 +1,10 @@
 // app/api/scheduled/route.js
 import { createClient } from '@supabase/supabase-js'
+import { cookies } from 'next/headers'
+
+function getSession() {
+  try { const c = cookies().get('session'); return c ? JSON.parse(c.value) : null } catch { return null }
+}
 
 function getSupabase() {
   return createClient(
@@ -10,6 +15,8 @@ function getSupabase() {
 }
 
 export async function GET(request) {
+  const session = getSession()
+  if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 })
   try {
     const { searchParams } = new URL(request.url)
     const hotelId = searchParams.get('hotelId')
