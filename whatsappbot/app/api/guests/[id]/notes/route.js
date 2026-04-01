@@ -1,6 +1,6 @@
 // app/api/guests/[id]/notes/route.js
 import { saveGuestNotes } from '../../../../../lib/dashboard.js'
-import { checkCsrf } from '../../../../lib/csrf.js'
+import { checkCsrf } from '../../../../../lib/csrf.js'
 import { cookies } from 'next/headers'
 
 function getSession() {
