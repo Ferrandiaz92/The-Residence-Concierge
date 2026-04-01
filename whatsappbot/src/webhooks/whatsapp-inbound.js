@@ -380,6 +380,23 @@ export async function handleInboundWhatsApp(rawBody) {
     link_type: 'conversation', link_id: conv.id,
   })
 
+  // 9b. Multi-intent detection — inject warning if message has multiple booking types
+  const msgLowerFull = message.toLowerCase()
+  const hasRoomIntent = /\b(room|suite|accommodation|check.?in|check.?out|reserv.*room|book.*room|room.*book|upgrade|transfer.*room)\b/i.test(message)
+  const hasTaxiIntent = /\b(taxi|transfer|airport|pickup|pick.?up|driver|car|ride|transport)\b/i.test(message)
+  const hasRestaurantIntent = /\b(restaurant|table|dinner|lunch|breakfast|reserv.*table|book.*table|dining)\b/i.test(message)
+  const hasActivityIntent = /\b(tour|boat|cruise|activity|trip|excursion|booking.*activity)\b/i.test(message)
+  const serviceCount = [hasTaxiIntent, hasRestaurantIntent, hasActivityIntent].filter(Boolean).length
+  const isMultiIntent = (hasRoomIntent && serviceCount > 0) || serviceCount > 1
+  if (isMultiIntent) {
+    systemPrompt += `\n\n[MULTI-REQUEST DETECTED] This message contains multiple booking requests. ` +
+      `You MUST handle them one at a time. ` +
+      `${hasRoomIntent ? 'Room request detected — output [ESCALATE] for that. ' : ''}` +
+      `Output only ONE [BOOKING] tag maximum. ` +
+      `Tell the guest you are handling the first request and will sort the next one immediately after.`
+    log.info('Multi-intent message detected', { ...hCtx, hasRoom: hasRoomIntent, taxi: hasTaxiIntent, restaurant: hasRestaurantIntent })
+  }
+
   // 10. Flight lookup
   const allFlights = extractAllFlightNumbers(message)
   if (allFlights.length > 0) {
@@ -574,12 +591,33 @@ export async function handleInboundWhatsApp(rawBody) {
     return
   }
 
+  // 14b. Detect [ESCALATE] tag — for room bookings and complex requests
+  //  Claude outputs [ESCALATE] when it needs to hand off to reception
+  //  Can co-exist with [BOOKING] for multi-intent messages (e.g. taxi + room)
+  let processedResponse = aiResponse
+  if (aiResponse.includes('[ESCALATE]')) {
+    processedResponse = aiResponse.replace(/\[ESCALATE\]/g, '').trim()
+    // Mark conversation as escalated so reception sees it
+    await supabase.from('conversations').update({ status: 'escalated' }).eq('id', conv.id).catch(()=>{})
+    const escalateBody = isMultiIntent
+      ? `Multi-request: guest asked for room + service. Bot handled service; room needs reception. Message: ${message.slice(0, 80)}`
+      : `Bot escalated: ${message.slice(0, 80)}`
+    await supabase.from('notifications').insert({
+      hotel_id: hotel.id, type: 'escalation',
+      title: `Reception needed — ${guest.name || 'Guest'} · Room ${guest.room || '?'}`,
+      body: escalateBody,
+      link_type: 'conversation', link_id: conv.id,
+    }).catch(()=>{})
+    await notifyReceptionEscalation(hotel.id, guest, conv.id).catch(()=>{})
+    log.info('Bot escalated via [ESCALATE] tag', { ...hCtx, ...gCtx, isMultiIntent })
+  }
+
   // 15. Parse booking + product tags
-  const { hasBooking, booking, cleanResponse: afterBooking } = parseBookingRequest(aiResponse)
+  const { hasBooking, booking, cleanResponse: afterBooking } = parseBookingRequest(processedResponse)
   // Check for cash payment intent in the ORIGINAL aiResponse (before tag stripping)
   const hasCashIntent = /\b(cash|pay.?on.?site|pay.?at.?(hotel|arrival|reception)|onsite|on.?arrival)\b/i.test(message) &&
     /\b(cash|pay.?cash|prefer.?cash|want.?to.?pay.?cash|paying.?cash)\b/i.test(message)
-  const { hasOrder, order: productOrder, cleanResponse: finalReply } = parseProductOrder(afterBooking || aiResponse)
+  const { hasOrder, order: productOrder, cleanResponse: finalReply } = parseProductOrder(afterBooking || processedResponse)
 
   const replyText = finalReply || afterBooking || aiResponse
   await sendWhatsApp(from, replyText)
