@@ -25,6 +25,7 @@ import {
 import { sendWhatsApp, parseIncomingMessage } from '../lib/twilio.js'
 import { detectLanguage, parseBookingRequest, formatPartnerAlert, buildSystemPrompt } from '../lib/language.js'
 import { logKnowledgeGap, detectHedging } from '../lib/knowledge-gaps.js'
+import { getLocalGuideContext, detectLocalGuideIntent } from '../lib/local-guide.js'
 import { callClaude } from '../lib/claude.js'
 import { handleTicketReply } from '../lib/ticketing.js'
 import { getKnowledgeBase, formatKnowledgeForPrompt } from '../lib/knowledge.js'
@@ -389,6 +390,16 @@ export async function handleInboundWhatsApp(rawBody) {
     body: message.slice(0, 100),
     link_type: 'conversation', link_id: conv.id,
   })
+
+  // 9a. Local Guide context injection — restaurants, beaches, attractions
+  const localGuideIntents = detectLocalGuideIntent(message)
+  if (localGuideIntents.length > 0) {
+    const localGuideCtx = await getLocalGuideContext(hotel.id, message).catch(() => null)
+    if (localGuideCtx) {
+      systemPrompt += localGuideCtx
+      log.info('Local guide context injected', { ...hCtx, intents: localGuideIntents })
+    }
+  }
 
   // 9b. Multi-intent detection — inject warning if message has multiple booking types
   const msgLowerFull = message.toLowerCase()
