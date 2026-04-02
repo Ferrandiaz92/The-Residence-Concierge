@@ -63,7 +63,7 @@ export async function GET(request) {
     if (!CAN_READ.includes(session.role)) return Response.json({ error: 'Access denied' }, { status: 403 })
 
     const { searchParams } = new URL(request.url)
-    const hotelId = searchParams.get('hotelId') || session.hotelId
+    const hotelId = session.hotelId  // always from session — never URL
     const status  = searchParams.get('status') || null
     const supabase = getSupabase()
 
@@ -91,6 +91,7 @@ export async function POST(request) {
     if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { hotelId, facilityId, facilityName, guestId, date, time, guestsCount, notes, createdBy } = await request.json()
+  if (hotelId && session.hotelId && hotelId !== session.hotelId) return Response.json({ error: 'Access denied' }, { status: 403 })
     const supabase = getSupabase()
 
     // Get facility contact
