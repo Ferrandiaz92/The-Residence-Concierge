@@ -2,8 +2,9 @@
 // Returns partner types and departments for the hotel
 // Used by staff portal and settings tab
 
-import { createClient } from '@supabase/supabase-js'
-import { checkCsrf } from '../../../lib/csrf.js'
+import { createClient }    from '@supabase/supabase-js'
+import { checkCsrf }       from '../../../lib/csrf.js'
+import { requireSession }  from '../../../lib/route-helpers.js'
 
 function getSupabase() {
   return createClient(
@@ -14,9 +15,10 @@ function getSupabase() {
 }
 
 export async function GET(request) {
+  const { session, error: authErr } = requireSession(request)
+  if (authErr) return authErr
   try {
-    const { searchParams } = new URL(request.url)
-    const hotelId = searchParams.get('hotelId')
+    const hotelId = session.hotelId  // always from session — no URL override
     if (!hotelId) return Response.json({ error: 'hotelId required' }, { status: 400 })
 
     const supabase = getSupabase()
