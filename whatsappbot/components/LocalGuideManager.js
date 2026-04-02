@@ -33,8 +33,293 @@ const BOOKING_METHODS = [
 
 const PRICE_RANGES = ['$','$$','$$$','$$$$']
 const VIBES        = ['romantic','family','business','lively','relaxed','adventurous','cultural']
-const COMMON_TAGS  = ['sea_view','outdoor','vegetarian','vegan','halal','kosher','late_night',
-                      'live_music','pet_friendly','wheelchair','parking','instagram_worthy']
+// ── Flat tags (legacy / fallback) ────────────────────────────
+const COMMON_TAGS = ['sea_view','outdoor','vegetarian','vegan','halal','kosher',
+                     'late_night','live_music','pet_friendly','wheelchair','parking','instagram_worthy']
+
+// ── Category-specific structured attributes ───────────────────
+// Stored as "group:value" in tags[] e.g. "vibe:romantic", "bestfor:couples"
+const CATEGORY_ATTRS = {
+  restaurant: [
+    { key:'vibe', label:'Vibe', emoji:'😌', multi:true, options:[
+      {key:'romantic',    label:'Romantic'},
+      {key:'family',      label:'Family-friendly'},
+      {key:'casual',      label:'Casual & relaxed'},
+      {key:'lively',      label:'Lively & social'},
+      {key:'fine_dining', label:'Fine dining'},
+      {key:'authentic',   label:'Authentic & local'},
+      {key:'business',    label:'Business lunch'},
+    ]},
+    { key:'bestfor', label:'Best for', emoji:'👥', multi:true, options:[
+      {key:'couples',     label:'Couples'},
+      {key:'families',    label:'Families with kids'},
+      {key:'groups',      label:'Groups & friends'},
+      {key:'solo',        label:'Solo dining'},
+      {key:'special_occ', label:'Special occasions'},
+      {key:'business',    label:'Business meetings'},
+    ]},
+    { key:'setting', label:'Setting', emoji:'📍', multi:true, options:[
+      {key:'sea_view',    label:'Sea view'},
+      {key:'rooftop',     label:'Rooftop'},
+      {key:'beachfront',  label:'Beachfront'},
+      {key:'outdoor',     label:'Outdoor terrace'},
+      {key:'indoor',      label:'Indoor only'},
+      {key:'cave',        label:'Cave / unique setting'},
+    ]},
+    { key:'diet', label:'Dietary', emoji:'🥗', multi:true, options:[
+      {key:'vegetarian',  label:'Vegetarian options'},
+      {key:'vegan',       label:'Vegan options'},
+      {key:'gluten_free', label:'Gluten-free'},
+      {key:'halal',       label:'Halal'},
+      {key:'kosher',      label:'Kosher'},
+    ]},
+  ],
+  beach: [
+    { key:'vibe', label:'Vibe / Atmosphere', emoji:'😌', multi:true, options:[
+      {key:'calm',        label:'Calm & peaceful'},
+      {key:'family',      label:'Family-friendly'},
+      {key:'lively',      label:'Lively & social'},
+      {key:'romantic',    label:'Romantic'},
+      {key:'secluded',    label:'Secluded & private'},
+      {key:'trendy',      label:'Trendy & Instagram'},
+    ]},
+    { key:'bestfor', label:'Best for', emoji:'🏄', multi:true, options:[
+      {key:'couples',     label:'Couples'},
+      {key:'families',    label:'Families with kids'},
+      {key:'solo',        label:'Solo relaxation'},
+      {key:'groups',      label:'Groups & friends'},
+      {key:'snorkeling',  label:'Snorkeling & exploring'},
+      {key:'watersports', label:'Water sports'},
+      {key:'sunbathing',  label:'Sunbathing'},
+      {key:'photography', label:'Photography & sunset'},
+    ]},
+    { key:'access', label:'Accessibility', emoji:'🚶', multi:false, options:[
+      {key:'easy_parking',label:'Easy — parking nearby'},
+      {key:'short_walk',  label:'Short walk from road'},
+      {key:'stairs',      label:'Stairs access'},
+      {key:'hike',        label:'Requires short hike'},
+      {key:'boat_only',   label:'Boat access only'},
+      {key:'hidden_gem',  label:'Hidden gem'},
+    ]},
+    { key:'amenity', label:'Amenities', emoji:'🏖️', multi:true, options:[
+      {key:'sunbeds',     label:'Sunbeds & umbrellas'},
+      {key:'beach_bar',   label:'Beach bar / restaurant'},
+      {key:'showers',     label:'Showers & toilets'},
+      {key:'watersports', label:'Water sports rentals'},
+      {key:'lifeguard',   label:'Lifeguard'},
+      {key:'parking',     label:'Parking available'},
+    ]},
+  ],
+  nightlife: [
+    { key:'vibe', label:'Vibe / Atmosphere', emoji:'🎶', multi:false, options:[
+      {key:'chill',       label:'Chill & laid-back'},
+      {key:'lively',      label:'Lively & social'},
+      {key:'party',       label:'Party / high-energy'},
+      {key:'upscale',     label:'Upscale & classy'},
+      {key:'alternative', label:'Alternative / underground'},
+    ]},
+    { key:'venue', label:'Venue Type', emoji:'🍹', multi:false, options:[
+      {key:'cocktail_bar',label:'Cocktail bar'},
+      {key:'beach_bar',   label:'Beach bar'},
+      {key:'nightclub',   label:'Nightclub'},
+      {key:'lounge',      label:'Lounge bar'},
+      {key:'pub',         label:'Pub / casual bar'},
+      {key:'rooftop_bar', label:'Rooftop bar'},
+      {key:'wine_bar',    label:'Wine bar'},
+    ]},
+    { key:'setting', label:'Setting', emoji:'📍', multi:true, options:[
+      {key:'beachfront',  label:'Beachfront'},
+      {key:'city_center', label:'City centre'},
+      {key:'rooftop',     label:'Rooftop'},
+      {key:'marina',      label:'Marina'},
+      {key:'hidden',      label:'Hidden / speakeasy'},
+      {key:'resort',      label:'Resort / hotel bar'},
+    ]},
+    { key:'price', label:'Price Level', emoji:'💸', multi:false, options:[
+      {key:'budget',      label:'Budget-friendly'},
+      {key:'midrange',    label:'Mid-range'},
+      {key:'premium',     label:'Premium'},
+      {key:'luxury',      label:'Luxury'},
+      {key:'bottle',      label:'Bottle service'},
+    ]},
+    { key:'time', label:'Best Time', emoji:'⏰', multi:true, options:[
+      {key:'sunset',      label:'Sunset drinks'},
+      {key:'early_eve',   label:'Early evening'},
+      {key:'late_night',  label:'Late-night'},
+      {key:'after_hours', label:'After-hours'},
+      {key:'day_to_night',label:'Day-to-night'},
+    ]},
+  ],
+  cafe: [
+    { key:'vibe', label:'Vibe', emoji:'☕', multi:true, options:[
+      {key:'chill',       label:'Chill & relaxed'},
+      {key:'lively',      label:'Lively & social'},
+      {key:'coworking',   label:'Coworking-friendly'},
+      {key:'instagram',   label:'Instagram-worthy'},
+      {key:'local',       label:'Local favourite'},
+      {key:'artsy',       label:'Artsy & creative'},
+    ]},
+    { key:'bestfor', label:'Best for', emoji:'👥', multi:true, options:[
+      {key:'remote_work', label:'Remote work'},
+      {key:'first_date',  label:'First date / catch up'},
+      {key:'family',      label:'Family with kids'},
+      {key:'groups',      label:'Groups & friends'},
+      {key:'solo',        label:'Solo & reading'},
+      {key:'meetings',    label:'Informal meetings'},
+    ]},
+    { key:'amenity', label:'Amenities', emoji:'🔌', multi:true, options:[
+      {key:'fast_wifi',   label:'Fast WiFi'},
+      {key:'power',       label:'Power outlets'},
+      {key:'outdoor',     label:'Outdoor seating'},
+      {key:'food',        label:'Food menu'},
+      {key:'specialty',   label:'Specialty coffee'},
+      {key:'vegan',       label:'Vegan options'},
+    ]},
+    { key:'setting', label:'Setting', emoji:'📍', multi:false, options:[
+      {key:'city_center', label:'City centre'},
+      {key:'beachfront',  label:'Beachfront'},
+      {key:'quiet',       label:'Quiet side street'},
+      {key:'marina',      label:'Marina'},
+      {key:'old_town',    label:'Old town'},
+    ]},
+  ],
+  museum: [
+    { key:'bestfor', label:'Best for', emoji:'👥', multi:true, options:[
+      {key:'history',     label:'History enthusiasts'},
+      {key:'families',    label:'Families with kids'},
+      {key:'photography', label:'Photography'},
+      {key:'groups',      label:'School & tour groups'},
+      {key:'culture',     label:'Art & culture lovers'},
+      {key:'rainy_day',   label:'Rainy day option'},
+    ]},
+    { key:'type', label:'Collection', emoji:'🏛️', multi:false, options:[
+      {key:'archaeology', label:'Archaeological'},
+      {key:'art',         label:'Art & contemporary'},
+      {key:'history',     label:'History & heritage'},
+      {key:'science',     label:'Science & technology'},
+      {key:'local',       label:'Local culture'},
+      {key:'maritime',    label:'Maritime & nautical'},
+    ]},
+    { key:'visit', label:'Visit Duration', emoji:'⏱️', multi:false, options:[
+      {key:'quick',       label:'Quick — under 1 hour'},
+      {key:'half_day',    label:'Half day'},
+      {key:'full_day',    label:'Full day'},
+    ]},
+  ],
+  archaeological: [
+    { key:'bestfor', label:'Best for', emoji:'👥', multi:true, options:[
+      {key:'history',     label:'History enthusiasts'},
+      {key:'families',    label:'Families'},
+      {key:'photography', label:'Photography'},
+      {key:'guided',      label:'Guided tours'},
+      {key:'self_guided', label:'Self-guided'},
+    ]},
+    { key:'period', label:'Historical Period', emoji:'🏺', multi:false, options:[
+      {key:'neolithic',   label:'Neolithic'},
+      {key:'bronze_age',  label:'Bronze Age'},
+      {key:'greek',       label:'Ancient Greek'},
+      {key:'roman',       label:'Roman'},
+      {key:'byzantine',   label:'Byzantine'},
+      {key:'medieval',    label:'Medieval'},
+    ]},
+    { key:'practical', label:'Practical Info', emoji:'ℹ️', multi:true, options:[
+      {key:'shade',       label:'Shaded areas'},
+      {key:'parking',     label:'Parking available'},
+      {key:'cafe',        label:'Café on site'},
+      {key:'audio_guide', label:'Audio guide'},
+      {key:'wheelchair',  label:'Wheelchair accessible'},
+    ]},
+  ],
+  nature: [
+    { key:'difficulty', label:'Difficulty', emoji:'💪', multi:false, options:[
+      {key:'easy',        label:'Easy — flat & paved'},
+      {key:'moderate',    label:'Moderate — some elevation'},
+      {key:'hard',        label:'Challenging — steep'},
+      {key:'expert',      label:'Expert only'},
+    ]},
+    { key:'bestfor', label:'Best for', emoji:'👥', multi:true, options:[
+      {key:'couples',     label:'Couples'},
+      {key:'families',    label:'Families with kids'},
+      {key:'groups',      label:'Groups'},
+      {key:'solo',        label:'Solo hikers'},
+      {key:'photography', label:'Nature photography'},
+      {key:'birdwatch',   label:'Birdwatching'},
+    ]},
+    { key:'terrain', label:'Terrain', emoji:'🌿', multi:true, options:[
+      {key:'forest',      label:'Forest trail'},
+      {key:'mountain',    label:'Mountain'},
+      {key:'coastal',     label:'Coastal path'},
+      {key:'gorge',       label:'Gorge / canyon'},
+      {key:'vineyard',    label:'Vineyard landscape'},
+      {key:'waterfall',   label:'Waterfall'},
+    ]},
+    { key:'season', label:'Best Season', emoji:'🗓️', multi:true, options:[
+      {key:'spring',      label:'Spring'},
+      {key:'summer',      label:'Summer (early morning)'},
+      {key:'autumn',      label:'Autumn'},
+      {key:'winter',      label:'Winter'},
+      {key:'year_round',  label:'Year-round'},
+    ]},
+  ],
+  winery: [
+    { key:'experience', label:'Experience Type', emoji:'🍷', multi:true, options:[
+      {key:'tasting',     label:'Wine tasting'},
+      {key:'tour',        label:'Winery tour'},
+      {key:'food_pairing',label:'Food & wine pairing'},
+      {key:'harvest',     label:'Harvest experience'},
+      {key:'private',     label:'Private events'},
+    ]},
+    { key:'bestfor', label:'Best for', emoji:'👥', multi:true, options:[
+      {key:'couples',     label:'Couples'},
+      {key:'groups',      label:'Groups'},
+      {key:'enthusiasts', label:'Wine enthusiasts'},
+      {key:'casual',      label:'Casual introduction'},
+      {key:'corporate',   label:'Corporate events'},
+    ]},
+    { key:'setting', label:'Setting', emoji:'📍', multi:false, options:[
+      {key:'mountain',    label:'Mountain vineyard'},
+      {key:'valley',      label:'Valley / plains'},
+      {key:'coastal',     label:'Coastal area'},
+      {key:'traditional', label:'Traditional stone building'},
+      {key:'modern',      label:'Modern facility'},
+    ]},
+  ],
+  other: [
+    { key:'vibe', label:'Vibe', emoji:'✨', multi:true, options:[
+      {key:'relaxed',     label:'Relaxed'},
+      {key:'lively',      label:'Lively'},
+      {key:'romantic',    label:'Romantic'},
+      {key:'family',      label:'Family-friendly'},
+      {key:'unique',      label:'Unique experience'},
+    ]},
+    { key:'bestfor', label:'Best for', emoji:'👥', multi:true, options:[
+      {key:'couples',     label:'Couples'},
+      {key:'families',    label:'Families'},
+      {key:'groups',      label:'Groups'},
+      {key:'solo',        label:'Solo'},
+    ]},
+  ],
+}
+
+// Helper: get tags for a category as prefixed strings
+function getTagsForCategory(cat) {
+  return (CATEGORY_ATTRS[cat] || CATEGORY_ATTRS.other)
+}
+
+// Helper: parse prefixed tag → {group, value}
+function parseTag(tag) {
+  const idx = tag.indexOf(':')
+  return idx > -1 ? { group: tag.slice(0,idx), value: tag.slice(idx+1) } : { group:'tag', value:tag }
+}
+
+// Helper: get display label for a prefixed tag
+function tagLabel(tag, cat) {
+  const {group, value} = parseTag(tag)
+  const attrs = CATEGORY_ATTRS[cat] || CATEGORY_ATTRS.other
+  const grp = attrs.find(g => g.key === group)
+  const opt = grp?.options.find(o => o.key === value)
+  return opt?.label || value
+}
 
 // ── Category-specific column definitions ─────────────────────
 // Each category overrides 3 flexible columns: col4, col5, col6
@@ -61,7 +346,7 @@ function Tooltip({ item }) {
     item.custom_notes && `💬 ${item.custom_notes}`,
     item.popular_item && `⭐ ${item.popular_item}${item.popular_item_price ? ` — €${item.popular_item_price}` : ''}`,
     item.seasonal_notes && `🗓 ${item.seasonal_notes}`,
-    (item.tags||[]).length && `🏷 ${item.tags.join(', ')}`,
+    (item.tags||[]).length && `🏷 ${item.tags.map(t=>{const{group,value}=parseTag(t);return tagLabel(t,item.category)||value}).join(' · ')}`,
     item.website && `🌐 ${item.website}`,
   ].filter(Boolean)
 
@@ -194,32 +479,66 @@ function FlagBtn({ active, label, color, bgActive, bgInactive, onClick }) {
 }
 
 
-// ── Tags popover ──────────────────────────────────────────────
+// ── Category-aware tags popover ───────────────────────────────
 function TagsPopover({ item, onSave, onClose }) {
   const [selected, setSelected] = useState(item.tags || [])
-  function toggle(t) { setSelected(p => p.includes(t) ? p.filter(x=>x!==t) : [...p,t]) }
+  const attrs = getTagsForCategory(item.category)
+
+  function toggle(group, value, multi) {
+    const prefixed = `${group}:${value}`
+    setSelected(prev => {
+      if (prev.includes(prefixed)) return prev.filter(t => t !== prefixed)
+      if (!multi) {
+        // Single-select: remove other values in same group
+        const filtered = prev.filter(t => !t.startsWith(`${group}:`))
+        return [...filtered, prefixed]
+      }
+      return [...prev, prefixed]
+    })
+  }
+
+  function isSelected(group, value) { return selected.includes(`${group}:${value}`) }
+
   async function save() { await onSave(item.pref_id, { tags: selected }); onClose() }
+
   return (
     <div style={{ position:'absolute', zIndex:400, top:'calc(100% + 4px)', left:0,
-      background:'white', border:'1px solid #E5E7EB', borderRadius:'10px', padding:'12px',
-      minWidth:'260px', boxShadow:'0 4px 20px rgba(0,0,0,0.12)' }}
+      background:'white', border:'1px solid #E5E7EB', borderRadius:'12px', padding:'14px',
+      minWidth:'300px', maxWidth:'380px', boxShadow:'0 8px 30px rgba(0,0,0,0.15)' }}
       onClick={e=>e.stopPropagation()}>
-      <div style={{ fontSize:'12px', fontWeight:'700', color:'#111827', marginBottom:'8px' }}>Edit tags</div>
-      <div style={{ display:'flex', flexWrap:'wrap', gap:'5px', marginBottom:'10px' }}>
-        {COMMON_TAGS.map(t => (
-          <button key={t} onClick={()=>toggle(t)}
-            style={{ padding:'3px 10px', borderRadius:'20px', fontSize:'11px', fontWeight:'500',
-              cursor:'pointer', fontFamily:font,
-              border:`0.5px solid ${selected.includes(t)?GREEN:'#D1D5DB'}`,
-              background:selected.includes(t)?GREEN:'white',
-              color:selected.includes(t)?'white':'#374151' }}>
-            {t}
-          </button>
+      <div style={{ fontSize:'12px', fontWeight:'700', color:'#111827', marginBottom:'10px', display:'flex', alignItems:'center', gap:'6px' }}>
+        🏷 Attributes — {item.name}
+        <span style={{ fontSize:'10px', fontWeight:'400', color:'#9CA3AF', marginLeft:'auto' }}>
+          {selected.length} selected
+        </span>
+      </div>
+      <div style={{ display:'flex', flexDirection:'column', gap:'12px', maxHeight:'360px', overflowY:'auto', marginBottom:'10px' }}>
+        {attrs.map(group => (
+          <div key={group.key}>
+            <div style={{ fontSize:'10px', fontWeight:'700', color:'#6B7280', marginBottom:'5px', textTransform:'uppercase', letterSpacing:'0.06em' }}>
+              {group.emoji} {group.label} {!group.multi && <span style={{ fontWeight:'400', color:'#D1D5DB' }}>· pick one</span>}
+            </div>
+            <div style={{ display:'flex', flexWrap:'wrap', gap:'4px' }}>
+              {group.options.map(opt => {
+                const active = isSelected(group.key, opt.key)
+                return (
+                  <button key={opt.key} onClick={()=>toggle(group.key, opt.key, group.multi)}
+                    style={{ padding:'3px 10px', borderRadius:'20px', fontSize:'11px', fontWeight:'500',
+                      cursor:'pointer', fontFamily:font, transition:'all .1s',
+                      border:`0.5px solid ${active?GREEN:'#D1D5DB'}`,
+                      background:active?GREEN:'white',
+                      color:active?'white':'#374151' }}>
+                    {opt.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
         ))}
       </div>
-      <div style={{ display:'flex', gap:'6px', justifyContent:'flex-end' }}>
-        <button onClick={onClose} style={{ padding:'5px 12px', background:'white', border:'0.5px solid #D1D5DB', borderRadius:'7px', fontSize:'11px', color:'#374151', cursor:'pointer', fontFamily:font }}>Cancel</button>
-        <button onClick={save} style={{ padding:'5px 12px', background:GREEN, border:'none', borderRadius:'7px', fontSize:'11px', fontWeight:'700', color:'white', cursor:'pointer', fontFamily:font }}>Save</button>
+      <div style={{ display:'flex', gap:'6px', justifyContent:'flex-end', borderTop:'0.5px solid #F3F4F6', paddingTop:'10px' }}>
+        <button onClick={onClose} style={{ padding:'6px 14px', background:'white', border:'0.5px solid #D1D5DB', borderRadius:'7px', fontSize:'11px', color:'#374151', cursor:'pointer', fontFamily:font }}>Cancel</button>
+        <button onClick={save} style={{ padding:'6px 14px', background:GREEN, border:'none', borderRadius:'7px', fontSize:'11px', fontWeight:'700', color:'white', cursor:'pointer', fontFamily:font }}>Save attributes</button>
       </div>
     </div>
   )
@@ -555,13 +874,13 @@ export default function LocalGuideManager({ hotelId }) {
                 <th style={{ ...thStyle(), width:'44px', cursor:'default' }}>On</th>
                 <th style={{ ...thStyle(), width:'30px', cursor:'default' }}>Cat</th>
                 <th style={thStyle('name')} onClick={()=>setSortBy('name')}>Name {sortBy==='name'?'↓':''}</th>
+                <th style={thStyle('commission')} onClick={()=>setSortBy('commission')}>Flags {sortBy==='commission'?'↓':''}</th>
                 <th style={thStyle()}>Area</th>
                 <th style={thStyle()}>{cols.col4}</th>
                 <th style={thStyle('rating')} onClick={()=>setSortBy('rating')}>Rating {sortBy==='rating'?'↓':''}</th>
                 <th style={thStyle()}>Contact / Book</th>
                 <th style={thStyle()}>{cols.col5}</th>
                 <th style={thStyle('priority')} onClick={()=>setSortBy('priority')}>Distance {sortBy==='priority'?'↓':''}</th>
-                <th style={thStyle('commission')} onClick={()=>setSortBy('commission')}>Flags {sortBy==='commission'?'↓':''}</th>
                 <th style={{ ...thStyle(), width:'100px', cursor:'default' }}>Actions</th>
               </tr>
             </thead>
@@ -603,15 +922,33 @@ export default function LocalGuideManager({ hotelId }) {
                       <div style={{ display:'flex', alignItems:'center', gap:'5px' }}>
                         <EditableCell value={item.name} field="name" item={item} onSave={patchPref} />
                         <button onClick={e=>{e.stopPropagation();setTagsPopover(tagsPopover===item.pref_id?null:item.pref_id)}}
-                          title={(item.tags||[]).length ? item.tags.join(', ') : 'Add tags'}
-                          style={{ padding:'1px 6px', borderRadius:'10px', fontSize:'9px', fontWeight:'700',
-                            background:(item.tags||[]).length?'#F3F4F6':'white',
-                            border:`0.5px solid ${(item.tags||[]).length?'#D1D5DB':'#E5E7EB'}`,
-                            color:(item.tags||[]).length?'#6B7280':'#D1D5DB',
+                          title={(item.tags||[]).length ? item.tags.map(t=>tagLabel(t,item.category)).join(', ') : 'Add attributes'}
+                          style={{ padding:'1px 7px', borderRadius:'10px', fontSize:'9px', fontWeight:'700',
+                            background:(item.tags||[]).length?GREEN:'white',
+                            border:`0.5px solid ${(item.tags||[]).length?GREEN:'#E5E7EB'}`,
+                            color:(item.tags||[]).length?'white':'#D1D5DB',
                             cursor:'pointer', fontFamily:font, whiteSpace:'nowrap' }}>
-                          {(item.tags||[]).length ? `🏷 ${item.tags.length}` : '+ tag'}
+                          {(item.tags||[]).length ? `🏷 ${item.tags.length}` : '+ attr'}
                         </button>
                         {!item.is_enabled && <span style={{ fontSize:'9px', color:'#9CA3AF' }}>hidden</span>}
+                      </div>
+                    </td>
+
+                    {/* Flags — right after name */}
+                    <td style={{ padding:'6px 8px' }}>
+                      <div style={{ display:'flex', gap:'4px', flexWrap:'nowrap', alignItems:'center' }}>
+                        <FlagBtn active={item.promoted_by_hotel} label="⭐"
+                          color="#78350F" bgActive="rgba(201,168,76,0.15)"
+                          onClick={()=>patchPref(item.pref_id,{promoted_by_hotel:!item.promoted_by_hotel})} />
+                        <FlagBtn
+                          active={item.commission_eligible}
+                          label={item.commission_eligible ? `💰${item.commission_percentage||0}%` : '💰'}
+                          color="#14532D" bgActive="#DCFCE7"
+                          onClick={()=>patchPref(item.pref_id,{commission_eligible:!item.commission_eligible})} />
+                        {item.commission_eligible && (
+                          <EditableCell value={item.commission_percentage} field="commission_percentage"
+                            item={item} onSave={patchPref} type="number" width="40px" />
+                        )}
                       </div>
                     </td>
 
@@ -652,24 +989,6 @@ export default function LocalGuideManager({ hotelId }) {
                     {/* Distance */}
                     <td style={{ padding:'6px 8px', color:'#6B7280', whiteSpace:'nowrap' }}>
                       <EditableCell value={item.distance_min_walk} field="distance_min_walk" item={item} onSave={patchPref} type="number" width="52px" />
-                    </td>
-
-                    {/* Flags — always visible, click to toggle */}
-                    <td style={{ padding:'6px 8px' }}>
-                      <div style={{ display:'flex', gap:'4px', flexWrap:'wrap' }}>
-                        <FlagBtn active={item.promoted_by_hotel} label="⭐ Fav"
-                          color="#78350F" bgActive="rgba(201,168,76,0.15)"
-                          onClick={()=>patchPref(item.pref_id,{promoted_by_hotel:!item.promoted_by_hotel})} />
-                        <FlagBtn
-                          active={item.commission_eligible}
-                          label={item.commission_eligible ? `💰 ${item.commission_percentage||0}%` : '💰 —'}
-                          color="#14532D" bgActive="#DCFCE7"
-                          onClick={()=>patchPref(item.pref_id,{commission_eligible:!item.commission_eligible})} />
-                        {item.commission_eligible && (
-                          <EditableCell value={item.commission_percentage} field="commission_percentage"
-                            item={item} onSave={patchPref} type="number" width="44px" />
-                        )}
-                      </div>
                     </td>
 
                     {/* Actions */}
