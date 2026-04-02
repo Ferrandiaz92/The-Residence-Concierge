@@ -44,6 +44,7 @@ export async function POST(request) {
     if (!['manager','admin'].includes(session?.role)) return Response.json({ error:'Forbidden' }, { status:403 })
 
     const { hotelId, partnerId, name, description, category, tiers, commissionRate, availableFrom, availableTo, availableTimes, maxPerGuest } = await request.json()
+  if (hotelId && session.hotelId && hotelId !== session.hotelId) return Response.json({ error: 'Access denied' }, { status: 403 })
     if (!hotelId || !partnerId || !name || !tiers?.length) return Response.json({ error:'Missing required fields' }, { status:400 })
 
     const supabase = getSupabase()
