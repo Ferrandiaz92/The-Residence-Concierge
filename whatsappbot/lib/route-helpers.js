@@ -75,7 +75,7 @@ export function requireHotel(request, session) {
 
   // Multi-hotel isolation: session must belong to this hotel
   // session.hotelId is set at login time and cannot be spoofed
-  if (session.hotelId && session.hotelId !== hotelId) {
+  if (session.hotelId !== hotelId) {  // always enforce — no bypass for null hotelId
     console.warn(JSON.stringify({
       level: 'warn', event: 'hotel_isolation_blocked',
       sessionHotel: session.hotelId, requestedHotel: hotelId,
@@ -96,7 +96,7 @@ export function requireHotelFromBody(body, session) {
     return { error: Response.json({ error: 'hotelId required' }, { status: 400 }) }
   }
 
-  if (session.hotelId && session.hotelId !== hotelId) {
+  if (session.hotelId !== hotelId) {
     console.warn(JSON.stringify({
       level: 'warn', event: 'hotel_isolation_blocked',
       sessionHotel: session.hotelId, requestedHotel: hotelId,
