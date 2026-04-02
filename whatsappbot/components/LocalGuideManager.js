@@ -326,7 +326,7 @@ function tagLabel(tag, cat) {
 // Fixed: toggle | emoji | name+flags | area | rating | walk | booking | actions
 const CAT_COLS = {
   restaurant:     { col4:'Cuisine',     col5:'Signature dish',  field4:'cuisine_type', field5:'popular_item' },
-  beach:          { col4:'Type',        col5:'Water quality',   field4:'vibe',         field5:'popular_item' },
+  beach:          { col4:'Type',        col5:'Character',       field4:'vibe',         field5:'popular_item' },
   nightlife:      { col4:'Vibe',        col5:'Signature drink', field4:'vibe',         field5:'popular_item' },
   cafe:           { col4:'Specialty',   col5:'Must-try item',   field4:'cuisine_type', field5:'popular_item' },
   museum:         { col4:'Theme',       col5:'Top exhibit',     field4:'vibe',         field5:'popular_item' },
@@ -346,7 +346,7 @@ function Tooltip({ item }) {
     item.custom_notes && `💬 ${item.custom_notes}`,
     item.popular_item && `⭐ ${item.popular_item}${item.popular_item_price ? ` — €${item.popular_item_price}` : ''}`,
     item.seasonal_notes && `🗓 ${item.seasonal_notes}`,
-    (item.tags||[]).length && `🏷 ${item.tags.map(t=>{const{group,value}=parseTag(t);return tagLabel(t,item.category)||value}).join(' · ')}`,
+    // tags shown via 🏷 button popover — not duplicated in tooltip
     item.website && `🌐 ${item.website}`,
   ].filter(Boolean)
 
@@ -772,13 +772,33 @@ export default function LocalGuideManager({ hotelId }) {
     <div style={{ fontFamily:font, height:'100%', display:'flex', flexDirection:'column' }}>
 
       {/* Info banner */}
-      <div style={{ padding:'10px 16px', background:'#FFFBEB', borderBottom:'0.5px solid #FDE68A',
-        fontSize:'11px', color:'#78350F', flexShrink:0, display:'flex', gap:'8px', alignItems:'center' }}>
-        <span>🗺️ <strong>Local Guide</strong> — what the bot recommends when guests ask "where to eat?" or "things to do?".</span>
-        <span style={{ color:'#9CA3AF' }}>|</span>
-        <span>Import CSV/JSON with columns: <code style={{ background:'#FEF3C7', padding:'1px 5px', borderRadius:'3px', fontSize:'10px' }}>name, category, area, cuisine_type, price_range, google_rating, phone, booking_method, popular_item, vibe, description, google_place_id</code></span>
-        <span style={{ color:'#9CA3AF' }}>|</span>
-        <span>💡 Grey rows = hidden from bot. Click any cell to edit inline.</span>
+      <div style={{ padding:'11px 18px', background:'#F0FDF4', borderBottom:'0.5px solid #86EFAC',
+        fontSize:'11px', color:'#14532D', flexShrink:0, display:'flex', gap:'20px', alignItems:'flex-start', flexWrap:'wrap' }}>
+        <div style={{ display:'flex', flexDirection:'column', gap:'3px', flex:1, minWidth:'280px' }}>
+          <span style={{ fontWeight:'700', fontSize:'12px' }}>🗺️ Local Guide — your hotel's curated recommendations</span>
+          <span style={{ color:'#166534', lineHeight:'1.5' }}>
+            The bot uses this to answer "where should I eat?", "what's a good beach?", "anything to do tonight?". 
+            It matches guests to places based on their message — <strong>Vibe & Best for attributes are the most important</strong> for accurate recommendations.
+          </span>
+        </div>
+        <div style={{ display:'flex', flexDirection:'column', gap:'3px', minWidth:'220px' }}>
+          <span style={{ fontWeight:'700' }}>How it works</span>
+          <span style={{ color:'#166534', lineHeight:'1.5' }}>
+            ⭐ <strong>Favourite</strong> — surfaces first, bot says "I especially recommend"<br/>
+            💰 <strong>Commission</strong> — boosts priority silently, never shown to guests<br/>
+            🔴 <strong>Red rows</strong> — disabled, invisible to bot<br/>
+            🏷 <strong>Attributes</strong> — click to set vibe, best for, amenities per category<br/>
+            ✏️ <strong>Click any cell</strong> to edit inline
+          </span>
+        </div>
+        <div style={{ display:'flex', flexDirection:'column', gap:'3px', minWidth:'180px' }}>
+          <span style={{ fontWeight:'700' }}>Import</span>
+          <span style={{ color:'#166534', lineHeight:'1.5' }}>
+            Use 📥 Import to upload CSV or JSON.<br/>
+            Required columns: <code style={{ background:'#DCFCE7', padding:'1px 5px', borderRadius:'3px', fontSize:'10px', fontFamily:'monospace' }}>name, category</code><br/>
+            Optional: area, google_rating, phone, booking_method, popular_item, description, google_place_id
+          </span>
+        </div>
       </div>
 
       {/* Category pills + toolbar */}
@@ -896,12 +916,13 @@ export default function LocalGuideManager({ hotelId }) {
               {filtered.map(item => {
                 const cat      = CATEGORIES.find(c=>c.key===item.category) || CATEGORIES[CATEGORIES.length-1]
                 const showTip  = visibleTooltip === item.pref_id
-                const rowBg    = item.is_enabled ? 'white' : '#FAFAFA'
-
                 return (
                   <tr key={item.pref_id}
-                    style={{ background:rowBg, borderBottom:'0.5px solid #F3F4F6',
-                      opacity: item.is_enabled ? 1 : 0.5 }}
+                    style={{
+                      background: item.is_enabled ? 'white' : '#FEF2F2',
+                      borderBottom: item.is_enabled ? '0.5px solid #F3F4F6' : '0.5px solid #FECACA',
+                      borderLeft: item.is_enabled ? 'none' : '3px solid #FCA5A5',
+                    }}
                     onMouseEnter={()=>{ handleMouseEnter(item.pref_id) }}
                     onMouseLeave={()=>{ handleMouseLeave() }}>
 
@@ -930,7 +951,7 @@ export default function LocalGuideManager({ hotelId }) {
                             cursor:'pointer', fontFamily:font, whiteSpace:'nowrap' }}>
                           {(item.tags||[]).length ? `🏷 ${item.tags.length}` : '+ attr'}
                         </button>
-                        {!item.is_enabled && <span style={{ fontSize:'9px', color:'#9CA3AF' }}>hidden</span>}
+                        {!item.is_enabled && <span style={{ fontSize:'9px', fontWeight:'700', color:'#DC2626', background:'#FEE2E2', padding:'1px 5px', borderRadius:'4px' }}>hidden</span>}
                       </div>
                     </td>
 
@@ -1012,7 +1033,7 @@ export default function LocalGuideManager({ hotelId }) {
       <div style={{ padding:'5px 16px', background:'#F9FAFB', borderTop:'0.5px solid #E5E7EB',
         fontSize:'11px', color:'#9CA3AF', display:'flex', gap:'14px', flexShrink:0 }}>
         <span>{filtered.length}/{items.length} items</span>
-        <span>{items.filter(i=>i.is_enabled).length} enabled (shown to bot)</span>
+        <span>{items.filter(i=>i.is_enabled).length} enabled</span>
         <span>{items.filter(i=>i.commission_eligible).length} commission</span>
         <span>{items.filter(i=>i.promoted_by_hotel).length} favourites</span>
       </div>
