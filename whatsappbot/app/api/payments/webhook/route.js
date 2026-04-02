@@ -19,7 +19,7 @@
 export const dynamic = 'force-dynamic'
 
 import Stripe          from 'stripe'
-import { generateBookingRef } from '../../../src/lib/booking-refs.js'
+import { generateBookingRef } from '../../../../src/lib/booking-refs.js'
 import { createClient } from '@supabase/supabase-js'
 import twilio           from 'twilio'
 
