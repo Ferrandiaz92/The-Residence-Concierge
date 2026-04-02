@@ -52,7 +52,7 @@ export async function GET(request) {
   if (guard) return guard
 
   const { searchParams } = new URL(request.url)
-  const hotelId = searchParams.get('hotelId') || session.hotelId
+  const hotelId = session.hotelId  // always from session — no URL override
   const limit   = Math.min(parseInt(searchParams.get('limit') || '50'), 100)
 
   const supabase = getSupabase()
