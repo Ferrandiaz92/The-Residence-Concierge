@@ -70,6 +70,7 @@ export async function GET(request) {
 export async function POST(request) {
   try {
     const { hotelId, guestId, messageType } = await request.json()
+  if (hotelId && session.hotelId && hotelId !== session.hotelId) return Response.json({ error: 'Access denied' }, { status: 403 })
     const supabase = getSupabase()
 
     // Reset status to pending so it gets picked up by next cron run
