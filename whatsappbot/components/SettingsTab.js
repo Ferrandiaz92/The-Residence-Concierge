@@ -6,8 +6,9 @@
 // - Shifts management section
 'use client'
 import { useState, useEffect } from 'react'
-import ShiftsManager   from './ShiftsManager'
-import ProductsManager from './ProductsManager'
+import ShiftsManager      from './ShiftsManager'
+import ProductsManager    from './ProductsManager'
+import LocalGuideManager  from './LocalGuideManager'
 
 
 // ── PARTNER CAPABILITIES EDITOR ──────────────────────────────
@@ -143,6 +144,7 @@ export default function SettingsTab({ hotelId, session, isMobile = false }) {
     types:       ['manager','admin'].includes(role),
     departments: ['manager','admin'].includes(role),
     shifts:      ['manager','admin','supervisor'].includes(role),
+    localguide:  ['manager','admin','communications'].includes(role),
   }
   const firstSection = ['manager','admin'].includes(role) ? 'partners'
     : role === 'communications' ? 'knowledge'
@@ -302,6 +304,7 @@ export default function SettingsTab({ hotelId, session, isMobile = false }) {
         {canSee.types       && secBtn('Partner types',   section==='types',       ()=>setSection('types'))}
         {canSee.departments && secBtn('Departments',     section==='departments', ()=>setSection('departments'))}
         {canSee.shifts      && secBtn('Shifts',          section==='shifts',      ()=>setSection('shifts'))}
+        {canSee.localguide  && secBtn('🗺️ Local Guide',  section==='localguide',  ()=>setSection('localguide'))}
       </div>
 
       <div className="scrollable" style={{ padding:'20px', background:'#F9FAFB' }}>
@@ -619,6 +622,17 @@ export default function SettingsTab({ hotelId, session, isMobile = false }) {
         )}
 
         {/* ── SHIFTS ── */}
+        {section === 'localguide' && (
+          <div style={{ maxWidth:'940px' }}>
+            <div style={{ fontSize:'14px', fontWeight:'700', color:'#111827', marginBottom:'4px' }}>Local Guide</div>
+            <div style={{ fontSize:'12px', color:'#6B7280', marginBottom:'16px' }}>
+              Restaurants, beaches, museums, nightlife, cafés, archaeological sites, nature trails, wineries.
+              Enabled items are recommended by the bot when guests ask for local suggestions.
+            </div>
+            <LocalGuideManager hotelId={hotelId} />
+          </div>
+        )}
+
         {section === 'shifts' && (
           <div style={{ maxWidth:'900px' }}>
             <ShiftsManager hotelId={hotelId} />
