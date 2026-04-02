@@ -43,7 +43,7 @@ export async function GET(request) {
   if (guard) return guard
 
   const { searchParams } = new URL(request.url)
-  const hotelId   = searchParams.get('hotelId') || session.hotelId
+  const hotelId   = session.hotelId  // always from session
   const filter    = searchParams.get('filter')
   const language  = searchParams.get('language')
   const guestType = searchParams.get('guestType')
