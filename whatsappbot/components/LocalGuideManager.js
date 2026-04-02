@@ -563,6 +563,7 @@ export default function LocalGuideManager({ hotelId }) {
   const [hoverTimer, setHoverTimer]   = useState(null)
   const [visibleTooltip, setVisibleTooltip] = useState(null)
   const [tagsPopover, setTagsPopover]     = useState(null)
+  const [bannerOpen, setBannerOpen]       = useState(true)
   const fileRef = useRef()
 
   const blank = () => ({
@@ -733,6 +734,7 @@ export default function LocalGuideManager({ hotelId }) {
           {sc('category', CATEGORIES.filter(c=>c.key!=='all').map(c=>({key:c.key,label:`${c.emoji}`})))}
         </td>
         <td style={{ padding:'4px 5px' }}>{tc('name','Name *')}</td>
+        <td style={{ padding:'4px 5px' }}>{tc('description','Short description for bot')}</td>
         <td style={{ padding:'4px 5px' }}>{tc('area','Area')}</td>
         <td style={{ padding:'4px 5px' }}>{tc(cols.field4, cols.col4)}</td>
         <td style={{ padding:'4px 5px' }}>{tc('google_rating','4.5','number','70px')}</td>
@@ -771,34 +773,53 @@ export default function LocalGuideManager({ hotelId }) {
   return (
     <div style={{ fontFamily:font, height:'100%', display:'flex', flexDirection:'column' }}>
 
-      {/* Info banner */}
-      <div style={{ padding:'11px 18px', background:'#F0FDF4', borderBottom:'0.5px solid #86EFAC',
-        fontSize:'11px', color:'#14532D', flexShrink:0, display:'flex', gap:'20px', alignItems:'flex-start', flexWrap:'wrap' }}>
-        <div style={{ display:'flex', flexDirection:'column', gap:'3px', flex:1, minWidth:'280px' }}>
-          <span style={{ fontWeight:'700', fontSize:'12px' }}>🗺️ Local Guide — your hotel's curated recommendations</span>
-          <span style={{ color:'#166534', lineHeight:'1.5' }}>
-            The bot uses this to answer "where should I eat?", "what's a good beach?", "anything to do tonight?". 
-            It matches guests to places based on their message — <strong>Vibe & Best for attributes are the most important</strong> for accurate recommendations.
+      {/* Info banner — collapsible */}
+      <div style={{ background:'#F0FDF4', borderBottom:'0.5px solid #86EFAC', flexShrink:0 }}>
+        {/* Always-visible header row */}
+        <div onClick={()=>setBannerOpen(o=>!o)}
+          style={{ padding:'8px 18px', display:'flex', alignItems:'center', gap:'10px', cursor:'pointer' }}>
+          <span style={{ fontSize:'12px', fontWeight:'700', color:'#14532D', flex:1 }}>
+            🗺️ Local Guide — your hotel's curated recommendations
           </span>
-        </div>
-        <div style={{ display:'flex', flexDirection:'column', gap:'3px', minWidth:'220px' }}>
-          <span style={{ fontWeight:'700' }}>How it works</span>
-          <span style={{ color:'#166534', lineHeight:'1.5' }}>
-            ⭐ <strong>Favourite</strong> — surfaces first, bot says "I especially recommend"<br/>
-            💰 <strong>Commission</strong> — boosts priority silently, never shown to guests<br/>
-            🔴 <strong>Red rows</strong> — disabled, invisible to bot<br/>
-            🏷 <strong>Attributes</strong> — click to set vibe, best for, amenities per category<br/>
-            ✏️ <strong>Click any cell</strong> to edit inline
+          <span style={{ fontSize:'11px', color:'#166534', opacity:0.8 }}>
+            {!bannerOpen && '⭐ Fav = first · 💰 Commission = silent boost · 🔴 Red = hidden · 🏷 = attributes · click cell to edit'}
           </span>
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ flexShrink:0, transition:'transform .2s', transform: bannerOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+            <path d="M2 5L7 10L12 5" stroke="#14532D" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
         </div>
-        <div style={{ display:'flex', flexDirection:'column', gap:'3px', minWidth:'180px' }}>
-          <span style={{ fontWeight:'700' }}>Import</span>
-          <span style={{ color:'#166534', lineHeight:'1.5' }}>
-            Use 📥 Import to upload CSV or JSON.<br/>
-            Required columns: <code style={{ background:'#DCFCE7', padding:'1px 5px', borderRadius:'3px', fontSize:'10px', fontFamily:'monospace' }}>name, category</code><br/>
-            Optional: area, google_rating, phone, booking_method, popular_item, description, google_place_id
-          </span>
-        </div>
+        {/* Expanded detail */}
+        {bannerOpen && (
+          <div style={{ padding:'0 18px 12px', fontSize:'11px', color:'#14532D',
+            display:'flex', gap:'24px', alignItems:'flex-start', flexWrap:'wrap', borderTop:'0.5px solid #DCFCE7' }}>
+            <div style={{ display:'flex', flexDirection:'column', gap:'4px', flex:1, minWidth:'260px', paddingTop:'10px' }}>
+              <span style={{ fontWeight:'700', marginBottom:'2px' }}>How the bot recommends</span>
+              <span style={{ color:'#166534', lineHeight:'1.6' }}>
+                When a guest says "where should I eat?" or "best beach for a family?", the bot queries this table.
+                It matches on <strong>Vibe & Best for attributes first</strong> — set these carefully for accurate recommendations.
+                ⭐ <strong>Favourites</strong> always surface first ("I especially recommend…").
+                💰 <strong>Commission items</strong> get a silent priority boost — never mentioned to guests.
+              </span>
+            </div>
+            <div style={{ display:'flex', flexDirection:'column', gap:'4px', minWidth:'200px', paddingTop:'10px' }}>
+              <span style={{ fontWeight:'700', marginBottom:'2px' }}>Managing this table</span>
+              <span style={{ color:'#166534', lineHeight:'1.6' }}>
+                🔴 <strong>Red rows</strong> are disabled — invisible to the bot<br/>
+                🏷 <strong>Click the tag button</strong> to set structured attributes per category<br/>
+                ✏️ <strong>Click any cell</strong> to edit it inline<br/>
+                📝 <strong>Description</strong> is what the bot uses to describe the place — keep it concise and vivid
+              </span>
+            </div>
+            <div style={{ display:'flex', flexDirection:'column', gap:'4px', minWidth:'180px', paddingTop:'10px' }}>
+              <span style={{ fontWeight:'700', marginBottom:'2px' }}>Import</span>
+              <span style={{ color:'#166534', lineHeight:'1.6' }}>
+                Use 📥 Import for CSV or JSON.<br/>
+                Required: <code style={{ background:'#DCFCE7', padding:'1px 5px', borderRadius:'3px', fontSize:'10px', fontFamily:'monospace' }}>name, category</code><br/>
+                Optional: area, google_rating, phone, booking_method, popular_item, description, google_place_id, tags
+              </span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Category pills + toolbar */}
@@ -895,6 +916,7 @@ export default function LocalGuideManager({ hotelId }) {
                 <th style={{ ...thStyle(), width:'30px', cursor:'default' }}>Cat</th>
                 <th style={thStyle('name')} onClick={()=>setSortBy('name')}>Name {sortBy==='name'?'↓':''}</th>
                 <th style={thStyle('commission')} onClick={()=>setSortBy('commission')}>Flags {sortBy==='commission'?'↓':''}</th>
+                <th style={{ ...thStyle(), maxWidth:'200px' }}>Description</th>
                 <th style={thStyle()}>Area</th>
                 <th style={thStyle()}>{cols.col4}</th>
                 <th style={thStyle('rating')} onClick={()=>setSortBy('rating')}>Rating {sortBy==='rating'?'↓':''}</th>
@@ -908,7 +930,7 @@ export default function LocalGuideManager({ hotelId }) {
               {adding && <AddRowInline />}
 
               {filtered.length === 0 && !adding && (
-                <tr><td colSpan={11} style={{ padding:'40px', textAlign:'center', color:'#9CA3AF' }}>
+                <tr><td colSpan={12} style={{ padding:'40px', textAlign:'center', color:'#9CA3AF' }}>
                   No items. Add a row or import from CSV.
                 </td></tr>
               )}
@@ -971,6 +993,11 @@ export default function LocalGuideManager({ hotelId }) {
                             item={item} onSave={patchPref} type="number" width="40px" />
                         )}
                       </div>
+                    </td>
+
+                    {/* Description */}
+                    <td style={{ padding:'6px 8px', color:'#6B7280', maxWidth:'200px' }}>
+                      <EditableCell value={item.description} field="description" item={item} onSave={patchPref} />
                     </td>
 
                     {/* Area */}
