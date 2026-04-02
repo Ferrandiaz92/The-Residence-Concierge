@@ -176,6 +176,7 @@ export async function POST(request) {
 
   try {
     const { hotelId, question, answer, category, tags, active = true } = await request.json()
+  if (hotelId && session.hotelId && hotelId !== session.hotelId) return Response.json({ error: 'Access denied' }, { status: 403 })
 
     if (!question || !answer) {
       return Response.json({ error: 'question and answer are required' }, { status: 400 })
