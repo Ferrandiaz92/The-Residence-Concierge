@@ -35,6 +35,7 @@ import { loadGuestMemory, formatMemoryForPrompt, updateGuestPreferences } from '
 import { notifyReceptionEscalation } from '../lib/push.js'
 import { getAvailableProducts, formatProductsForPrompt, parseProductOrder, createGuestOrder } from '../lib/stripe.js'
 import { checkInbound, RESTRICTED_PROMPT } from '../lib/abuse.js'
+import { sanitizeMessage, sanitizeName, sanitizeForPrompt, MAX_MESSAGE_LEN } from '../lib/sanitize.js'
 import log, { hotelCtx, guestCtx, bookingCtx } from '../../lib/logger.js'
 import { queuePartnerAlert, markRetrySucceeded } from '../lib/partner-retries.js'
 import { parseCancelFacility, parseCancelBooking, parseCancelRoom,
@@ -118,7 +119,16 @@ async function safeGetFlight(flightCode) {
 
 // ── MAIN HANDLER ──────────────────────────────────────────────
 export async function handleInboundWhatsApp(rawBody) {
-  const { from, to, message, profileName } = parseIncomingMessage(rawBody)
+  const { from, to, message: rawMessage, profileName: rawProfileName } = parseIncomingMessage(rawBody)
+
+  // ── Input sanitization ────────────────────────────────────
+  const message     = sanitizeMessage(rawMessage)
+  const profileName = sanitizeName(rawProfileName)
+
+  if (rawMessage.length > MAX_MESSAGE_LEN) {
+    log.warn('Message truncated', { to, originalLen: rawMessage.length, truncatedTo: MAX_MESSAGE_LEN })
+  }
+
   log.info('Inbound message', { to, preview: message.slice(0, 60) })
   if (!message.trim()) return
 
@@ -135,10 +145,15 @@ export async function handleInboundWhatsApp(rawBody) {
   // 3. Guest
   const guest = await getOrCreateGuest(hotel.id, from)
   if (!guest.name && profileName) {
-    const parts = profileName.trim().split(' ')
-    await updateGuest(guest.id, { name: parts[0]||null, surname: parts.slice(1).join(' ')||null })
-    guest.name = parts[0]||null
-    guest.surname = parts.slice(1).join(' ')||null
+    // profileName is user-controlled (WhatsApp display name) — already sanitized above
+    // but double-check length and split safely
+    const cleanName = profileName.slice(0, 60)
+    const parts     = cleanName.split(/\s+/).filter(Boolean)
+    if (parts.length > 0 && parts[0].length >= 2) {  // skip single-char or empty names
+      await updateGuest(guest.id, { name: parts[0], surname: parts.slice(1).join(' ')||null })
+      guest.name    = parts[0]
+      guest.surname = parts.slice(1).join(' ')||null
+    }
   }
   const gCtx = guestCtx(guest)
   log.info('Guest loaded', { ...hCtx, ...gCtx })
@@ -290,6 +305,19 @@ export async function handleInboundWhatsApp(rawBody) {
     conv = newConv
   }
 
+  // ── Per-guest flight lookup rate limit ───────────────────
+  // Prevent quota abuse — max 3 flight lookups per guest per 10 minutes
+  if (!global._flightRateMap) global._flightRateMap = new Map()
+  const flightRateKey    = `${guest.id}`
+  const flightRateWindow = 10 * 60 * 1000
+  const flightRateMax    = 3
+  const flightRateNow    = Date.now()
+  const flightRateRec    = global._flightRateMap.get(flightRateKey) || { count:0, start: flightRateNow }
+  if (flightRateNow - flightRateRec.start > flightRateWindow) {
+    global._flightRateMap.set(flightRateKey, { count: 0, start: flightRateNow })
+  }
+  const flightRateLimited = flightRateRec.count >= flightRateMax
+
   // ── IMPROVEMENT 1: Parallel fetches ───────────────────────
   // All six data sources are independent — fire them together.
   // Before: ~750ms sequential. After: ~150ms (slowest one wins).
@@ -308,8 +336,17 @@ export async function handleInboundWhatsApp(rawBody) {
   log.info('Parallel fetches done', { ...hCtx, partners: partners.length, kbEntries: kbEntries.length, products: products.length })
 
   // 8. Build system prompt
+  // Sanitize DB-sourced fields before prompt injection
+  // A guest's name or staff notes stored in DB could contain injection strings
+  const safeGuest = {
+    ...guest,
+    name:     sanitizeForPrompt(guest.name, 60),
+    surname:  sanitizeForPrompt(guest.surname, 60),
+    room:     (guest.room||'').replace(/[^\w\s\-]/g, '').slice(0, 10),
+    notes:    sanitizeForPrompt(guest.notes, 200),
+  }
   const kbText     = formatKnowledgeForPrompt(kbEntries)
-  const basePrompt = buildSystemPrompt(hotel, guest, partners)
+  const basePrompt = buildSystemPrompt(hotel, safeGuest, partners)
   let systemPrompt = kbText ? `${basePrompt}\n\n${kbText}` : basePrompt
 
   // Stay status context
@@ -418,9 +455,14 @@ export async function handleInboundWhatsApp(rawBody) {
     log.info('Multi-intent message detected', { ...hCtx, hasRoom: hasRoomIntent, taxi: hasTaxiIntent, restaurant: hasRestaurantIntent })
   }
 
-  // 10. Flight lookup
-  const allFlights = extractAllFlightNumbers(message)
+  // 10. Flight lookup — rate limited to 3 per guest per 10 minutes
+  const allFlights = !flightRateLimited ? extractAllFlightNumbers(message) : []
+  if (flightRateLimited && extractAllFlightNumbers(message).length > 0) {
+    log.warn('Flight lookup rate limited', { ...hCtx, ...gCtx })
+    global._flightRateMap.set(flightRateKey, { count: flightRateRec.count + 1, start: flightRateRec.start })
+  }
   if (allFlights.length > 0) {
+    global._flightRateMap.set(flightRateKey, { count: (flightRateRec.count||0) + 1, start: flightRateRec.start })
     log.info('Flight numbers detected', { flights: allFlights })
     const allResults = await Promise.all(allFlights.slice(0,2).map(fn => safeGetFlight(fn)))
     const flightData = allResults.find(f => f !== null) || null
