@@ -160,6 +160,7 @@ export async function POST(request) {
   if (csrf) return csrf
   try {
     const { hotelId, name, surname, phone, language, guestType, preferredServices, notes } = await request.json()
+  if (hotelId && session.hotelId && hotelId !== session.hotelId) return Response.json({ error: 'Access denied' }, { status: 403 })
     if (!hotelId || !name || !phone) return Response.json({ error: 'hotelId, name and phone required' }, { status: 400 })
 
     const supabase = getSupabase()
@@ -193,6 +194,7 @@ export async function PATCH(request) {
   if (csrf) return csrf
   try {
     const { id, logVisit, serviceType, serviceName, hotelId, ...updates } = await request.json()
+  if (hotelId && session.hotelId && hotelId !== session.hotelId) return Response.json({ error: 'Access denied' }, { status: 403 })
     if (!id) return Response.json({ error: 'id required' }, { status: 400 })
 
     const supabase = getSupabase()
