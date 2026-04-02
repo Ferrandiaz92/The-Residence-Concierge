@@ -24,7 +24,7 @@ export async function GET(request) {
     if (!session) return Response.json({ error:'Unauthorized' }, { status:401 })
 
     const { searchParams } = new URL(request.url)
-    const hotelId    = searchParams.get('hotelId')
+    const hotelId    = session.hotelId  // always from session
     const department = searchParams.get('department')
     const staffId    = searchParams.get('staffId')
 
@@ -79,7 +79,8 @@ export async function POST(request) {
 
     // ── Create staff worker ──────────────────────────────────
     if (action === 'create_staff') {
-      const { hotelId, name, displayName, email, department, password } = body
+      const { hotelId: bodyHotelId, name, displayName, email, department, password } = body
+      const hotelId = session.hotelId  // from session, not body
       if (!hotelId || !name || !department) return Response.json({ error:'Missing fields' }, { status:400 })
 
       const { data, error } = await supabase
