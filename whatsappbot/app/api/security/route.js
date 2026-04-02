@@ -33,7 +33,7 @@ export async function GET(request) {
     }
 
     const { searchParams } = new URL(request.url)
-    const hotelId = searchParams.get('hotelId') || session.hotelId
+    const hotelId = session.hotelId  // always from session — never URL
     const supabase = getSupabase()
 
     const [{ data: events }, { data: blocked }] = await Promise.all([
@@ -66,6 +66,7 @@ export async function POST(request) {
     }
 
     const { hotelId, phone, reason, notes } = await request.json()
+  if (hotelId && session.hotelId && hotelId !== session.hotelId) return Response.json({ error: 'Access denied' }, { status: 403 })
     if (!hotelId || !phone) {
       return Response.json({ error: 'hotelId and phone required' }, { status: 400 })
     }
@@ -106,6 +107,7 @@ export async function PATCH(request) {
     }
 
     const { action, hotelId, phone, eventId } = await request.json()
+  if (hotelId && session.hotelId && hotelId !== session.hotelId) return Response.json({ error: 'Access denied' }, { status: 403 })
     const supabase = getSupabase()
 
     if (action === 'unblock' && phone) {
