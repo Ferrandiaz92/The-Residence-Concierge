@@ -71,7 +71,9 @@ export async function POST(request) {
   }
   // ─────────────────────────────────────────────────────────
 
-  console.log('=== WEBHOOK HIT ===')
+  // Structured log — no full message body in production logs
+  console.log(JSON.stringify({ level:'info', event:'webhook_received', from: (rawBody.From||'').slice(-4), ts: new Date().toISOString() }))
+
   // Rate limit — max 30 messages/min per sender
   const senderPhone = rawBody.From || ''
   if (senderPhone && isRateLimited(senderPhone)) {
@@ -79,30 +81,20 @@ export async function POST(request) {
     return new Response('Too Many Requests', { status: 429 })
   }
 
-  console.log('From:', rawBody.From)
-  console.log('To:',   rawBody.To)
-  console.log('Body:', rawBody.Body)
-
   try {
     const from = rawBody.From?.replace('whatsapp:', '')
 
-    console.log('Step 1: importing modules...')
     const { handleInboundWhatsApp } = await import('../../../src/webhooks/whatsapp-inbound.js')
-    console.log('Step 2: imported whatsapp-inbound')
     const { handlePartnerReply }    = await import('../../../src/webhooks/partner-reply.js')
-    console.log('Step 3: imported partner-reply')
     const { supabase }              = await import('../../../src/lib/supabase.js')
-    console.log('Step 4: imported supabase')
 
     const isPartner = await checkIfPartner(from, supabase)
-    console.log('Step 5: isPartner =', isPartner)
 
     if (isPartner) {
       await handlePartnerReply(rawBody)
     } else {
       await handleInboundWhatsApp(rawBody)
     }
-    console.log('Step 6: handler completed successfully')
 
   } catch (err) {
     console.error('=== WEBHOOK CRASH ===')
