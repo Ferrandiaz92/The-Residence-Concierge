@@ -299,14 +299,17 @@ export default function SettingsTab({ hotelId, session, isMobile = false }) {
       {/* Section tabs — wraps to 2 lines on mobile */}
       <div style={{ display: isMobile ? 'grid' : 'flex', gridTemplateColumns: isMobile ? 'repeat(3, 1fr)' : undefined, background:'white', borderBottom:'0.5px solid var(--border)', flexShrink:0, overflowX: isMobile ? undefined : 'auto' }}>
         {canSee.knowledge   && secBtn('Knowledge base', section==='knowledge',   ()=>setSection('knowledge'))}
+        {!isMobile && canSee.localguide && secBtn('🗺️ Local Guide', section==='localguide', ()=>setSection('localguide'))}
         {canSee.experiences && secBtn('Experiences',    section==='experiences', ()=>setSection('experiences'))}
         {canSee.partners    && secBtn('Partners',        section==='partners',    ()=>setSection('partners'))}
         {canSee.types       && secBtn('Partner types',   section==='types',       ()=>setSection('types'))}
         {canSee.departments && secBtn('Departments',     section==='departments', ()=>setSection('departments'))}
         {canSee.shifts      && secBtn('Shifts',          section==='shifts',      ()=>setSection('shifts'))}
-        {canSee.localguide  && secBtn('🗺️ Local Guide',  section==='localguide',  ()=>setSection('localguide'))}
       </div>
 
+      {section === 'localguide' && !isMobile ? (
+        <LocalGuideManager hotelId={hotelId} />
+      ) : (
       <div className="scrollable" style={{ padding:'20px', background:'#F9FAFB' }}>
 
         {/* ── PARTNERS ── */}
@@ -622,17 +625,6 @@ export default function SettingsTab({ hotelId, session, isMobile = false }) {
         )}
 
         {/* ── SHIFTS ── */}
-        {section === 'localguide' && (
-          <div style={{ maxWidth:'940px' }}>
-            <div style={{ fontSize:'14px', fontWeight:'700', color:'#111827', marginBottom:'4px' }}>Local Guide</div>
-            <div style={{ fontSize:'12px', color:'#6B7280', marginBottom:'16px' }}>
-              Restaurants, beaches, museums, nightlife, cafés, archaeological sites, nature trails, wineries.
-              Enabled items are recommended by the bot when guests ask for local suggestions.
-            </div>
-            <LocalGuideManager hotelId={hotelId} />
-          </div>
-        )}
-
         {section === 'shifts' && (
           <div style={{ maxWidth:'900px' }}>
             <ShiftsManager hotelId={hotelId} />
@@ -641,5 +633,6 @@ export default function SettingsTab({ hotelId, session, isMobile = false }) {
 
       </div>
     </div>
+      )}
   )
 }
