@@ -12,24 +12,43 @@
 
 import twilio from 'twilio'
 
-// Simple in-memory rate limiter — limits per phone number
-// Prevents a single number from flooding the webhook
+// ── Per-phone rate limiter (prevents individual abuse) ───────
 const rateLimitMap = new Map()
 const RATE_LIMIT_WINDOW_MS = 60_000  // 1 minute
-const RATE_LIMIT_MAX       = 30      // max 30 messages per minute per number
+const RATE_LIMIT_MAX       = 30      // max 30 messages per minute per phone
 
 function isRateLimited(phone) {
   const now    = Date.now()
   const record = rateLimitMap.get(phone) || { count: 0, windowStart: now }
   if (now - record.windowStart > RATE_LIMIT_WINDOW_MS) {
-    // Reset window
     rateLimitMap.set(phone, { count: 1, windowStart: now })
     return false
   }
   record.count++
   rateLimitMap.set(phone, record)
   if (record.count > RATE_LIMIT_MAX) {
-    console.warn(JSON.stringify({ level:'warn', event:'rate_limited', phone: phone.slice(-4), count: record.count, ts: new Date().toISOString() }))
+    console.warn(JSON.stringify({ level:'warn', event:'rate_limited_phone', phone: phone.slice(-4), count: record.count, ts: new Date().toISOString() }))
+    return true
+  }
+  return false
+}
+
+// ── Per-hotel rate limiter (prevents coordinated abuse / Anthropic budget protection)
+const hotelRateLimitMap = new Map()
+const HOTEL_RATE_WINDOW_MS = 60_000   // 1 minute
+const HOTEL_RATE_MAX       = 200      // max 200 messages per minute per hotel
+
+function isHotelRateLimited(hotelNumber) {
+  const now    = Date.now()
+  const record = hotelRateLimitMap.get(hotelNumber) || { count: 0, windowStart: now }
+  if (now - record.windowStart > HOTEL_RATE_WINDOW_MS) {
+    hotelRateLimitMap.set(hotelNumber, { count: 1, windowStart: now })
+    return false
+  }
+  record.count++
+  hotelRateLimitMap.set(hotelNumber, record)
+  if (record.count > HOTEL_RATE_MAX) {
+    console.warn(JSON.stringify({ level:'warn', event:'rate_limited_hotel', hotel: hotelNumber, count: record.count, ts: new Date().toISOString() }))
     return true
   }
   return false
@@ -77,7 +96,14 @@ export async function POST(request) {
   // Rate limit — max 30 messages/min per sender
   const senderPhone = rawBody.From || ''
   if (senderPhone && isRateLimited(senderPhone)) {
-    console.warn(JSON.stringify({ level:'warn', event:'rate_limited', phone: senderPhone.slice(-6), ts: new Date().toISOString() }))
+    console.warn(JSON.stringify({ level:'warn', event:'rate_limited', phone: senderPhone.slice(-4), ts: new Date().toISOString() }))
+    return new Response('Too Many Requests', { status: 429 })
+  }
+
+  // Per-hotel global rate limit — protects Anthropic budget against coordinated abuse
+  const hotelNumber = rawBody.To || ''
+  if (hotelNumber && isHotelRateLimited(hotelNumber)) {
+    console.warn(JSON.stringify({ level:'warn', event:'rate_limited_hotel', ts: new Date().toISOString() }))
     return new Response('Too Many Requests', { status: 429 })
   }
 
