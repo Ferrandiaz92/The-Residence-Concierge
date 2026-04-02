@@ -41,6 +41,47 @@ function getLang(code) { return LANGUAGES[code] || LANGUAGES.en }
 function getType(type) { return GUEST_TYPES[type] || GUEST_TYPES.stay }
 function isVIP(guest)  { return (guest.visit_count_day || 0) >= 10 || (guest.visit_count || 1) >= 3 }
 
+const BOOKING_TYPE_EMOJI = { taxi:'🚗', restaurant:'🍽️', activity:'⛵', facility:'🛎️', late_checkout:'🕐' }
+
+function BookingRow({ b, TYPE_COLORS }) {
+  const [open, setOpen] = useState(false)
+  const tc = TYPE_COLORS?.[b.type] || { bg:'#F1F5F9', color:'#334155', label:'?' }
+  const isPending   = b.status === 'pending'
+  const isConfirmed = b.status === 'confirmed'
+  const emoji   = BOOKING_TYPE_EMOJI[b.type] || tc.label
+  const dateStr = (() => { try { return new Date(b.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'}) } catch { return '' } })()
+  return (
+    <div style={{ background:'#F9FAFB', borderRadius:'8px', overflow:'hidden', border:'0.5px solid #E5E7EB' }}>
+      <div onClick={() => setOpen(o=>!o)} style={{ display:'flex', alignItems:'center', gap:'10px', padding:'9px 12px', cursor:'pointer' }}>
+        <div style={{ width:'7px', height:'7px', borderRadius:'50%', background: isConfirmed?'#16A34A':isPending?'#F59E0B':'#9CA3AF', flexShrink:0 }}/>
+        <div style={{ width:'22px', height:'22px', borderRadius:'5px', background:tc.bg, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'12px', flexShrink:0 }}>{emoji}</div>
+        <div style={{ flex:1, minWidth:0 }}>
+          <div style={{ fontSize:'13px', fontWeight:'600', color:'#374151', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+            {b.partners?.name || b.type}
+          </div>
+          <div style={{ fontSize:'11px', color:'#9CA3AF' }}>{dateStr}</div>
+        </div>
+        <div style={{ fontSize:'11px', fontWeight:'700', color: isConfirmed?'#14532D':isPending?'#78350F':'#9CA3AF', flexShrink:0 }}>
+          {isConfirmed?'✅ Confirmed':isPending?'⏳ Pending':'Done'}
+        </div>
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+          <path d={open?'M1 7L5 3L9 7':'M1 3L5 7L9 3'} stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </div>
+      {open && (
+        <div style={{ padding:'0 12px 10px 39px', display:'flex', flexDirection:'column', gap:'3px', fontSize:'12px', color:'#374151' }}>
+          {b.details?.destination && <div>📍 {b.details.destination}</div>}
+          {b.details?.time        && <div>🕐 {b.details.time}</div>}
+          {b.details?.date        && <div>📅 {b.details.date?.includes('-') ? b.details.date.split('-').reverse().join('/') : b.details.date}</div>}
+          {b.details?.passengers  && <div>👥 {b.details.passengers} passengers</div>}
+          {b.commission_amount > 0 && <div>💰 Commission: €{b.commission_amount}</div>}
+          {b.id && <div style={{ color:'#9CA3AF', fontSize:'11px' }}>Ref: #{b.id.slice(-6).toUpperCase()}</div>}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function GuestsTab({ hotelId, selectedGuest }) {
   const [profile, setProfile]             = useState(null)
   const [loading, setLoading]             = useState(false)
@@ -424,47 +465,6 @@ export default function GuestsTab({ hotelId, selectedGuest }) {
             {bookings.length > 0 && (() => {
               const upcoming = bookings.filter(b => ['pending','confirmed'].includes(b.status))
               const past     = bookings.filter(b => ['completed','resolved','declined','cancelled'].includes(b.status))
-              const typeEmoji = { taxi:'🚗', restaurant:'🍽️', activity:'⛵', facility:'🛎️', late_checkout:'🕐' }
-
-              function BookingRow({ b }) {
-                const [open, setOpen] = React.useState(false)
-                const tc      = TYPE_COLORS[b.type]||{bg:'#F1F5F9',color:'#334155',label:'?'}
-                const isPending   = b.status === 'pending'
-                const isConfirmed = b.status === 'confirmed'
-                const emoji   = typeEmoji[b.type] || tc.label
-                const dateStr = (() => { try { return new Date(b.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'}) } catch { return '' } })()
-                return (
-                  <div style={{ background:'#F9FAFB', borderRadius:'8px', overflow:'hidden', border:'0.5px solid #E5E7EB' }}>
-                    <div onClick={() => setOpen(o=>!o)} style={{ display:'flex', alignItems:'center', gap:'10px', padding:'9px 12px', cursor:'pointer' }}>
-                      <div style={{ width:'7px', height:'7px', borderRadius:'50%', background: isConfirmed?'#16A34A':isPending?'#F59E0B':'#9CA3AF', flexShrink:0 }}/>
-                      <div style={{ width:'22px', height:'22px', borderRadius:'5px', background:tc.bg, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'12px', flexShrink:0 }}>{emoji}</div>
-                      <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{ fontSize:'13px', fontWeight:'600', color:'#374151', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                          {b.partners?.name || b.type}
-                        </div>
-                        <div style={{ fontSize:'11px', color:'#9CA3AF' }}>{dateStr}</div>
-                      </div>
-                      <div style={{ fontSize:'11px', fontWeight:'700', color: isConfirmed?'#14532D':isPending?'#78350F':'#9CA3AF', flexShrink:0 }}>
-                        {isConfirmed?'✅ Confirmed':isPending?'⏳ Pending':'Done'}
-                      </div>
-                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                        <path d={open?'M1 7L5 3L9 7':'M1 3L5 7L9 3'} stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
-                    </div>
-                    {open && (
-                      <div style={{ padding:'0 12px 10px 39px', display:'flex', flexDirection:'column', gap:'3px', fontSize:'12px', color:'#374151' }}>
-                        {b.details?.destination && <div>📍 {b.details.destination}</div>}
-                        {b.details?.time        && <div>🕐 {b.details.time}</div>}
-                        {b.details?.date        && <div>📅 {b.details.date?.includes('-') ? b.details.date.split('-').reverse().join('/') : b.details.date}</div>}
-                        {b.details?.passengers  && <div>👥 {b.details.passengers} passengers</div>}
-                        {b.commission_amount > 0 && <div>💰 Commission: €{b.commission_amount}</div>}
-                        {b.id && <div style={{ color:'#9CA3AF', fontSize:'11px' }}>Ref: #{b.id.slice(-6).toUpperCase()}</div>}
-                      </div>
-                    )}
-                  </div>
-                )
-              }
-
               return (
                 <div>
                   {upcoming.length > 0 && (
@@ -474,7 +474,7 @@ export default function GuestsTab({ hotelId, selectedGuest }) {
                         Upcoming & confirmed
                       </div>
                       <div style={{ display:'flex', flexDirection:'column', gap:'5px' }}>
-                        {upcoming.map(b => <BookingRow key={b.id} b={b} />)}
+                        {upcoming.map(b => <BookingRow key={b.id} b={b} TYPE_COLORS={TYPE_COLORS} />)}
                       </div>
                     </div>
                   )}
@@ -485,7 +485,7 @@ export default function GuestsTab({ hotelId, selectedGuest }) {
                         Past bookings
                       </div>
                       <div style={{ display:'flex', flexDirection:'column', gap:'5px' }}>
-                        {past.map(b => <BookingRow key={b.id} b={b} />)}
+                        {past.map(b => <BookingRow key={b.id} b={b} TYPE_COLORS={TYPE_COLORS} />)}
                       </div>
                     </div>
                   )}

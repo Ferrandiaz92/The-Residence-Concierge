@@ -309,7 +309,7 @@ export default function SettingsTab({ hotelId, session, isMobile = false }) {
 
       {section === 'localguide' && !isMobile ? (
         <LocalGuideManager hotelId={hotelId} />
-      ) : (
+      ) : section !== 'localguide' && (
       <div className="scrollable" style={{ padding:'20px', background:'#F9FAFB' }}>
 
         {/* ── PARTNERS ── */}
@@ -632,7 +632,7 @@ export default function SettingsTab({ hotelId, session, isMobile = false }) {
         )}
 
       </div>
-    </div>
       )}
+    </div>
   )
 }
