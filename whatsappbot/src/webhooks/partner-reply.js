@@ -19,6 +19,10 @@
 
 import { parseIncomingMessage, sendWhatsApp } from '../lib/twilio.js'
 import { supabase, updateBookingStatus, appendMessage } from '../lib/supabase.js'
+import {
+  isRefVerification, parseRefFromMessage, lookupRef, buildVerificationReply,
+  isDisputeMessage, parseDisputeMessage,
+} from '../lib/booking-refs.js'
 import log, { hotelCtx, guestCtx } from '../../lib/logger.js'
 
 function detectPartnerReply(message) {
@@ -175,6 +179,58 @@ export async function handlePartnerReply(rawBody) {
   const replyType = detectPartnerReply(message)
   if (replyType === 'unknown') {
     log.debug('Partner reply type unknown — ignoring', { preview: message.slice(0, 40) })
+    return
+  }
+
+  // ── REF verification — partner texts "REF #RC-2604-0042" ──
+  if (isRefVerification(message)) {
+    const ref    = parseRefFromMessage(message)
+    const lookup = ref ? await lookupRef(ref) : null
+    const reply  = buildVerificationReply(lookup)
+    await sendWhatsApp(from, reply)
+    log.info('Partner ref verification', { ref, found: !!lookup })
+    return
+  }
+
+  // ── Dispute — partner texts "DISPUTE #RC-2604-0042 reason" ─
+  if (isDisputeMessage(message)) {
+    const { ref, reason } = parseDisputeMessage(message)
+    if (ref) {
+      const lookup = await lookupRef(ref)
+      if (lookup) {
+        // Flag as disputed in DB
+        const table = lookup.type === 'stripe_order' ? 'guest_orders' : 'bookings'
+        await supabase.from(table).update({
+          disputed:    true,
+          disputed_at: new Date().toISOString(),
+          dispute_note: reason,
+        }).eq('id', lookup.record.id)
+
+        // Create urgent notification for reception
+        await supabase.from('notifications').insert({
+          hotel_id:  lookup.hotel.id,
+          type:      'payment_dispute',
+          title:     `🚨 Payment dispute — Ref #${ref}`,
+          body:      `${lookup.partner?.name}: "${reason}" · Guest: ${[lookup.guest?.name, lookup.guest?.surname].filter(Boolean).join(' ')} · ${lookup.guest?.room ? 'Room ' + lookup.guest.room : ''}`,
+          link_type: 'order',
+          link_id:   lookup.record.id,
+          urgent:    true,
+        }).catch(() => {})
+
+        await sendWhatsApp(from,
+          `🚨 Dispute received for Ref #${ref}.
+
+Reception has been notified urgently and will contact you within 30 minutes.
+
+Reason logged: "${reason}"
+
+Thank you for flagging this.`
+        )
+        log.info('Partner dispute filed', { ref, reason, partnerId: from })
+      } else {
+        await sendWhatsApp(from, `❓ Ref #${ref} not found. Please check and retry or call reception.`)
+      }
+    }
     return
   }
 
