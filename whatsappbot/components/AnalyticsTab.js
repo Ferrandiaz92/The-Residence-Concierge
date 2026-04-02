@@ -25,6 +25,11 @@ export default function AnalyticsTab({ hotelId }) {
   const [gaps, setGaps]                   = useState([])
   const [gapsLoading, setGapsLoading]     = useState(false)
   const [gapResolved, setGapResolved]     = useState({})
+  const [payments, setPayments]           = useState([])
+  const [payStats, setPayStats]           = useState(null)
+  const [paymentsLoading, setPaymentsLoading] = useState(false)
+  const [payPeriod, setPayPeriod]         = useState('30')
+  const [paySearch, setPaySearch]         = useState('')
   const [exportMonth, setExportMonth] = useState(() => {
     const now = new Date()
     return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`
@@ -46,6 +51,19 @@ export default function AnalyticsTab({ hotelId }) {
       .then(d => { setGaps(d.gaps || []); setGapsLoading(false) })
       .catch(() => setGapsLoading(false))
   }, [hotelId, activeSection])
+
+  useEffect(() => {
+    if (!hotelId || activeSection !== 'payments') return
+    setPaymentsLoading(true)
+    fetch(`/api/orders?hotelId=${hotelId}&period=${payPeriod}`)
+      .then(r => r.json())
+      .then(d => {
+        setPayments(d.orders || [])
+        setPayStats(d.summary || null)
+        setPaymentsLoading(false)
+      })
+      .catch(() => setPaymentsLoading(false))
+  }, [hotelId, activeSection, payPeriod])
 
   async function handleExport() {
     setExporting(true)
@@ -179,6 +197,7 @@ export default function AnalyticsTab({ hotelId }) {
         {[
           { key:'qa',       label:'Bot QA'         },
           { key:'gaps',     label:'Knowledge Gaps'  },
+          { key:'payments', label:'💳 Payments'      },
           { key:'overview', label:'Overview'        },
         ].map(sec => (
           <button key={sec.key} onClick={() => setActiveSection(sec.key)}
@@ -254,6 +273,107 @@ export default function AnalyticsTab({ hotelId }) {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeSection === 'payments' && (
+        <div className="scrollable" style={{ padding:'16px', background:'#F9FAFB' }}>
+          {/* Stats row */}
+          {payStats && (
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:'10px', marginBottom:'16px' }}>
+              {[
+                { label:'Total paid',      value:`€${(payStats.totalRevenue||0).toFixed(0)}`,     color:'#14532D', bg:'#F0FDF4' },
+                { label:'Commission',      value:`€${(payStats.totalCommission||0).toFixed(0)}`,  color:'#78350F', bg:'#FFFBEB' },
+                { label:'Orders',          value:payStats.paidOrders||0,                           color:'#1E3A5F', bg:'#EFF6FF' },
+                { label:'Pending payment', value:payStats.pendingPayment||0,                       color:'#7C3AED', bg:'#F5F3FF' },
+              ].map(s => (
+                <div key={s.label} style={{ background:s.bg, borderRadius:'10px', padding:'12px 14px' }}>
+                  <div style={{ fontSize:'11px', color:s.color, fontWeight:'600', marginBottom:'3px' }}>{s.label}</div>
+                  <div style={{ fontSize:'22px', fontWeight:'700', color:s.color }}>{s.value}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Filters */}
+          <div style={{ display:'flex', gap:'8px', marginBottom:'12px', alignItems:'center' }}>
+            <input value={paySearch} onChange={e=>setPaySearch(e.target.value)}
+              placeholder="Search guest, ref, product…"
+              style={{ flex:1, padding:'7px 12px', border:'0.5px solid #D1D5DB', borderRadius:'8px', fontSize:'13px', fontFamily:"'DM Sans',sans-serif", outline:'none' }} />
+            <select value={payPeriod} onChange={e=>setPayPeriod(e.target.value)}
+              style={{ padding:'7px 10px', border:'0.5px solid #D1D5DB', borderRadius:'8px', fontSize:'12px', fontFamily:"'DM Sans',sans-serif", outline:'none', background:'white' }}>
+              <option value="7">Last 7 days</option>
+              <option value="30">Last 30 days</option>
+              <option value="90">Last 90 days</option>
+            </select>
+          </div>
+
+          {paymentsLoading ? (
+            <div style={{ padding:'40px', textAlign:'center', color:'#9CA3AF', fontSize:'13px' }}>Loading…</div>
+          ) : (
+            <div style={{ background:'white', borderRadius:'12px', border:'0.5px solid #E5E7EB', overflow:'hidden' }}>
+              <table style={{ width:'100%', borderCollapse:'collapse', fontSize:'12px' }}>
+                <thead>
+                  <tr style={{ background:'#F9FAFB', borderBottom:'0.5px solid #E5E7EB' }}>
+                    {['Ref','Guest','Product','Amount','Commission','Payout','Paid at','Status'].map(h => (
+                      <th key={h} style={{ padding:'9px 12px', textAlign:'left', fontSize:'11px', fontWeight:'700', color:'#6B7280', whiteSpace:'nowrap' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {(payments || [])
+                    .filter(o => !paySearch || [
+                      o.booking_ref, o.guests?.name, o.guests?.surname,
+                      o.partner_products?.name, o.guests?.room
+                    ].join(' ').toLowerCase().includes(paySearch.toLowerCase()))
+                    .map(o => {
+                      const isPaid     = ['paid','confirmed'].includes(o.status)
+                      const isDisputed = o.disputed
+                      const guest      = o.guests || {}
+                      const payout     = ((o.total_amount||0) - (o.commission_amount||0)).toFixed(0)
+                      return (
+                        <tr key={o.id} style={{ borderBottom:'0.5px solid #F3F4F6',
+                          background: isDisputed ? '#FEF2F2' : 'white' }}>
+                          <td style={{ padding:'8px 12px', fontWeight:'700', color:'#111827', whiteSpace:'nowrap' }}>
+                            {o.booking_ref || o.id?.slice(-6).toUpperCase() || '—'}
+                            {isDisputed && <span style={{ marginLeft:'5px', fontSize:'10px', background:'#FEE2E2', color:'#DC2626', padding:'1px 5px', borderRadius:'4px', fontWeight:'700' }}>DISPUTED</span>}
+                          </td>
+                          <td style={{ padding:'8px 12px', color:'#374151' }}>
+                            {[guest.name, guest.surname].filter(Boolean).join(' ') || '—'}
+                            {guest.room && <span style={{ color:'#9CA3AF', marginLeft:'5px' }}>R{guest.room}</span>}
+                          </td>
+                          <td style={{ padding:'8px 12px', color:'#6B7280', maxWidth:'140px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                            {o.partner_products?.name || o.partners?.name || '—'}
+                          </td>
+                          <td style={{ padding:'8px 12px', fontWeight:'600', color:'#111827', whiteSpace:'nowrap' }}>
+                            €{(o.total_amount||0).toFixed(0)}
+                          </td>
+                          <td style={{ padding:'8px 12px', color:'#78350F', whiteSpace:'nowrap' }}>
+                            €{(o.commission_amount||0).toFixed(0)}
+                          </td>
+                          <td style={{ padding:'8px 12px', color:'#14532D', whiteSpace:'nowrap' }}>
+                            €{payout}
+                          </td>
+                          <td style={{ padding:'8px 12px', color:'#9CA3AF', whiteSpace:'nowrap' }}>
+                            {o.paid_at ? new Date(o.paid_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : '—'}
+                          </td>
+                          <td style={{ padding:'8px 12px' }}>
+                            <span style={{ fontSize:'10px', fontWeight:'700', padding:'2px 7px', borderRadius:'20px',
+                              background: isPaid?'#DCFCE7':isDisputed?'#FEE2E2':'#FEF3C7',
+                              color:      isPaid?'#14532D':isDisputed?'#DC2626':'#78350F' }}>
+                              {isDisputed?'DISPUTED':o.status?.toUpperCase()}
+                            </span>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                </tbody>
+              </table>
+              {payments.length === 0 && !paymentsLoading && (
+                <div style={{ padding:'40px', textAlign:'center', color:'#9CA3AF', fontSize:'13px' }}>No payments in this period</div>
+              )}
             </div>
           )}
         </div>
