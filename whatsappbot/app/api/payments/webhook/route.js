@@ -19,6 +19,7 @@
 export const dynamic = 'force-dynamic'
 
 import Stripe          from 'stripe'
+import { generateBookingRef } from '../../../src/lib/booking-refs.js'
 import { createClient } from '@supabase/supabase-js'
 import twilio           from 'twilio'
 
@@ -87,8 +88,8 @@ function buildRichConfirmation(lang, { productName, tierName, quantity, total, m
 }
 
 // ── PARTNER ALERT BUILDER ─────────────────────────────────────
-function buildPartnerAlert({ productName, tierName, quantity, guestName, guestRoom, total, payout, orderId }) {
-  const ref = orderId.slice(-6).toUpperCase()
+function buildPartnerAlert({ productName, tierName, quantity, guestName, guestRoom, total, payout, orderId, bookingRef }) {
+  const ref = bookingRef || orderId.slice(-6).toUpperCase()
   return [
     `🎟 New booking from The Residence Concierge`,
     ``,
@@ -103,6 +104,8 @@ function buildPartnerAlert({ productName, tierName, quantity, guestName, guestRo
     ``,
     `Guest will present this reference + photo ID on arrival.`,
     `Reply ✅ to confirm you have received this booking.`,
+    `Reply REF #${ref} at any time to verify payment.`,
+    `Reply DISPUTE #${ref} [reason] if any issue.`,
   ].join('\n')
 }
 
@@ -171,6 +174,13 @@ export async function POST(request) {
 
       if (!order) return new Response('ok', { status: 200 })
 
+      // Generate proper booking ref if not already set
+      let bookingRef = order.booking_ref
+      if (!bookingRef) {
+        bookingRef = await generateBookingRef(hotelId)
+        await supabase.from('guest_orders').update({ booking_ref: bookingRef }).eq('id', orderId)
+      }
+
       await supabase.from('partner_payouts').update({ status: 'ready' }).eq('order_id', orderId)
 
       const { data: guest } = await supabase
@@ -197,7 +207,7 @@ export async function POST(request) {
         whatToBring:        product.what_to_bring       || null,
         cancellationPolicy: product.cancellation_policy || null,
         partnerContact:     product.partner_contact     || null,
-        bookingRef:         orderId,
+        bookingRef:         bookingRef,  // RC-YYMM-NNNN format
         guestName:          fullGuestName,
       })
 
@@ -216,7 +226,7 @@ export async function POST(request) {
         hotel_id:   hotelId,
         type:       'fulfillment_needed',
         title:      `🎟 Paid & confirmed — ${productName}`,
-        body:       `${fullGuestName}${order.guests?.room ? ' · Room ' + order.guests.room : ''} · Ref #${orderId.slice(-6).toUpperCase()} · €${total} received. Please prepare for guest arrival.`,
+        body:       `${fullGuestName}${order.guests?.room ? ' · Room ' + order.guests.room : ''} · Ref #${bookingRef} · €${total} received. Please prepare for guest arrival.`,
         link_type:  'order',
         link_id:    orderId,
         urgent:     true,
@@ -246,6 +256,7 @@ export async function POST(request) {
           total,
           payout,
           orderId,
+          bookingRef,
         })).catch(e => console.error('Partner notify error:', e.message))
       }
 
