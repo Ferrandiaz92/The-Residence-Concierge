@@ -20,6 +20,10 @@ function getSupabase() {
 const DEPT_ROLES = ['maintenance','housekeeping','concierge','fnb','security','valet','frontdesk']
 
 export async function GET(request) {
+  const auth = request.headers.get('authorization')
+  if (process.env.CRON_SECRET && auth !== `Bearer ${process.env.CRON_SECRET}`) {
+    return Response.json({ error: 'Unauthorized' }, { status: 401 })
+  }
   // Verify it's from Vercel cron or an internal call
   const authHeader = request.headers.get('authorization')
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
