@@ -24,8 +24,9 @@ const CATEGORIES = [
 
 const BOOKING_METHODS = [
   { key:'partner', label:'Via partner' },
-  { key:'phone',   label:'Phone' },
-  { key:'link',    label:'Booking link' },
+  { key:'phone',    label:'📞 Phone' },
+  { key:'whatsapp', label:'💬 WhatsApp' },
+  { key:'link',     label:'🔗 Book online' },
   { key:'walkin',  label:'Walk-in' },
   { key:'none',    label:'—' },
 ]
@@ -39,16 +40,16 @@ const COMMON_TAGS  = ['sea_view','outdoor','vegetarian','vegan','halal','kosher'
 // Each category overrides 3 flexible columns: col4, col5, col6
 // Fixed: toggle | emoji | name+flags | area | rating | walk | booking | actions
 const CAT_COLS = {
-  restaurant:     { col4:'Cuisine',     col5:'Price',     col6:'Signature dish',  field4:'cuisine_type', field5:'price_range',    field6:'popular_item' },
-  beach:          { col4:'Type',        col5:'Facilities',col6:'Water quality',   field4:'vibe',         field5:'notes',          field6:'popular_item' },
-  nightlife:      { col4:'Vibe',        col5:'Price',     col6:'Signature drink', field4:'vibe',         field5:'price_range',    field6:'popular_item' },
-  cafe:           { col4:'Specialty',   col5:'Price',     col6:'Must-try item',   field4:'cuisine_type', field5:'price_range',    field6:'popular_item' },
-  museum:         { col4:'Theme',       col5:'Entry fee', col6:'Top exhibit',     field4:'vibe',         field5:'price_range',    field6:'popular_item' },
-  archaeological: { col4:'Period',      col5:'Entry fee', col6:'Highlight',       field4:'cuisine_type', field5:'price_range',    field6:'popular_item' },
-  nature:         { col4:'Difficulty',  col5:'Duration',  col6:'Best season',     field4:'vibe',         field5:'notes',          field6:'popular_item' },
-  winery:         { col4:'Grape type',  col5:'Tasting €', col6:'Signature wine',  field4:'cuisine_type', field5:'price_range',    field6:'popular_item' },
-  other:          { col4:'Type',        col5:'Price',     col6:'Highlight',       field4:'vibe',         field5:'price_range',    field6:'popular_item' },
-  all:            { col4:'Cuisine/Type',col5:'Price',     col6:'Signature item',  field4:'cuisine_type', field5:'price_range',    field6:'popular_item' },
+  restaurant:     { col4:'Cuisine',     col5:'Signature dish',  field4:'cuisine_type', field5:'popular_item' },
+  beach:          { col4:'Type',        col5:'Water quality',   field4:'vibe',         field5:'popular_item' },
+  nightlife:      { col4:'Vibe',        col5:'Signature drink', field4:'vibe',         field5:'popular_item' },
+  cafe:           { col4:'Specialty',   col5:'Must-try item',   field4:'cuisine_type', field5:'popular_item' },
+  museum:         { col4:'Theme',       col5:'Top exhibit',     field4:'vibe',         field5:'popular_item' },
+  archaeological: { col4:'Period',      col5:'Highlight',       field4:'cuisine_type', field5:'popular_item' },
+  nature:         { col4:'Difficulty',  col5:'Best season',     field4:'vibe',         field5:'popular_item' },
+  winery:         { col4:'Grape type',  col5:'Signature wine',  field4:'cuisine_type', field5:'popular_item' },
+  other:          { col4:'Type',        col5:'Highlight',       field4:'vibe',         field5:'popular_item' },
+  all:            { col4:'Cuisine/Type',col5:'Signature item',  field4:'cuisine_type', field5:'popular_item' },
 }
 
 function getCols(cat) { return CAT_COLS[cat] || CAT_COLS.all }
@@ -192,6 +193,38 @@ function FlagBtn({ active, label, color, bgActive, bgInactive, onClick }) {
   )
 }
 
+
+// ── Tags popover ──────────────────────────────────────────────
+function TagsPopover({ item, onSave, onClose }) {
+  const [selected, setSelected] = useState(item.tags || [])
+  function toggle(t) { setSelected(p => p.includes(t) ? p.filter(x=>x!==t) : [...p,t]) }
+  async function save() { await onSave(item.pref_id, { tags: selected }); onClose() }
+  return (
+    <div style={{ position:'absolute', zIndex:400, top:'calc(100% + 4px)', left:0,
+      background:'white', border:'1px solid #E5E7EB', borderRadius:'10px', padding:'12px',
+      minWidth:'260px', boxShadow:'0 4px 20px rgba(0,0,0,0.12)' }}
+      onClick={e=>e.stopPropagation()}>
+      <div style={{ fontSize:'12px', fontWeight:'700', color:'#111827', marginBottom:'8px' }}>Edit tags</div>
+      <div style={{ display:'flex', flexWrap:'wrap', gap:'5px', marginBottom:'10px' }}>
+        {COMMON_TAGS.map(t => (
+          <button key={t} onClick={()=>toggle(t)}
+            style={{ padding:'3px 10px', borderRadius:'20px', fontSize:'11px', fontWeight:'500',
+              cursor:'pointer', fontFamily:font,
+              border:`0.5px solid ${selected.includes(t)?GREEN:'#D1D5DB'}`,
+              background:selected.includes(t)?GREEN:'white',
+              color:selected.includes(t)?'white':'#374151' }}>
+            {t}
+          </button>
+        ))}
+      </div>
+      <div style={{ display:'flex', gap:'6px', justifyContent:'flex-end' }}>
+        <button onClick={onClose} style={{ padding:'5px 12px', background:'white', border:'0.5px solid #D1D5DB', borderRadius:'7px', fontSize:'11px', color:'#374151', cursor:'pointer', fontFamily:font }}>Cancel</button>
+        <button onClick={save} style={{ padding:'5px 12px', background:GREEN, border:'none', borderRadius:'7px', fontSize:'11px', fontWeight:'700', color:'white', cursor:'pointer', fontFamily:font }}>Save</button>
+      </div>
+    </div>
+  )
+}
+
 export default function LocalGuideManager({ hotelId }) {
   const [items, setItems]             = useState([])
   const [available, setAvailable]     = useState([])
@@ -210,6 +243,7 @@ export default function LocalGuideManager({ hotelId }) {
   const [hoveredRow, setHoveredRow]   = useState(null)
   const [hoverTimer, setHoverTimer]   = useState(null)
   const [visibleTooltip, setVisibleTooltip] = useState(null)
+  const [tagsPopover, setTagsPopover]     = useState(null)
   const fileRef = useRef()
 
   const blank = () => ({
@@ -382,14 +416,15 @@ export default function LocalGuideManager({ hotelId }) {
         <td style={{ padding:'4px 5px' }}>{tc('name','Name *')}</td>
         <td style={{ padding:'4px 5px' }}>{tc('area','Area')}</td>
         <td style={{ padding:'4px 5px' }}>{tc(cols.field4, cols.col4)}</td>
-        <td style={{ padding:'4px 5px' }}>{tc(cols.field5, cols.col5)}</td>
         <td style={{ padding:'4px 5px' }}>{tc('google_rating','4.5','number','70px')}</td>
-        <td style={{ padding:'4px 5px' }}>{tc('phone','+357...')}</td>
-        <td style={{ padding:'4px 5px' }}>{tc(cols.field6, cols.col6)}</td>
-        <td style={{ padding:'4px 5px' }}>{tc('distance_min_walk','min','number','60px')}</td>
         <td style={{ padding:'4px 5px' }}>
-          {sc('booking_method', BOOKING_METHODS.map(b=>({key:b.key,label:b.label})))}
+          <div style={{ display:'flex', gap:'3px' }}>
+            {sc('booking_method', BOOKING_METHODS.map(b=>({key:b.key,label:b.label})))}
+            {tc('phone','+357...')}
+          </div>
         </td>
+        <td style={{ padding:'4px 5px' }}>{tc(cols.field5, cols.col5)}</td>
+        <td style={{ padding:'4px 5px' }}>{tc('distance_min_walk','min','number','60px')}</td>
         <td style={{ padding:'4px 5px' }}>
           <div style={{ display:'flex', gap:'4px' }}>
             <button onClick={()=>{setNewRow(d);saveNew()}} disabled={!d.name.trim()||saving}
@@ -522,12 +557,10 @@ export default function LocalGuideManager({ hotelId }) {
                 <th style={thStyle('name')} onClick={()=>setSortBy('name')}>Name {sortBy==='name'?'↓':''}</th>
                 <th style={thStyle()}>Area</th>
                 <th style={thStyle()}>{cols.col4}</th>
-                <th style={thStyle()}>{cols.col5}</th>
                 <th style={thStyle('rating')} onClick={()=>setSortBy('rating')}>Rating {sortBy==='rating'?'↓':''}</th>
-                <th style={thStyle()}>Phone</th>
-                <th style={thStyle()}>{cols.col6}</th>
-                <th style={thStyle('priority')} onClick={()=>setSortBy('priority')}>Walk {sortBy==='priority'?'↓':''}</th>
-                <th style={thStyle()}>Booking</th>
+                <th style={thStyle()}>Contact / Book</th>
+                <th style={thStyle()}>{cols.col5}</th>
+                <th style={thStyle('priority')} onClick={()=>setSortBy('priority')}>Distance {sortBy==='priority'?'↓':''}</th>
                 <th style={thStyle('commission')} onClick={()=>setSortBy('commission')}>Flags {sortBy==='commission'?'↓':''}</th>
                 <th style={{ ...thStyle(), width:'100px', cursor:'default' }}>Actions</th>
               </tr>
@@ -536,7 +569,7 @@ export default function LocalGuideManager({ hotelId }) {
               {adding && <AddRowInline />}
 
               {filtered.length === 0 && !adding && (
-                <tr><td colSpan={13} style={{ padding:'40px', textAlign:'center', color:'#9CA3AF' }}>
+                <tr><td colSpan={11} style={{ padding:'40px', textAlign:'center', color:'#9CA3AF' }}>
                   No items. Add a row or import from CSV.
                 </td></tr>
               )}
@@ -561,13 +594,25 @@ export default function LocalGuideManager({ hotelId }) {
                     {/* Category emoji */}
                     <td style={{ padding:'6px 6px', fontSize:'16px', textAlign:'center' }} title={cat.label}>{cat.emoji}</td>
 
-                    {/* Name + tooltip anchor */}
+                    {/* Name + tooltip + tags popover */}
                     <td style={{ padding:'6px 10px', fontWeight:'600', color:'#111827', whiteSpace:'nowrap', position:'relative' }}>
-                      {showTip && <Tooltip item={item} />}
-                      <EditableCell value={item.name} field="name" item={item} onSave={patchPref} />
-                      {!item.is_enabled && (
-                        <span style={{ fontSize:'9px', color:'#9CA3AF', marginLeft:'6px' }}>hidden</span>
+                      {showTip && tagsPopover !== item.pref_id && <Tooltip item={item} />}
+                      {tagsPopover === item.pref_id && (
+                        <TagsPopover item={item} onSave={patchPref} onClose={()=>setTagsPopover(null)} />
                       )}
+                      <div style={{ display:'flex', alignItems:'center', gap:'5px' }}>
+                        <EditableCell value={item.name} field="name" item={item} onSave={patchPref} />
+                        <button onClick={e=>{e.stopPropagation();setTagsPopover(tagsPopover===item.pref_id?null:item.pref_id)}}
+                          title={(item.tags||[]).length ? item.tags.join(', ') : 'Add tags'}
+                          style={{ padding:'1px 6px', borderRadius:'10px', fontSize:'9px', fontWeight:'700',
+                            background:(item.tags||[]).length?'#F3F4F6':'white',
+                            border:`0.5px solid ${(item.tags||[]).length?'#D1D5DB':'#E5E7EB'}`,
+                            color:(item.tags||[]).length?'#6B7280':'#D1D5DB',
+                            cursor:'pointer', fontFamily:font, whiteSpace:'nowrap' }}>
+                          {(item.tags||[]).length ? `🏷 ${item.tags.length}` : '+ tag'}
+                        </button>
+                        {!item.is_enabled && <span style={{ fontSize:'9px', color:'#9CA3AF' }}>hidden</span>}
+                      </div>
                     </td>
 
                     {/* Area */}
@@ -580,36 +625,33 @@ export default function LocalGuideManager({ hotelId }) {
                       <EditableCell value={item[cols.field4]} field={cols.field4} item={item} onSave={patchPref} />
                     </td>
 
-                    {/* Flexible col 5 */}
-                    <td style={{ padding:'6px 8px', color:'#6B7280' }}>
-                      <EditableCell value={item[cols.field5]} field={cols.field5} item={item} onSave={patchPref}
-                        options={cols.field5==='price_range' ? PRICE_RANGES.map(p=>({key:p,label:p})) : null} />
-                    </td>
-
                     {/* Rating */}
                     <td style={{ padding:'6px 8px', whiteSpace:'nowrap' }}>
                       <EditableCell value={item.google_rating} field="google_rating" item={item} onSave={patchPref} type="number" width="60px" />
                     </td>
 
-                    {/* Phone */}
-                    <td style={{ padding:'6px 8px', color:'#6B7280', whiteSpace:'nowrap' }}>
-                      <EditableCell value={item.phone} field="phone" item={item} onSave={patchPref} />
+                    {/* Contact / Book */}
+                    <td style={{ padding:'6px 8px', color:'#6B7280', whiteSpace:'nowrap', minWidth:'170px' }}>
+                      <div style={{ display:'flex', gap:'4px', alignItems:'center' }}>
+                        <EditableCell value={item.booking_method} field="booking_method" item={item} onSave={patchPref}
+                          options={BOOKING_METHODS.map(b=>({key:b.key,label:b.label}))} width="110px" />
+                        {['phone','whatsapp'].includes(item.booking_method) && (
+                          <EditableCell value={item.phone} field="phone" item={item} onSave={patchPref} width="110px" />
+                        )}
+                        {item.booking_method === 'link' && (
+                          <EditableCell value={item.reservation_url||item.website} field="reservation_url" item={item} onSave={patchPref} width="140px" />
+                        )}
+                      </div>
                     </td>
 
-                    {/* Flexible col 6 (signature item) */}
-                    <td style={{ padding:'6px 8px', color:'#6B7280', maxWidth:'160px' }}>
-                      <EditableCell value={item[cols.field6]} field={cols.field6} item={item} onSave={patchPref} />
+                    {/* Signature item (flexible col5) */}
+                    <td style={{ padding:'6px 8px', color:'#6B7280', maxWidth:'150px' }}>
+                      <EditableCell value={item[cols.field5]} field={cols.field5} item={item} onSave={patchPref} />
                     </td>
 
-                    {/* Walk time */}
+                    {/* Distance */}
                     <td style={{ padding:'6px 8px', color:'#6B7280', whiteSpace:'nowrap' }}>
-                      <EditableCell value={item.distance_min_walk} field="distance_min_walk" item={item} onSave={patchPref} type="number" width="50px" />
-                    </td>
-
-                    {/* Booking method */}
-                    <td style={{ padding:'6px 8px', color:'#6B7280', whiteSpace:'nowrap' }}>
-                      <EditableCell value={item.booking_method} field="booking_method" item={item} onSave={patchPref}
-                        options={BOOKING_METHODS.map(b=>({key:b.key,label:b.label}))} />
+                      <EditableCell value={item.distance_min_walk} field="distance_min_walk" item={item} onSave={patchPref} type="number" width="52px" />
                     </td>
 
                     {/* Flags — always visible, click to toggle */}
