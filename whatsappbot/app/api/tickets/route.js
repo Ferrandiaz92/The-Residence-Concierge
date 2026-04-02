@@ -50,7 +50,7 @@ export async function GET(request) {
   if (guard) return guard
 
   const { searchParams } = new URL(request.url)
-  const hotelId    = searchParams.get('hotelId') || session.hotelId
+  const hotelId = session.hotelId  // always from session — never URL
   const department = searchParams.get('department')
 
   const supabase = getSupabase()
@@ -126,6 +126,7 @@ export async function POST(request) {
       priority = 'today',
       createdBy,
     } = await request.json()
+  if (hotelId && session.hotelId && hotelId !== session.hotelId) return Response.json({ error: 'Access denied' }, { status: 403 })
 
     if (!hotelId || !department || !description) {
       return Response.json({ error: 'Missing required fields' }, { status: 400 })
