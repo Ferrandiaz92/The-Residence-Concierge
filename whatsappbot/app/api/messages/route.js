@@ -23,6 +23,7 @@ export async function POST(request) {
   try {
     const session = getSession()
     if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    const hotelId = session.hotelId
 
     // Only receptionist and manager can reply to guests
     if (!['receptionist','manager','admin'].includes(session.role)) {
