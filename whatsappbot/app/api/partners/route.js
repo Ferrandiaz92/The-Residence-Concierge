@@ -37,8 +37,8 @@ export async function GET(request) {
     }
 
     const { searchParams } = new URL(request.url)
-    const hotelId = searchParams.get('hotelId')
-    if (!hotelId) return Response.json({ error: 'hotelId required' }, { status: 400 })
+    const hotelId = session.hotelId  // always from session
+    if (!hotelId) return Response.json({ error: 'Unauthorized' }, { status: 401 })
 
     const supabase = getSupabase()
     const { data } = await supabase
@@ -59,6 +59,7 @@ export async function POST(request) {
     }
 
     const { hotelId, name, type, phone, commission_rate, details, contact_name } = await request.json()
+  if (hotelId && session.hotelId && hotelId !== session.hotelId) return Response.json({ error: 'Access denied' }, { status: 403 })
     if (!hotelId || !name || !type || !phone) {
       return Response.json({ error: 'hotelId, name, type and phone required' }, { status: 400 })
     }
