@@ -17,7 +17,7 @@ export async function GET(request) {
   if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { searchParams } = new URL(request.url)
-  const hotelId  = searchParams.get('hotelId') || session.hotelId
+  const hotelId = session.hotelId  // always from session — never URL
   const resolved = searchParams.get('resolved') === 'true'
   const limit    = parseInt(searchParams.get('limit') || '50')
 
