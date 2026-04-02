@@ -26,6 +26,7 @@ export async function POST(request) {
     if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { hotelId, conversationId, messageIndex, messageContent, flagType, note, correctAnswer } = await request.json()
+  if (hotelId && session.hotelId && hotelId !== session.hotelId) return Response.json({ error: 'Access denied' }, { status: 403 })
 
     if (!hotelId || !conversationId || messageIndex === undefined || !flagType) {
       return Response.json({ error: 'Missing required fields' }, { status: 400 })
