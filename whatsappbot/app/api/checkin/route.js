@@ -67,6 +67,7 @@ export async function POST(request) {
       rooms,
       sendWelcome,
     } = await request.json()
+  if (hotelId && session.hotelId && hotelId !== session.hotelId) return Response.json({ error: 'Access denied' }, { status: 403 })
 
     const supabase = getSupabase()
 
@@ -226,6 +227,7 @@ export async function PATCH(request) {
     }
 
     const { guestId, hotelId } = await request.json()
+  if (hotelId && session.hotelId && hotelId !== session.hotelId) return Response.json({ error: 'Access denied' }, { status: 403 })
     if (!guestId) return Response.json({ error: 'guestId required' }, { status: 400 })
 
     const supabase    = getSupabase()
