@@ -19,7 +19,8 @@ export async function GET(request) {
   if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 })
   try {
     const { searchParams } = new URL(request.url)
-    const hotelId = searchParams.get('hotelId')
+    const hotelId = session.hotelId || searchParams.get('hotelId')
+    if (session.hotelId && hotelId !== session.hotelId) return Response.json({ error: 'Access denied' }, { status: 403 })
     if (!hotelId) return Response.json({ error: 'hotelId required' }, { status: 400 })
 
     const supabase = getSupabase()
