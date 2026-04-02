@@ -26,7 +26,7 @@ export async function GET(request) {
     if (!CAN_READ.includes(session.role)) return Response.json({ error: 'Access denied' }, { status: 403 })
 
     const { searchParams } = new URL(request.url)
-    const hotelId = searchParams.get('hotelId') || session.hotelId
+    const hotelId = session.hotelId  // always from session — never URL
     const supabase = getSupabase()
 
     const { data } = await supabase
