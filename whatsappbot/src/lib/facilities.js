@@ -146,7 +146,7 @@ export async function processFacilityRequest(facility, hotel, guest, convId) {
       body:      `${guest.name || 'Guest'}${guest.room ? ' · Room ' + guest.room : ''} · ${facility.date || ''} at ${facility.time || ''}`,
       link_type: 'facility_booking',
       link_id:   booking.id,
-    }).catch(() => {})
+    })
 
   } catch (e) {
     console.error('processFacilityRequest error:', e.message)
@@ -162,5 +162,5 @@ async function createFallbackTicket(facility, hotel, guest, convId) {
     department: 'concierge', category: 'facility_booking',
     description, room: guest.room, priority: 'normal',
     status: 'pending', created_by: 'bot',
-  }).catch(() => {})
+  })
 }

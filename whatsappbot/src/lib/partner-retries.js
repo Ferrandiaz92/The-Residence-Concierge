@@ -181,7 +181,7 @@ export async function processPendingRetries() {
       await supabase.from('bookings')
         .update({ partner_alerted_at: now })
         .eq('id', retry.booking_id)
-        .catch(() => {})
+
 
       results.succeeded++
       log.info('Partner alert retry succeeded', {
@@ -208,26 +208,23 @@ export async function processPendingRetries() {
         await supabase.from('bookings')
           .update({ status: 'declined', details: { ...retry.bookings?.details, _alert_failed: true, _failure_reason: 'partner_unreachable' } })
           .eq('id', retry.booking_id)
-          .catch(() => {})
+
 
         // Mark partner as inactive (unreachable)
-        try {
-          await supabase.from('partners')
-            .update({ active: false, _unreachable_at: new Date().toISOString() })
-            .eq('id', retry.partner_id)
-        } catch {}
+        await supabase.from('partners')
+          .update({ active: false, details: supabase.rpc ? undefined : undefined, _unreachable_at: new Date().toISOString() })
+          .eq('id', retry.partner_id)
+
 
         // Better: use a dedicated unreachable flag column
-        try {
-          await supabase.from('partners')
-            .update({ unreachable: true, unreachable_since: new Date().toISOString() })
-            .eq('id', retry.partner_id)
-        } catch {}
+        await supabase.from('partners')
+          .update({ unreachable: true, unreachable_since: new Date().toISOString() })
+          .eq('id', retry.partner_id)
+
 
         // Load partner + hotel info for the alert
-        let partner = null, hotel = null
-        try { ({ data: partner } = await supabase.from('partners').select('name, phone').eq('id', retry.partner_id).single()) } catch {}
-        try { ({ data: hotel }   = await supabase.from('hotels').select('name, config').eq('id', retry.hotel_id).single()) } catch {}
+        const { data: partner } = await supabase.from('partners').select('name, phone').eq('id', retry.partner_id).single().then(r => r).catch(() => ({ data: null, error: null }))
+        const { data: hotel }   = await supabase.from('hotels').select('name, config').eq('id', retry.hotel_id).single().then(r => r).catch(() => ({ data: null, error: null }))
         const guestName  = retry.bookings?.guests?.name || 'Guest'
         const guestRoom  = retry.bookings?.guests?.room || '?'
         const bookingType = retry.bookings?.type || 'booking'
@@ -242,7 +239,7 @@ export async function processPendingRetries() {
           link_type: 'booking',
           link_id:   retry.booking_id,
           urgent:    true,
-        }).catch(() => {})
+        })
 
         // WhatsApp alert to manager phone (if configured)
         const managerPhone = hotel?.config?.staff_digest_phone || hotel?.config?.manager_phone

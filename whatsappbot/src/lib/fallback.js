@@ -126,7 +126,7 @@ export async function handleFallback(message, hotel, guest, conv, triggerReason 
         guest_id: guest?.id || null,
         trigger:  triggerReason,
         matched:  rule.id,
-      }).catch(() => {})
+      })
 
       log.info('Fallback rule matched', {
         hotelId:  hotel.id,
@@ -149,7 +149,7 @@ export async function handleFallback(message, hotel, guest, conv, triggerReason 
     guest_id: guest?.id || null,
     trigger:  triggerReason,
     matched:  'holding_escalation',
-  }).catch(() => {})
+  })
 
   log.warn('Fallback: no rule matched — escalated', {
     hotelId:  hotel.id,
@@ -178,7 +178,7 @@ async function createFallbackEscalation(hotel, guest, conv, message) {
       body:      `"${message.slice(0, 100)}" — Bot is temporarily unavailable. Please respond manually.`,
       link_type: conv?.id ? 'conversation' : null,
       link_id:   conv?.id || null,
-    }).catch(() => {})
+    })
   } catch (err) {
     log.warn('createFallbackEscalation failed', { error: err.message })
   }

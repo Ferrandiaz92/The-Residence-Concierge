@@ -109,7 +109,7 @@ export async function cancelFacility(facilityCancel, hotel, guest, convId) {
       body:      `${guest.name || 'Guest'}${guest.room ? ` · Room ${guest.room}` : ''} cancelled their booking`,
       link_type: 'ticket',
       link_id:   ticket.id,
-    }).catch(() => {})
+    })
 
     log.info('Facility cancelled', { ...hCtx, ...gCtx, ticketId: ticket.id })
     return { success: true, ticket }
@@ -171,7 +171,7 @@ export async function cancelPartnerBooking(bookingCancel, hotel, guest, convId) 
           last_error:    err.message,
           status:        'pending',
           next_retry_at: new Date(Date.now() + 2 * 60 * 1000).toISOString(),
-        }).catch(() => {})
+        })
         log.warn('Partner cancellation notify failed — queued for retry', { bookingId: booking.id, error: err.message })
       }
     }
@@ -195,7 +195,7 @@ export async function cancelPartnerBooking(bookingCancel, hotel, guest, convId) 
         .from('commissions')
         .update({ status: 'cancelled' })
         .eq('booking_id', booking.id)
-        .catch(() => {})
+
     }
 
     // Step 3: Create cancellation alert card for reception
@@ -215,7 +215,7 @@ export async function cancelPartnerBooking(bookingCancel, hotel, guest, convId) 
         time:             booking.details?.time,
         cancel_reason:    bookingCancel.reason,
       }),
-    }).catch(() => {})
+    })
 
     log.info('Partner booking cancelled', {
       ...hCtx, ...gCtx,
@@ -254,7 +254,7 @@ export async function escalateRoomCancellation(hotel, guest, convId) {
       link_type: 'conversation',
       link_id:   convId,
       priority:  'urgent',
-    }).catch(() => {})
+    })
 
     log.warn('Room cancellation escalated to reception', { ...hCtx, ...gCtx, convId })
     return { success: true }
@@ -288,7 +288,7 @@ export async function acknowledgeBookingCancellation(bookingId, staffSession, ac
     .update({ read: true })
     .eq('link_id', bookingId)
     .eq('type', 'booking_cancelled')
-    .catch(() => {})
+
 
   return data
 }

@@ -482,7 +482,7 @@ export async function processScheduledMessages(hotelId) {
             role:            'assistant',
             content:         message,
             sent_by:         'scheduled',
-          }).catch(() => {})
+          })
           await supabase.from('conversations')
             .update({ last_message_at: new Date().toISOString() }).eq('id', conv.id)
         }
