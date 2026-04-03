@@ -661,16 +661,18 @@ export async function handleInboundWhatsApp(rawBody) {
   if (aiResponse.includes('[ESCALATE]')) {
     processedResponse = aiResponse.replace(/\[ESCALATE\]/g, '').trim()
     // Mark conversation as escalated so reception sees it
-    await supabase.from('conversations').update({ status: 'escalated' }).eq('id', conv.id).catch(()=>{})
+    try { await supabase.from('conversations').update({ status: 'escalated' }).eq('id', conv.id) } catch {}
     const escalateBody = isMultiIntent
       ? `Multi-request: guest asked for room + service. Bot handled service; room needs reception. Message: ${message.slice(0, 80)}`
       : `Bot escalated: ${message.slice(0, 80)}`
-    await supabase.from('notifications').insert({
-      hotel_id: hotel.id, type: 'escalation',
-      title: `Reception needed — ${guest.name || 'Guest'} · Room ${guest.room || '?'}`,
-      body: escalateBody,
-      link_type: 'conversation', link_id: conv.id,
-    }).catch(()=>{})
+    try {
+      await supabase.from('notifications').insert({
+        hotel_id: hotel.id, type: 'escalation',
+        title: `Reception needed — ${guest.name || 'Guest'} · Room ${guest.room || '?'}`,
+        body: escalateBody,
+        link_type: 'conversation', link_id: conv.id,
+      })
+    } catch {}
     await notifyReceptionEscalation(hotel.id, guest, conv.id).catch(()=>{})
     log.info('Bot escalated via [ESCALATE] tag', { ...hCtx, ...gCtx, isMultiIntent })
   }
