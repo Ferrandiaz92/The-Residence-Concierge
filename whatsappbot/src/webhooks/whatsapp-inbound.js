@@ -29,7 +29,7 @@ import { getLocalGuideContext, detectLocalGuideIntent } from '../lib/local-guide
 import { callClaude } from '../lib/claude.js'
 import { handleTicketReply } from '../lib/ticketing.js'
 import { getKnowledgeBase, formatKnowledgeForPrompt } from '../lib/knowledge.js'
-import { getFacilities, formatFacilitiesForPrompt, parseFacilityRequest } from '../lib/facilities.js'
+import { getFacilities, formatFacilitiesForPrompt, parseFacilityRequest, parseFacilitySummary } from '../lib/facilities.js'
 import { handleFeedbackReply } from '../lib/scheduled.js'
 import { loadGuestMemory, formatMemoryForPrompt, updateGuestPreferences } from '../lib/memory.js'
 import { notifyReceptionEscalation } from '../lib/push.js'
@@ -216,9 +216,119 @@ export async function handleInboundWhatsApp(rawBody) {
     }
   }
 
-  // 4b. Facility alternative reply check (Yes/No to alternative slot offer)
+  // 4b. Facility summary confirmation + alternative reply check
   const msgTrimmed = message.trim().toLowerCase()
-  if (msgTrimmed === 'yes' || msgTrimmed === 'no' || msgTrimmed === 'si' || msgTrimmed === 'да' || msgTrimmed === 'כן' || msgTrimmed === 'نعم') {
+
+  // All YES words across 17 languages
+  const YES_WORDS = new Set([
+    'yes','yeah','yep','sure','ok','okay','perfect','great','go ahead','do it','sounds good','confirmed','confirm',
+    'sí','si','claro','adelante','perfecto','de acuerdo',
+    'да','конечно','давай','хорошо','ладно',
+    'oui','bien sûr','parfait','allez-y',
+    'ja','natürlich','gut','in ordnung','bitte',
+    'sì','certo','vai avanti','perfetto',
+    'sim','claro','perfeito','pode ser',
+    '确认','好的','可以','是的','没问题',
+    'نعم','حسنا','تأكيد','موافق',
+    'כן','בסדר','אישור',
+    'ja','prima','goed','oké',
+    'ναι','εντάξει','επιβεβαιώνω',
+    'tak','dobrze','potwierdzam',
+    'так','добре','підтверджую',
+    'ja','bra','okej','självklart',
+    'evet','tamam','onay','tabii',
+    'はい','了解','お願いします',
+  ])
+  const NO_WORDS = new Set([
+    'no','nope','cancel','nevermind','never mind',
+    'no','cancelar','no gracias',
+    'нет','не надо','отмена',
+    'non','annuler',
+    'nein','abbrechen',
+    'no','annulla',
+    'não','cancelar',
+    '不','取消','不用了',
+    'لا','إلغاء',
+    'לא','ביטול',
+    'nee','annuleren',
+    'όχι','ακύρωση',
+    'nie','anuluj',
+    'ні','скасувати',
+    'nej','avbryt',
+    'hayır','iptal',
+    'いいえ','キャンセル',
+  ])
+  const isYesMsg = YES_WORDS.has(msgTrimmed) || /^(yes|sí|да|oui|ja|sì|sim|确认|نعم|כן|ναι|tak|так|evet|はい)/i.test(msgTrimmed)
+  const isNoMsg  = NO_WORDS.has(msgTrimmed)  || /^(no|нет|non|nein|não|不|لا|לא|nee|όχι|nie|ні|nej|hayır|いいえ)/i.test(msgTrimmed)
+
+  // Check for pending FACILITY_SUMMARY first (guest confirming the summary)
+  if (isYesMsg || isNoMsg) {
+    const { data: pendingSummary } = await supabase
+      .from('facility_bookings')
+      .select('*')
+      .eq('guest_id', guest.id)
+      .eq('status', 'pending_confirmation')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single()
+      .catch(() => ({ data: null }))
+
+    if (pendingSummary) {
+      if (isYesMsg) {
+        // Guest confirmed — fire the actual facility request
+        await supabase.from('facility_bookings')
+          .update({ status: 'pending' })
+          .eq('id', pendingSummary.id)
+        const { processFacilityRequest } = await import('../lib/facilities.js')
+        await processFacilityRequest(
+          { facility: pendingSummary.facility_name, date: pendingSummary.date, time: pendingSummary.time, guests: pendingSummary.pax },
+          hotel, guest, conv.id
+        )
+        const lang = guest.language || 'en'
+        const sentMsgs = {
+          en: `✅ Your request has been sent to our team! We'll confirm availability in a few minutes.`,
+          es: `✅ ¡Tu solicitud ha sido enviada! Te confirmaremos la disponibilidad en unos minutos.`,
+          ru: `✅ Ваш запрос отправлен! Подтвердим наличие мест в течение нескольких минут.`,
+          fr: `✅ Votre demande a été envoyée! Nous confirmons dans quelques minutes.`,
+          de: `✅ Ihre Anfrage wurde gesendet! Wir bestätigen in wenigen Minuten.`,
+          it: `✅ La sua richiesta è stata inviata! Confermeremo in pochi minuti.`,
+          pt: `✅ O seu pedido foi enviado! Confirmaremos em poucos minutos.`,
+          zh: `✅ 您的请求已发送！我们将在几分钟内确认。`,
+          ar: `✅ تم إرسال طلبكم! سنؤكد التوفر خلال دقائق.`,
+          he: `✅ הבקשה שלך נשלחה! נאשר זמינות תוך מספר דקות.`,
+          nl: `✅ Uw aanvraag is verzonden! We bevestigen de beschikbaarheid binnen een paar minuten.`,
+          el: `✅ Η αίτησή σας στάλθηκε! Θα επιβεβαιώσουμε τη διαθεσιμότητα σε λίγα λεπτά.`,
+          pl: `✅ Twoja prośba została wysłana! Potwierdzimy dostępność w ciągu kilku minut.`,
+          uk: `✅ Ваш запит надіслано! Підтвердимо наявність протягом кількох хвилин.`,
+          sv: `✅ Din förfrågan har skickats! Vi bekräftar tillgängligheten inom några minuter.`,
+          tr: `✅ Talebiniz gönderildi! Birkaç dakika içinde müsaitliği onaylayacağız.`,
+          ja: `✅ リクエストを送信しました！数分以内に空き状況をご確認します。`,
+        }
+        const sentMsg = sentMsgs[lang] || sentMsgs.en
+        await sendWhatsApp(from, sentMsg)
+        await appendMessage(conv.id, 'assistant', sentMsg, { sent_by: 'facility_confirmation' })
+      } else {
+        // Guest said no — cancel the pending summary
+        await supabase.from('facility_bookings')
+          .update({ status: 'cancelled' })
+          .eq('id', pendingSummary.id)
+        const lang = guest.language || 'en'
+        const cancelMsgs = {
+          en: `No problem! Let me know if you'd like to book something else. 😊`,
+          es: `¡Sin problema! Avísame si quieres reservar algo más. 😊`,
+          ru: `Понятно! Дайте знать, если захотите что-то ещё. 😊`,
+          fr: `Pas de problème! Dites-moi si vous souhaitez autre chose. 😊`,
+          de: `Kein Problem! Sagen Sie mir, wenn Sie etwas anderes möchten. 😊`,
+        }
+        const cancelMsg = cancelMsgs[lang] || cancelMsgs.en
+        await sendWhatsApp(from, cancelMsg)
+        await appendMessage(conv.id, 'assistant', cancelMsg, { sent_by: 'facility_confirmation' })
+      }
+      return
+    }
+  }
+
+  if (isYesMsg || isNoMsg) {
     // Check if this guest has a pending 'alternative' facility booking
     const { data: altBooking } = await supabase
       .from('facility_bookings')
@@ -645,7 +755,28 @@ export async function handleInboundWhatsApp(rawBody) {
     return
   }
 
-  // 14. Facility request
+  // 14. Facility summary (Step 2 — ask guest to confirm before sending)
+  const { hasSummary, summary, cleanResponse: summaryClean } = parseFacilitySummary(aiResponse)
+  if (hasSummary && summary) {
+    // Save as pending_confirmation so the YES handler can find it
+    try {
+      await supabase.from('facility_bookings').insert({
+        hotel_id:    hotel.id,
+        guest_id:    guest.id,
+        facility_name: summary.facility,
+        date:        summary.date || null,
+        time:        summary.time || null,
+        pax:         summary.guests || 1,
+        status:      'pending_confirmation',
+        created_by:  'bot',
+      })
+    } catch {}
+    await sendWhatsApp(from, summaryClean)
+    await appendMessage(conv.id, 'assistant', summaryClean)
+    return
+  }
+
+  // 14b. Facility request (Step 3 — guest confirmed summary)
   const { hasFacility, facility, cleanResponse: facilityClean } = parseFacilityRequest(aiResponse)
   if (hasFacility && facility) {
     await processFacilityRequest(facility, hotel, guest, conv.id)
