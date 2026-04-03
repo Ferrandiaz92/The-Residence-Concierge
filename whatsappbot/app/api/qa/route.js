@@ -156,16 +156,33 @@ export async function GET(request) {
       if (!hit) return null
     }
 
-    return { ...conv, messages, flags }
+    return { ...conv, messages, qa_flags: flags }
   }).filter(Boolean)
 
-  const stats = {
-    totalConvs:    conversations.length,
-    escalated:     conversations.filter(c => c.status === 'escalated').length,
-    totalMessages: conversations.reduce((s, c) => s + (c.messages?.length || 0), 0),
+  // Apply 'flagged' filter after we have flags loaded
+  let filteredConvs = conversations
+  if (filter === 'flagged') {
+    filteredConvs = conversations.filter(c => (c.qa_flags || []).some(f => !f.resolved))
   }
 
-  return Response.json({ conversations, stats })
+  // Compute flag stats
+  const allFlags = filteredConvs.flatMap(c => c.qa_flags || [])
+  const unresolvedFlags = allFlags.filter(f => !f.resolved).length
+  const flagsByType = allFlags.filter(f => !f.resolved).reduce((acc, f) => {
+    acc[f.flag_type] = (acc[f.flag_type] || 0) + 1
+    return acc
+  }, {})
+
+  const stats = {
+    totalConvs:     filteredConvs.length,
+    escalated:      filteredConvs.filter(c => c.status === 'escalated').length,
+    totalMessages:  filteredConvs.reduce((s, c) => s + (c.messages?.length || 0), 0),
+    unresolvedFlags,
+    totalFlags:     allFlags.length,
+    flagsByType,
+  }
+
+  return Response.json({ conversations: filteredConvs, stats })
 }
 
 // ── POST — create Q&A entry ───────────────────────────────────
