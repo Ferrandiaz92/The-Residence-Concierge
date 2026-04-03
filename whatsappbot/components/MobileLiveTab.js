@@ -884,6 +884,9 @@ function TicketAlertRow({ ticket: t, depts = [], isPrivileged = false, onOpenThr
                     }
                   }
                   await fetch('/api/tickets', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ticketId: t.id, status:'resolved' }) })
+                  load()
+                  setAlertTab('bookings')
+                  return
                 } else {
                   await updateStatus('in_progress')
                 }

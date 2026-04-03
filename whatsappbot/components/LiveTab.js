@@ -215,7 +215,7 @@ function ExpandableBookingDesktop({ b, conversations, onSelectConv, onNavigateTo
 }
 
 // ── TICKET ROW (desktop) — proper component so useState is legal ──
-function DesktopTicketRow({ t, session, conversations, onSelectConv, onSetCentreMode, onNavigateToGuest, onReload }) {
+function DesktopTicketRow({ t, session, conversations, onSelectConv, onSetCentreMode, onNavigateToGuest, onReload, onSetAlertTab }) {
   const [open, setOpen] = React.useState(false)
   const typeConfig = {
     room_issue:   { label:'Maintenance', bg:'#FEF2F2', color:'#DC2626', emoji:'🔧' },
@@ -315,9 +315,7 @@ function DesktopTicketRow({ t, session, conversations, onSelectConv, onSetCentre
                   // Mark ticket resolved
                   await fetch('/api/tickets', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ticketId: t.id, status:'resolved' }) })
                   onReload()
-                  // Navigate to Facility Bookings tab
-                  if (typeof onSetTab === 'function') onSetTab('facility_bookings')
-                  else if (typeof setTab === 'function') setTab('facility_bookings')
+                  if (typeof onSetAlertTab === 'function') onSetAlertTab('bookings')
                 } else {
                   await fetch('/api/tickets', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ticketId: t.id, status:'in_progress' }) })
                   onReload()
@@ -1042,6 +1040,7 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
                   onSetCentreMode={setCentreMode}
                   onNavigateToGuest={onSelectGuest}
                   onReload={loadData}
+                  onSetAlertTab={setAlertTab}
                 />
               ))}
             </div>
@@ -1081,7 +1080,8 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
                               onSelectConv={(conv) => { setSelectedConv(conv); setCentreMode('chat') }}
                               onSetCentreMode={setCentreMode}
                               onNavigateToGuest={onSelectGuest}
-                              onReload={loadData} />
+                              onReload={loadData}
+                              onSetAlertTab={setAlertTab} />
                           : <ExpandableBookingDesktop key={item.id} b={item}
                               conversations={conversations}
                               onSelectConv={(conv) => { setSelectedConv(conv); setCentreMode('chat') }}
