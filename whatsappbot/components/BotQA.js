@@ -52,6 +52,7 @@ export default function BotQA({ hotelId }) {
   const [expandedConv, setExpandedConv]    = useState(null)
   const [highlightMsg, setHighlightMsg]    = useState(null)
   const [flagPanelOpen, setFlagPanelOpen]  = useState(true)
+  const [statsOpen, setStatsOpen]          = useState(false)
   const [month, setMonth]                 = useState(() => {
     const now = new Date()
     return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`
@@ -165,38 +166,40 @@ export default function BotQA({ hotelId }) {
   return (
     <div style={{ fontFamily:"'DM Sans',sans-serif" }}>
 
-      {/* Stats row — hidden when a conv is expanded full-screen */}
-      {stats && !expandedConv && (
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(6,1fr)', gap:'10px', marginBottom:'18px' }}>
-          {[
-            { label:'Total conversations', value: s.totalConvs || 0 },
-            { label:'Escalation rate',     value:`${s.escalationRate || 0}%`, warn:(s.escalationRate||0) > 15 },
-            { label:'Avg messages/conv',   value: s.avgMessagesPerConv || 0 },
-            { label:'Bot messages',        value: s.botMessages || 0 },
-            { label:'Open flags',          value: s.unresolvedFlags || 0, warn:(s.unresolvedFlags||0) > 0 },
-            { label:'Total flags',         value: s.totalFlags || 0 },
-          ].map(k => (
-            <div key={k.label} style={{ background:k.warn?'#FEE2E2':'white', border:`1px solid ${k.warn?'#FCA5A5':'#E5E7EB'}`, borderRadius:'10px', padding:'14px 16px' }}>
-              <div style={{ fontSize:'12px', color:k.warn?'#991B1B':'#6B7280', marginBottom:'6px', fontWeight:'600' }}>{k.label}</div>
-              <div style={{ fontSize:'24px', fontWeight:'700', color:k.warn?'#DC2626':'#111827', lineHeight:1 }}>{k.value}</div>
+      {/* Stats — collapsible single line */}
+      {stats && !expandedConv && (() => {
+        const hasFlags = (s.unresolvedFlags || 0) > 0
+        return (
+          <div style={{ marginBottom:'14px' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:'16px', padding:'10px 14px', background:'white', border:`1px solid ${hasFlags?'#FCA5A5':'#E5E7EB'}`, borderRadius:'10px', cursor:'pointer' }}
+              onClick={() => setStatsOpen(o => !o)}>
+              {hasFlags && <span style={{ fontSize:'13px', fontWeight:'700', color:'#DC2626' }}>🚩 {s.unresolvedFlags} open flag{s.unresolvedFlags!==1?'s':''} · </span>}
+              <span style={{ fontSize:'13px', color:'#6B7280' }}>{s.totalConvs||0} convs</span>
+              <span style={{ fontSize:'13px', color:'#6B7280' }}>·</span>
+              <span style={{ fontSize:'13px', color:'#6B7280' }}>{s.escalationRate||0}% escalation</span>
+              <span style={{ fontSize:'13px', color:'#6B7280' }}>·</span>
+              <span style={{ fontSize:'13px', color:'#6B7280' }}>{s.totalFlags||0} total flags</span>
+              <span style={{ marginLeft:'auto', fontSize:'11px', color:'#9CA3AF' }}>{statsOpen ? '▲ hide' : '▼ details'}</span>
             </div>
-          ))}
-        </div>
-      )}
-
-      {/* Flag breakdown */}
-      {!expandedConv && s.flagsByType && Object.keys(s.flagsByType).length > 0 && (
-        <div style={{ display:'flex', gap:'8px', flexWrap:'wrap', marginBottom:'16px' }}>
-          {Object.entries(s.flagsByType).map(([type, count]) => {
-            const ft = FLAG_TYPES.find(f => f.key === type) || FLAG_TYPES[4]
-            return (
-              <div key={type} style={{ fontSize:'13px', fontWeight:'600', padding:'5px 12px', borderRadius:'20px', background:ft.bg, color:ft.color }}>
-                {ft.label}: {count}
+            {statsOpen && (
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:'8px', marginTop:'8px' }}>
+                {[
+                  { label:'Conversations',   value: s.totalConvs || 0 },
+                  { label:'Escalation rate', value:`${s.escalationRate||0}%`, warn:(s.escalationRate||0)>15 },
+                  { label:'Avg msgs/conv',   value: s.avgMessagesPerConv || 0 },
+                  { label:'Open flags',      value: s.unresolvedFlags || 0, warn:(s.unresolvedFlags||0)>0 },
+                  { label:'Total flags',     value: s.totalFlags || 0 },
+                ].map(k => (
+                  <div key={k.label} style={{ background:k.warn?'#FEF2F2':'#F9FAFB', border:`1px solid ${k.warn?'#FCA5A5':'#E5E7EB'}`, borderRadius:'8px', padding:'10px 12px' }}>
+                    <div style={{ fontSize:'11px', color:k.warn?'#991B1B':'#6B7280', marginBottom:'4px', fontWeight:'600' }}>{k.label}</div>
+                    <div style={{ fontSize:'20px', fontWeight:'700', color:k.warn?'#DC2626':'#111827' }}>{k.value}</div>
+                  </div>
+                ))}
               </div>
-            )
-          })}
-        </div>
-      )}
+            )}
+          </div>
+        )
+      })()}
 
       {/* Filters row */}
       <div style={{ display:'flex', gap:'8px', alignItems:'center', marginBottom:'16px', flexWrap:'wrap' }}>
@@ -276,12 +279,35 @@ export default function BotQA({ hotelId }) {
             if (allFlags.length === 0) return null
             return (
               <div style={{ border:'1.5px solid #FCA5A5', borderRadius:'12px', overflow:'hidden', marginBottom:'8px' }}>
-                <div onClick={() => setFlagPanelOpen(o => !o)}
-                  style={{ background:'#FEF2F2', padding:'10px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer', userSelect:'none' }}>
-                  <span style={{ fontSize:'13px', fontWeight:'700', color:'#991B1B' }}>
-                    🚩 {allFlags.length} flagged message{allFlags.length !== 1 ? 's' : ''} needing review
-                  </span>
-                  <span style={{ fontSize:'11px', color:'#DC2626' }}>{flagPanelOpen ? '▲ Hide' : '▼ Show'}</span>
+                <div style={{ background:'#FEF2F2', padding:'10px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', userSelect:'none' }}>
+                  <div onClick={() => setFlagPanelOpen(o => !o)} style={{ display:'flex', alignItems:'center', gap:'10px', cursor:'pointer', flex:1 }}>
+                    <span style={{ fontSize:'13px', fontWeight:'700', color:'#991B1B' }}>
+                      🚩 {allFlags.length} flagged message{allFlags.length !== 1 ? 's' : ''} needing review
+                    </span>
+                    <span style={{ fontSize:'11px', color:'#DC2626' }}>{flagPanelOpen ? '▲ Hide' : '▼ Show'}</span>
+                  </div>
+                  <button onClick={() => {
+                    const text = allFlags.map((f, i) => {
+                      const conv  = f.conv
+                      const msgs  = conv.messages || []
+                      const guest = conv.guests || {}
+                      const botMsg = msgs[f.message_index]
+                      const guestMsg = f.message_index > 0 ? msgs[f.message_index - 1] : null
+                      const ft = FLAG_TYPES.find(t => t.key === f.flag_type)?.label || 'Issue'
+                      return [
+                        `--- Flag ${i+1}: ${ft} · ${guest.name || 'Guest'}${guest.room ? ' · Room '+guest.room : ''} ---`,
+                        guestMsg ? `GUEST SAID: "${(guestMsg.content||'').slice(0,200)}"` : '',
+                        `BOT SAID: "${(botMsg?.content||'').slice(0,400)}"`,
+                        f.note ? `WHAT WAS WRONG: ${f.note}` : '',
+                        f.correct_answer ? `CORRECT ANSWER: ${f.correct_answer}` : '',
+                      ].filter(Boolean).join('\n')
+                    }).join('\n\n')
+                    const prompt = text + '\n\n---\nFor each flag above, rewrite the BOT SAID reply. Make it accurate, natural, and concise. Use the CORRECT ANSWER as guidance where provided.'
+                    navigator.clipboard.writeText(prompt)
+                    alert('Copied! Paste into Claude to get improved answers.')
+                  }} style={{ fontSize:'11px', fontWeight:'600', padding:'4px 12px', borderRadius:'6px', border:'0.5px solid #FCA5A5', background:'white', color:'#DC2626', cursor:'pointer', whiteSpace:'nowrap' }}>
+                    📋 Copy all for Claude
+                  </button>
                 </div>
                 {flagPanelOpen && allFlags.map((f, fi) => {
                   const conv   = f.conv
@@ -369,7 +395,7 @@ export default function BotQA({ hotelId }) {
                         {(guest.language||'EN').toUpperCase()}
                       </span>
                       {conv.status === 'escalated' && (
-                        <span style={{ fontSize:'11px', fontWeight:'700', padding:'2px 8px', borderRadius:'5px', background:'#FEE2E2', color:'#DC2626' }}>escalated</span>
+                        <span style={{ fontSize:'11px', fontWeight:'700', padding:'2px 8px', borderRadius:'5px', background:'#FEF3C7', color:'#92400E' }}>escalated</span>
                       )}
                       {openFlags > 0 && (
                         <span style={{ fontSize:'11px', fontWeight:'700', padding:'2px 8px', borderRadius:'5px', background:'#FEE2E2', color:'#DC2626' }}>
@@ -421,7 +447,7 @@ export default function BotQA({ hotelId }) {
                     </div>
 
                     {/* Scrollable message list */}
-                    <div style={{ padding:'16px 18px', display:'flex', flexDirection:'column', gap:'8px', maxHeight: expandedConv === conv.id ? 'calc(100vh - 180px)' : '420px', overflowY:'auto' }}>
+                    <div style={{ padding:'16px 18px', display:'flex', flexDirection:'column', gap:'8px', maxHeight: expandedConv === conv.id ? 'calc(100vh - 180px)' : '600px', overflowY:'auto' }}>
                     {(translations[conv.id] || msgs).map((msg, idx) => {
                       const isBot    = msg.role === 'assistant'
                       const isFlagged = isMsgFlagged(conv, idx)

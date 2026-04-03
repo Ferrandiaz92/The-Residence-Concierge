@@ -237,6 +237,25 @@ export default function AnalyticsTab({ hotelId }) {
             </div>
           ) : (
             <div style={{ display:'flex', flexDirection:'column', gap:'8px' }}>
+              {/* Bulk dismiss contextual questions */}
+              {gaps.length > 0 && (
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'8px 12px', background:'#FFFBEB', border:'1px solid #FDE68A', borderRadius:'8px', marginBottom:'4px' }}>
+                  <span style={{ fontSize:'12px', color:'#92400E' }}>
+                    Some questions may be real-time (concerts tonight, weather) and can never be in a KB.
+                  </span>
+                  <button onClick={async () => {
+                    const REALTIME = /today|tonight|now|currently|concert|show|event|weather|flight|link|available today|open now/i
+                    const toDelete = gaps.filter(g => REALTIME.test(g.question_text))
+                    await Promise.all(toDelete.map(g =>
+                      fetch('/api/knowledge-gaps', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id: g.id, resolved: true }) })
+                    ))
+                    const ids = new Set(toDelete.map(g => g.id))
+                    setGapResolved(r => { const n={...r}; ids.forEach(id => n[id]=true); return n })
+                  }} style={{ fontSize:'11px', fontWeight:'600', padding:'4px 10px', borderRadius:'6px', border:'1px solid #FCD34D', background:'white', color:'#92400E', cursor:'pointer', whiteSpace:'nowrap', marginLeft:'12px' }}>
+                    Dismiss contextual ones
+                  </button>
+                </div>
+              )}
               {gaps.map(gap => (
                 <div key={gap.id} style={{ background:'white', border:`1px solid ${gapResolved[gap.id] ? '#86EFAC' : '#E5E7EB'}`, borderRadius:'12px', padding:'14px 16px', opacity: gapResolved[gap.id] ? 0.6 : 1 }}>
                   <div style={{ display:'flex', alignItems:'flex-start', gap:'12px' }}>
@@ -268,6 +287,12 @@ export default function AnalyticsTab({ hotelId }) {
                         setGapResolved(r => ({...r, [gap.id]: true}))
                       }} style={{ fontSize:'11px', fontWeight:'600', padding:'5px 10px', borderRadius:'7px', border:'1px solid #86EFAC', background:'#DCFCE7', color:'#14532D', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                         ✓ Resolved
+                      </button>
+                      <button onClick={async () => {
+                        await fetch('/api/knowledge-gaps', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id: gap.id, resolved: true }) })
+                        setGapResolved(r => ({...r, [gap.id]: true}))
+                      }} style={{ fontSize:'11px', fontWeight:'600', padding:'5px 10px', borderRadius:'7px', border:'1px solid #D1D5DB', background:'#F9FAFB', color:'#6B7280', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                        Not relevant
                       </button>
                     </div>
                   </div>
