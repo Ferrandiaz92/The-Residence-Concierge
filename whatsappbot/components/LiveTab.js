@@ -484,11 +484,17 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
     setBookings(bookData.bookings || [])
     setTickets(tickData.tickets || [])
     setOrders(orderData.orders || [])
-    // Keep selected conversation messages in sync
+    // Sync selected conversation — merge server messages with any local optimistic ones
     setSelectedConv(prev => {
       if (!prev) return prev
       const updated = freshConvs.find(c => c.id === prev.id)
-      return updated || prev
+      if (!updated) return prev
+      // If local state has MORE messages than server (optimistic), keep local messages
+      // This prevents server reload from wiping an optimistically-added staff reply
+      const localMsgs  = prev.messages || []
+      const serverMsgs = updated.messages || []
+      const messages   = localMsgs.length > serverMsgs.length ? localMsgs : serverMsgs
+      return { ...updated, messages }
     })
   }
 
