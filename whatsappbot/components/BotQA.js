@@ -246,38 +246,13 @@ export default function BotQA({ hotelId }) {
   return (
     <div style={{ fontFamily:F, background:'#f5f4f0', minHeight:'100%' }}>
 
-      {/* Line 1 — stats summary */}
-      <div style={{ background:'white', borderBottom:'0.5px solid #e0dfd8', padding:'8px 16px', display:'flex', alignItems:'center', gap:'10px' }}>
-        {(s.unresolvedFlags||0) > 0
-          ? <span style={{ fontSize:'13px', color:'#5f5e5a' }}><strong style={{ color:'#A32D2D' }}>🚩 {s.unresolvedFlags} open flag{s.unresolvedFlags!==1?'s':''}</strong> · {s.totalConvs||0} convs · {s.escalationRate||0}% escalation · {s.totalFlags||0} total flags</span>
-          : <span style={{ fontSize:'13px', color:'#5f5e5a' }}>✅ No open flags · {s.totalConvs||0} convs · {s.escalationRate||0}% escalation</span>
-        }
-        <button onClick={() => setStatsOpen(o=>!o)}
-          style={{ marginLeft:'auto', fontSize:'11px', color:'#b0a99f', background:'none', border:'none', cursor:'pointer', fontFamily:F }}>
-          {statsOpen?'▲ hide':'▼ details'}
-        </button>
-      </div>
-
-      {/* Stats expanded grid */}
-      {statsOpen && (
-        <div style={{ background:'white', borderBottom:'0.5px solid #e0dfd8', padding:'8px 16px', display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:'8px' }}>
-          {[
-            { label:'Conversations',   value: s.totalConvs||0 },
-            { label:'Escalation rate', value:`${s.escalationRate||0}%`, warn:(s.escalationRate||0)>15 },
-            { label:'Avg msgs/conv',   value: s.avgMessagesPerConv||0 },
-            { label:'Open flags',      value: s.unresolvedFlags||0, warn:(s.unresolvedFlags||0)>0 },
-            { label:'Total flags',     value: s.totalFlags||0 },
-          ].map(k => (
-            <div key={k.label} style={{ background:k.warn?'#FEF2F2':'#f9f8f5', border:`0.5px solid ${k.warn?'#d3b0b0':'#e0dfd8'}`, borderRadius:'8px', padding:'8px 12px' }}>
-              <div style={{ fontSize:'11px', color:k.warn?'#A32D2D':'#5f5e5a', marginBottom:'3px', fontWeight:'600' }}>{k.label}</div>
-              <div style={{ fontSize:'20px', fontWeight:'700', color:k.warn?'#A32D2D':'#1a1a18' }}>{k.value}</div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Line 2 — ALL filters in one row, no wrap */}
+      {/* Single combined bar: stats + filters */}
       <div style={{ background:'white', borderBottom:'0.5px solid #e0dfd8', padding:'7px 16px', display:'flex', alignItems:'center', gap:'6px', overflowX:'auto', whiteSpace:'nowrap' }}>
+        {(s.unresolvedFlags||0) > 0
+          ? <span style={{ fontSize:'12px', color:'#5f5e5a', flexShrink:0 }}><strong style={{ color:'#A32D2D' }}>🚩 {s.unresolvedFlags} open flag{s.unresolvedFlags!==1?'s':''}</strong> · {s.totalConvs||0} convs · {s.escalationRate||0}% esc</span>
+          : <span style={{ fontSize:'12px', color:'#5f5e5a', flexShrink:0 }}>✅ No open flags · {s.totalConvs||0} convs</span>
+        }
+        <span style={{ color:'#d3d1c7', flexShrink:0 }}>·</span>
         {[{key:'all',label:'All'},{key:'escalated',label:'Escalated'},{key:'flagged',label:'Flagged'},{key:'booked',label:'Had booking'}].map(f => (
           <button key={f.key} onClick={() => setFilter(f.key)} style={FBTN(filter===f.key)}>{f.label}</button>
         ))}
@@ -303,18 +278,40 @@ export default function BotQA({ hotelId }) {
           <input value={searchInput} onChange={e=>setSearchInput(e.target.value)}
             onKeyDown={e=>{ if(e.key==='Enter') setSearch(searchInput) }}
             placeholder="Search messages…"
-            style={{ padding:'5px 10px', border:'0.5px solid #d3d1c7', borderRadius:'6px', fontSize:'12px', fontFamily:F, outline:'none', width:'160px', color:'#1a1a18', background:'white' }}
+            style={{ padding:'4px 9px', border:'0.5px solid #d3d1c7', borderRadius:'6px', fontSize:'12px', fontFamily:F, outline:'none', width:'150px', color:'#1a1a18', background:'white' }}
           />
           {search && <button onClick={()=>{ setSearch(''); setSearchInput('') }} style={{ fontSize:'12px', color:'#888780', background:'none', border:'none', cursor:'pointer', fontFamily:F }}>✕</button>}
+          <button onClick={() => setStatsOpen(o=>!o)}
+            style={{ fontSize:'11px', color:'#b0a99f', background:'none', border:'none', cursor:'pointer', fontFamily:F, flexShrink:0 }}>
+            {statsOpen?'▲ hide':'▼ details'}
+          </button>
         </div>
       </div>
+
+      {/* Stats expanded grid — only when details open */}
+      {statsOpen && (
+        <div style={{ background:'white', borderBottom:'0.5px solid #e0dfd8', padding:'8px 16px', display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:'8px' }}>
+          {[
+            { label:'Conversations',   value: s.totalConvs||0 },
+            { label:'Escalation rate', value:`${s.escalationRate||0}%`, warn:(s.escalationRate||0)>15 },
+            { label:'Avg msgs/conv',   value: s.avgMessagesPerConv||0 },
+            { label:'Open flags',      value: s.unresolvedFlags||0, warn:(s.unresolvedFlags||0)>0 },
+            { label:'Total flags',     value: s.totalFlags||0 },
+          ].map(k => (
+            <div key={k.label} style={{ background:k.warn?'#FEF2F2':'#f9f8f5', border:`0.5px solid ${k.warn?'#d3b0b0':'#e0dfd8'}`, borderRadius:'8px', padding:'8px 12px' }}>
+              <div style={{ fontSize:'11px', color:k.warn?'#A32D2D':'#5f5e5a', marginBottom:'3px', fontWeight:'600' }}>{k.label}</div>
+              <div style={{ fontSize:'20px', fontWeight:'700', color:k.warn?'#A32D2D':'#1a1a18' }}>{k.value}</div>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div style={{ padding:'10px 16px' }}>
 
         {/* Flagged panel — white background, only the text is red */}
         {allFlags.length > 0 && (
           <div style={{ border:'0.5px solid #e0dfd8', borderLeft:'3px solid #d3b0b0', borderRadius:'10px', overflow:'hidden', marginBottom:'12px' }}>
-            <div style={{ background:'white', padding:'8px 14px', display:'flex', alignItems:'center', gap:'10px' }}>
+            <div style={{ background:'white', padding:'6px 14px', display:'flex', alignItems:'center', gap:'10px' }}>
               <span onClick={() => setFlagPanelOpen(o=>!o)}
                 style={{ fontSize:'13px', fontWeight:'600', color:'#A32D2D', cursor:'pointer' }}>
                 🚩 {allFlags.length} flagged message{allFlags.length!==1?'s':''} needing review
