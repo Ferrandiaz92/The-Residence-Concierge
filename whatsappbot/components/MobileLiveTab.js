@@ -240,7 +240,7 @@ function ConversationsList({ conversations, selectedConvId, onOpenThread, orders
 // ════════════════════════════════════════════════════════════
 //  CHAT THREAD — full-screen slide-in
 // ════════════════════════════════════════════════════════════
-function ChatThread({ conv, session, onBack, onReload, orders = [] }) {
+function ChatThread({ conv, session, onBack, onReload, onUpdateConv, orders = [] }) {
   const [replyText, setReplyText] = useState('')
   const [sending,   setSending]   = useState(false)
   const scrollRef = useRef(null)
@@ -260,15 +260,26 @@ function ChatThread({ conv, session, onBack, onReload, orders = [] }) {
     if (!replyText.trim() || !conv || sending) return
     setSending(true)
     try {
+      const msgText = replyText.trim()
       await fetch('/api/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           conversationId: conv.id,
           guestPhone:     conv.guests?.phone,
-          message:        replyText.trim(),
+          message:        msgText,
         }),
       })
+      // Optimistically show message immediately — don't wait for reload
+      const sentMsg = {
+        role:    'assistant',
+        content: msgText,
+        ts:      new Date().toISOString(),
+        sent_by: session?.name || 'Staff',
+      }
+      if (onUpdateConv) {
+        onUpdateConv({ ...conv, messages: [...(conv.messages||[]), sentMsg], status:'active' })
+      }
       setReplyText('')
       onReload?.()
     } finally {
@@ -1522,6 +1533,7 @@ function ReceptionView({ hotelId, session }) {
           session={session}
           onBack={() => setThreadOpen(false)}
           onReload={load}
+          onUpdateConv={(updatedConv) => setSelectedConv(updatedConv)}
           orders={orders}
         />
       )}

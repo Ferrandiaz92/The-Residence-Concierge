@@ -505,14 +505,17 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
           message:        replyText.trim(),
         }),
       })
+      const sentMsg = {
+        role:    'assistant',
+        content: replyText.trim(),
+        ts:      new Date().toISOString(),
+        sent_by: session?.name || 'Staff',
+      }
+      // Optimistically add message to selectedConv so it appears immediately
+      setSelectedConv(prev => prev ? { ...prev, messages: [...(prev.messages||[]), sentMsg], status:'active' } : prev)
       setReplyText('')
-      await loadData()
-      // Refresh selected conversation specifically
-      try {
-        const res  = await fetch(`/api/conversations?hotelId=${hotelId}&convId=${selectedConv.id}`)
-        const data = await res.json()
-        if (data.conversation) setSelectedConv(data.conversation)
-      } catch {}
+      // Full reload in background to sync with server
+      loadData()
     } finally { setSending(false) }
   }
 
