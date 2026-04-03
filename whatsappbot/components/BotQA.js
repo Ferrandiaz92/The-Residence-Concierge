@@ -336,8 +336,7 @@ export default function BotQA({ hotelId }) {
                           const hasNonEnglish = /[àáâãäåæçèéêëìíîïðñòóôõöùúûüýþÿЀ-ӿ֐-׿؀-ۿ一-鿿Ͱ-Ͽ]/i.test(sampleText)
                           const hasSpanish = /(hola|gracias|buenos|días|noches|por favor|cómo|cuándo|habitación|sí|también|quiero|necesito|puedo)/i.test(sampleText)
                           const hasOtherLatin = /(bonjour|merci|bitte|danke|grazie|obrigado|hej|tack|proszę|dziękuję)/i.test(sampleText)
-                          const showTranslate = !storedLang || storedLang !== 'en' || hasNonEnglish || hasSpanish || hasOtherLatin
-                          if (!showTranslate) return null
+                          const showTranslate = true // always show — guest may write in any language
                           return (
                             <button
                               onClick={() => translateConversation(conv)}

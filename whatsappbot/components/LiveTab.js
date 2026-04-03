@@ -299,20 +299,29 @@ function DesktopTicketRow({ t, session, conversations, onSelectConv, onSetCentre
             {isPrivileged && t.status === 'pending' && (
               <button onClick={async () => {
                 if (t.category === 'facility_booking') {
-                  // Find the matching facility_booking row by guest_id, then confirm it
-                  // which sends WhatsApp to guest AND notifies facility contact
-                  const facRes  = await fetch('/api/facility-bookings?hotelId=' + (t.hotel_id || '') + '&status=pending')
-                  const facData = await facRes.json()
-                  const match   = (facData.bookings || []).find(b => b.guest_id === t.guest_id)
-                  if (match) {
-                    await fetch('/api/facility-bookings', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ bookingId: match.id, action:'confirmed' }) })
+                  // Use t.link_id directly — it already points to the correct facility_booking row
+                  const bookingId = t.link_id
+                  if (bookingId) {
+                    await fetch('/api/facility-bookings', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ bookingId, action:'confirmed' }) })
+                  } else {
+                    // Fallback: find by guest_id + pending status
+                    const facRes  = await fetch('/api/facility-bookings?hotelId=' + (t.hotel_id || '') + '&status=pending')
+                    const facData = await facRes.json()
+                    const match   = (facData.bookings || []).find(b => b.guest_id === t.guest_id)
+                    if (match) {
+                      await fetch('/api/facility-bookings', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ bookingId: match.id, action:'confirmed' }) })
+                    }
                   }
-                  // Also mark the ticket resolved
+                  // Mark ticket resolved
                   await fetch('/api/tickets', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ticketId: t.id, status:'resolved' }) })
+                  onReload()
+                  // Navigate to Facility Bookings tab
+                  if (typeof onSetTab === 'function') onSetTab('facility_bookings')
+                  else if (typeof setTab === 'function') setTab('facility_bookings')
                 } else {
                   await fetch('/api/tickets', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ticketId: t.id, status:'in_progress' }) })
+                  onReload()
                 }
-                onReload()
               }} style={{ fontSize:'11px', fontWeight:'600', padding:'4px 10px', borderRadius:'5px', border:'0.5px solid #86EFAC', background:'#DCFCE7', color:'#14532D', cursor:'pointer', fontFamily:'var(--font)' }}>
                 {t.category === 'facility_booking' ? '✅ Confirm booking' : '👍 Accept'}
               </button>

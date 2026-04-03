@@ -872,11 +872,16 @@ function TicketAlertRow({ ticket: t, depts = [], isPrivileged = false, onOpenThr
             {isPrivileged && t.status === 'pending' && (
               <button onClick={async () => {
                 if (t.category === 'facility_booking') {
-                  const facRes  = await fetch('/api/facility-bookings?status=pending')
-                  const facData = await facRes.json()
-                  const match   = (facData.bookings || []).find(b => b.guest_id === t.guest_id)
-                  if (match) {
-                    await fetch('/api/facility-bookings', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ bookingId: match.id, action:'confirmed' }) })
+                  const bookingId = t.link_id
+                  if (bookingId) {
+                    await fetch('/api/facility-bookings', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ bookingId, action:'confirmed' }) })
+                  } else {
+                    const facRes  = await fetch('/api/facility-bookings?status=pending')
+                    const facData = await facRes.json()
+                    const match   = (facData.bookings || []).find(b => b.guest_id === t.guest_id)
+                    if (match) {
+                      await fetch('/api/facility-bookings', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ bookingId: match.id, action:'confirmed' }) })
+                    }
                   }
                   await fetch('/api/tickets', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ticketId: t.id, status:'resolved' }) })
                 } else {
