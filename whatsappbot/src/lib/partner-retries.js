@@ -211,20 +211,23 @@ export async function processPendingRetries() {
           .catch(() => {})
 
         // Mark partner as inactive (unreachable)
-        await supabase.from('partners')
-          .update({ active: false, details: supabase.rpc ? undefined : undefined, _unreachable_at: new Date().toISOString() })
-          .eq('id', retry.partner_id)
-          .catch(() => {})
+        try {
+          await supabase.from('partners')
+            .update({ active: false, _unreachable_at: new Date().toISOString() })
+            .eq('id', retry.partner_id)
+        } catch {}
 
         // Better: use a dedicated unreachable flag column
-        await supabase.from('partners')
-          .update({ unreachable: true, unreachable_since: new Date().toISOString() })
-          .eq('id', retry.partner_id)
-          .catch(() => {})
+        try {
+          await supabase.from('partners')
+            .update({ unreachable: true, unreachable_since: new Date().toISOString() })
+            .eq('id', retry.partner_id)
+        } catch {}
 
         // Load partner + hotel info for the alert
-        const { data: partner } = await supabase.from('partners').select('name, phone').eq('id', retry.partner_id).single().catch(() => ({ data: null }))
-        const { data: hotel }   = await supabase.from('hotels').select('name, config').eq('id', retry.hotel_id).single().catch(() => ({ data: null }))
+        let partner = null, hotel = null
+        try { ({ data: partner } = await supabase.from('partners').select('name, phone').eq('id', retry.partner_id).single()) } catch {}
+        try { ({ data: hotel }   = await supabase.from('hotels').select('name, config').eq('id', retry.hotel_id).single()) } catch {}
         const guestName  = retry.bookings?.guests?.name || 'Guest'
         const guestRoom  = retry.bookings?.guests?.room || '?'
         const bookingType = retry.bookings?.type || 'booking'
