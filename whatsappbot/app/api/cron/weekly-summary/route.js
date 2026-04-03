@@ -185,7 +185,7 @@ export async function GET(request) {
         link_id:    null,
         department: 'communications',
         urgent:     false,
-      }).catch(() => {})
+      })
 
       // ── 10. Save summary to history ─────────────────────────
       await supabase.from('weekly_summaries').insert({
@@ -193,7 +193,7 @@ export async function GET(request) {
         week_start:   weekStart.toISOString().split('T')[0],
         week_end:     new Date(now.getFullYear(),now.getMonth(),now.getDate()-1).toISOString().split('T')[0],
         summary_data: summaryData,
-      }).catch(() => {})
+      })
 
       results.push({ hotel: hotel.name, gaps: gaps?.length||0, convs: totalConvs })
       console.log(JSON.stringify({ level:'info', cron:'weekly-summary', hotel: hotel.name, totalConvs, escalationPct, gaps: gaps?.length||0 }))
