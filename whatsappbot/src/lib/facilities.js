@@ -43,11 +43,19 @@ When a guest wants to book a facility, collect:
 3. Preferred time
 4. Number of people
 
-Then say: "I'll check availability and confirm your booking right away. Our team will reach out to confirm within a few minutes."
+CRITICAL — tell the guest the REQUEST is SENT, never that it is confirmed/reserved/booked.
+Use these exact phrases in the guest_confirmation field:
+- English:  "Your [facility] request for [date] at [time] has been sent! We will confirm availability in a few minutes ✅"
+- Spanish:  "¡Tu solicitud para [facility] el [date] a las [time] ha sido enviada! Te confirmaremos en unos minutos ✅"
+- Russian:  "Ваш запрос на [facility] [date] в [time] отправлен! Подтвердим наличие мест через несколько минут ✅"
+- French:   "Votre demande pour [facility] le [date] à [time] a été envoyée! Nous confirmons dans quelques minutes ✅"
+- German:   "Ihre Anfrage für [facility] am [date] um [time] wurde gesendet! Wir bestätigen in wenigen Minuten ✅"
 
-Then output: [FACILITY_REQUEST]{"facility":"Tennis Court","date":"2026-03-25","time":"16:00","guests":2,"guest_confirmation":"Your tennis court request for Tuesday at 4pm has been sent to our team. We will confirm within a few minutes!"}
+NEVER say: confirmado, reservado, booked, confirmed, done, all set — it is a REQUEST pending approval.
 
-Do NOT say the booking is confirmed — it needs reception to check their calendar first.`
+Then output: [FACILITY_REQUEST]{"facility":"Tennis Court","date":"2026-03-25","time":"16:00","guests":2,"guest_confirmation":"Your Tennis Court request for 25 Mar at 16:00 has been sent! We will confirm availability in a few minutes ✅"}
+
+Do NOT say the booking is confirmed — it needs reception to check the calendar first.`
 
   return text
 }

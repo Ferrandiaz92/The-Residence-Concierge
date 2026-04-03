@@ -81,6 +81,26 @@ function keywordOverlap(kw1, kw2) {
 }
 
 // ── MAIN EXPORT ───────────────────────────────────────────────
+// ── CONTEXTUAL / REAL-TIME FILTER ────────────────────────────
+// These questions can never be answered from a static knowledge base.
+// Logging them as gaps creates noise — skip them entirely.
+const REALTIME_PATTERNS = [
+  /\b(today|tonight|this evening|right now|currently|at the moment|now|this week|this weekend)\b/i,
+  /\b(hoy|esta noche|ahora mismo|actualmente|esta semana|este fin de semana)\b/i,
+  /\b(сегодня|сейчас|этим вечером|на этой неделе)\b/i,
+  /\b(concert|show|event|performance|happening|on tonight|what'?s on|schedule today)\b/i,
+  /\b(concierto|espectáculo|evento|qué hay esta noche|qué pasa hoy)\b/i,
+  /\b(weather|forecast|temperature|rain|sunny|clima|tiempo)\b/i,
+  /\b(open now|open today|still open|closing time today|hours today)\b/i,
+  /\b(available tonight|available today|any availability|last minute)\b/i,
+  /\b(flight|gate|delay|arrival|departure|landing|takeoff)\b/i,
+  /\b(give me a link|send me a link|send link|whatsapp me|message me)\b/i,
+]
+
+function isRealtimeQuestion(text) {
+  return REALTIME_PATTERNS.some(p => p.test(text))
+}
+
 export async function logKnowledgeGap(hotelId, {
   questionText,
   detectionSource,   // 'escalation' | 'hedging' | 'flag'
@@ -91,6 +111,9 @@ export async function logKnowledgeGap(hotelId, {
 
   // Don't log very short messages — likely greetings or test messages
   if (questionText.trim().split(/\s+/).length < 3) return
+
+  // Don't log real-time/contextual questions — they can never be in a KB
+  if (isRealtimeQuestion(questionText)) return
 
   try {
     const norm     = normalise(questionText)
