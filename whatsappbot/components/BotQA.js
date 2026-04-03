@@ -47,7 +47,11 @@ export default function BotQA({ hotelId }) {
   const [flagPanelOpen, setFlagPanelOpen] = useState(true)
   const [statsOpen,     setStatsOpen]     = useState(false)
   const [highlightMsg,  setHighlightMsg]  = useState(null)
+  const [session,       setSession]       = useState(null)
 
+  useEffect(() => {
+    fetch('/api/auth/session').then(r=>r.json()).then(d=>setSession(d.session||null)).catch(()=>{})
+  }, [])
   useEffect(() => { if (hotelId) loadData() }, [hotelId, filter, language, search, month, guestType])
 
   async function loadData() {
@@ -129,7 +133,7 @@ export default function BotQA({ hotelId }) {
       const guestMsg = f.message_index > 0 ? msgs[f.message_index - 1] : null
       const ft       = FLAG_TYPES.find(t => t.key === f.flag_type)?.label || 'Issue'
       return [
-        `--- Flag ${i+1}: ${ft} · ${guest.name||'Guest'}${guest.room?' · Room '+guest.room:''} ---`,
+        `--- Flag ${i+1}: ${ft} · ${guestDisplay(guest)} ---`,
         guestMsg ? `GUEST SAID: "${(guestMsg.content||'').slice(0,200)}"` : '',
         `BOT SAID: "${(botMsg?.content||'').slice(0,400)}"`,
         f.note           ? `WHAT WAS WRONG: ${f.note}` : '',
@@ -138,6 +142,34 @@ export default function BotQA({ hotelId }) {
     }).join('\n\n')
     const prompt = text + '\n\n---\nFor each flag above, rewrite the BOT SAID reply. Make it accurate, natural and concise. Use the CORRECT ANSWER as guidance where provided.'
     navigator.clipboard.writeText(prompt).then(() => alert('Copied! Paste into Claude to get improved answers.'))
+  }
+
+  // GDPR-aware guest display
+  // manager/receptionist/admin → show room + name (they handle PII in Live Tab anyway)
+  // communications/others → show room or anonymised ref only
+  function guestDisplay(guest) {
+    const canSeePII = ['manager','admin','receptionist','supervisor'].includes(session?.role)
+    const ref = (guest.id||'').slice(-4).toUpperCase() || '????'
+    const typeLabel = guest.guest_type === 'prospect' ? 'Prospect'
+      : guest.guest_type === 'day_visitor' ? 'Visitor'
+      : guest.guest_type === 'event' ? 'Event guest'
+      : 'Guest'
+    if (guest.room) {
+      return canSeePII && guest.name
+        ? `Room ${guest.room} · ${guest.name}`
+        : `Room ${guest.room}`
+    }
+    if (canSeePII && guest.name) {
+      return guest.name + (guest.surname ? ' ' + guest.surname : '')
+    }
+    return `${typeLabel} #${ref}`
+  }
+
+  function guestAvatar(guest) {
+    if (guest.room) return guest.room.toString().slice(0,3).toUpperCase()
+    const canSeePII = ['manager','admin','receptionist','supervisor'].includes(session?.role)
+    if (canSeePII && guest.name) return guest.name[0].toUpperCase()
+    return (guest.id||'?').slice(-2).toUpperCase()
   }
 
   const SEL  = { padding:'5px 8px', borderRadius:'6px', fontSize:'12px', border:'0.5px solid #d3d1c7', background:'white', color:'#3d3d3a', fontFamily:F, cursor:'pointer' }
@@ -154,19 +186,17 @@ export default function BotQA({ hotelId }) {
     const minsAgo    = Math.floor((Date.now() - new Date(conv.last_message_at)) / 60000)
     const timeLabel  = minsAgo < 60 ? `${minsAgo}m ago` : minsAgo < 1440 ? `${Math.floor(minsAgo/60)}h ago` : `${Math.floor(minsAgo/1440)}d ago`
     const displayMsgs = translations[conv.id] || msgs
-    const name = guest.room
-      ? `Room ${guest.room}${guest.name ? ' · '+guest.name : ''}`
-      : guest.name ? guest.name+(guest.surname?' '+guest.surname:'') : 'Guest'
+    const name = guestDisplay(guest)
 
     return (
-      <div style={{ background:'white', border:`0.5px solid ${openFlags>0?'#d3b0b0':'#e0dfd8'}`, borderRadius:'10px', overflow:'hidden', fontFamily:F }}>
+      <div style={{ background:'white', border:`0.5px solid ${openFlags>0?'#e8d9b0':'#e0dfd8'}`, borderRadius:'10px', overflow:'hidden', fontFamily:F }}>
         {/* Header */}
         <div onClick={() => toggleConv(conv.id)}
           style={{ padding:'10px 13px', display:'flex', alignItems:'center', gap:'9px', cursor:'pointer', background:isOpen?'#f9f8f5':'white' }}
           onMouseEnter={e=>{ if(!isOpen) e.currentTarget.style.background='#f9f8f5' }}
           onMouseLeave={e=>{ if(!isOpen) e.currentTarget.style.background='white' }}>
           <div style={{ width:'30px', height:'30px', borderRadius:'50%', background:'#f1efe8', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'11px', fontWeight:'700', color:'#5f5e5a', flexShrink:0 }}>
-            {(guest.room||guest.name?.[0]||'?').toString().slice(0,3).toUpperCase()}
+            {guestAvatar(guest)}
           </div>
           <div style={{ flex:1, minWidth:0 }}>
             <div style={{ fontSize:'13px', fontWeight:'600', color:'#1a1a18', marginBottom:'2px', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{name}</div>
@@ -205,7 +235,7 @@ export default function BotQA({ hotelId }) {
                       <div style={{ padding:'7px 10px', borderRadius:isBot?'3px 10px 10px 10px':'10px 3px 10px 10px',
                         background:isBot?'white':'#1a3d2e', color:isBot?'#1a1a18':'white',
                         fontSize:'12px', lineHeight:'1.6',
-                        border:isBot?`0.5px solid ${isFlagged?'#d3b0b0':'#e0dfd8'}`:'none' }}>
+                        border:isBot?`0.5px solid ${isFlagged?'#e8d9b0':'#e0dfd8'}`:'none' }}>
                         {msg.content}
                         {isFlagged && (
                           <div style={{ marginTop:'5px', fontSize:'11px', display:'flex', flexDirection:'column', gap:'3px' }}>
@@ -337,7 +367,7 @@ export default function BotQA({ hotelId }) {
                 <div key={fi} style={{ borderTop:'0.5px solid #fde8e8', padding:'11px 14px', background:'white' }}>
                   <div style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'8px' }}>
                     <span style={{ fontSize:'10px', fontWeight:'700', padding:'2px 7px', borderRadius:'4px', background:ft.bg, color:ft.color }}>{ft.label}</span>
-                    <span style={{ fontSize:'12px', color:'#5f5e5a' }}>{guest.name||'Guest'}{guest.room?` · Room ${guest.room}`:''}</span>
+                    <span style={{ fontSize:'12px', color:'#5f5e5a' }}>{guestDisplay(guest)}</span>
                     <button onClick={() => openAtFlag(f.conv, f.message_index)}
                       style={{ marginLeft:'auto', fontSize:'11px', fontWeight:'500', padding:'3px 9px', borderRadius:'6px', border:'0.5px solid #b5d4f4', background:'#e6f1fb', color:'#0c447c', cursor:'pointer', fontFamily:F }}>
                       View in conversation ↗
