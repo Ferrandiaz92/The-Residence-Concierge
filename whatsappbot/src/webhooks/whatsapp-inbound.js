@@ -22,7 +22,7 @@ import {
   getOrCreateConversation, appendMessage, getConversationHistory,
   getPartners, createBooking, supabase,
 } from '../lib/supabase.js'
-import { sendWhatsApp, parseIncomingMessage } from '../lib/twilio.js'
+import { sendWhatsApp, sendQuickAck, parseIncomingMessage } from '../lib/twilio.js'
 import { detectLanguage, parseBookingRequest, formatPartnerAlert, buildSystemPrompt } from '../lib/language.js'
 import { logKnowledgeGap, detectHedging } from '../lib/knowledge-gaps.js'
 import { getLocalGuideContext, detectLocalGuideIntent } from '../lib/local-guide.js'
@@ -673,7 +673,7 @@ export async function handleInboundWhatsApp(rawBody) {
         link_type: 'conversation', link_id: conv.id,
       })
     } catch {}
-    await notifyReceptionEscalation(hotel.id, guest, conv.id).catch(()=>{})
+    try { await notifyReceptionEscalation({ hotelId: hotel.id, guestName: `${guest.name||''} ${guest.surname||''}`.trim() || 'Guest', room: guest.room || null, convId: conv.id }) } catch {}
     log.info('Bot escalated via [ESCALATE] tag', { ...hCtx, ...gCtx, isMultiIntent })
   }
 
