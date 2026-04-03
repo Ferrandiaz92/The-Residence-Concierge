@@ -22,7 +22,7 @@ import {
   getOrCreateConversation, appendMessage, getConversationHistory,
   getPartners, createBooking, supabase,
 } from '../lib/supabase.js'
-import { sendWhatsApp, sendQuickAck, parseIncomingMessage } from '../lib/twilio.js'
+import { sendWhatsApp, parseIncomingMessage } from '../lib/twilio.js'
 import { detectLanguage, parseBookingRequest, formatPartnerAlert, buildSystemPrompt } from '../lib/language.js'
 import { logKnowledgeGap, detectHedging } from '../lib/knowledge-gaps.js'
 import { getLocalGuideContext, detectLocalGuideIntent } from '../lib/local-guide.js'
