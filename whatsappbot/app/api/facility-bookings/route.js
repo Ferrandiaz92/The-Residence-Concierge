@@ -147,7 +147,7 @@ export async function POST(request) {
       body:      `${date} at ${time} · ${guestsCount || 1} guest(s)`,
       link_type: 'facility_booking',
       link_id:   booking.id,
-    }).catch(() => {})
+    })
 
     // When created from staff portal — immediately confirm + notify guest
     const { data: guest } = guestId
@@ -175,7 +175,7 @@ export async function POST(request) {
         // Append to conversation so it shows in dashboard chat
         const { data: conv } = await supabase.from('conversations').select('id').eq('guest_id', guestId).in('status', ['active','escalated']).order('created_at', { ascending: false }).limit(1).single()
         if (conv) {
-          await supabase.from('messages').insert({ conversation_id: conv.id, hotel_id: hotelId || session.hotelId, role: 'assistant', content: msg, sent_by: 'facility_confirmation' }).catch(() => {})
+          try { await supabase.from('messages').insert({ conversation_id: conv.id, hotel_id: hotelId || session.hotelId, role: 'assistant', content: msg, sent_by: 'facility_confirmation' }) } catch {}
           await supabase.from('conversations').update({ last_message_at: new Date().toISOString() }).eq('id', conv.id)
         }
       } catch (e) { console.error('Guest confirm notify failed:', e.message) }
@@ -250,7 +250,7 @@ export async function PATCH(request) {
             convP = nc
           }
           if (convP) {
-            await supabase.from('messages').insert({ conversation_id: convP.id, hotel_id: booking.hotel_id, role: 'assistant', content: msg, sent_by: 'facility_confirmation' }).catch(() => {})
+            try { await supabase.from('messages').insert({ conversation_id: convP.id, hotel_id: booking.hotel_id, role: 'assistant', content: msg, sent_by: 'facility_confirmation' }) } catch {}
             await supabase.from('conversations').update({ last_message_at: new Date().toISOString(), status: 'active' }).eq('id', convP.id)
           }
         } catch (e) { console.error('Guest notify failed:', e.message) }
