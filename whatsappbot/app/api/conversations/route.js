@@ -152,7 +152,7 @@ export async function GET(request) {
       action:       'conversation_view',
       resourceType: 'conversation',
       detail:       { count: conversations.length, view: 'anonymised_list' },
-    }).catch(() => {})
+    })
   }
 
   return Response.json({ conversations })
