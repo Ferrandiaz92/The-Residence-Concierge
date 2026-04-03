@@ -186,8 +186,8 @@ function ExpandableBookingDesktop({ b, conversations, onSelectConv, onNavigateTo
             {b.commission_amount > 0 && <div>💰 <strong>Commission:</strong> €{b.commission_amount}</div>}
             <div style={{ marginTop:'2px' }}>
               <span style={{ fontSize:'10px', fontWeight:'700', padding:'2px 7px', borderRadius:'4px',
-                background: b.status==='confirmed' ? '#DCFCE7' : '#FEF3C7',
-                color:      b.status==='confirmed' ? '#14532D' : '#78350F',
+                background: b.status==='confirmed' ? '#DCFCE7' : b.status==='cancelled' ? '#FEE2E2' : '#FEF3C7',
+                color:      b.status==='confirmed' ? '#14532D' : b.status==='cancelled' ? '#991B1B' : '#78350F',
                 textTransform:'capitalize' }}>
                 {b.status}
               </span>
@@ -560,7 +560,7 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
   }
 
   const upcoming  = bookings.filter(b => ['confirmed','pending'].includes(b.status))
-  const completed = bookings.filter(b => ['completed','resolved'].includes(b.status))
+  const completed = bookings.filter(b => ['completed','resolved','cancelled'].includes(b.status))
   const issues    = tickets.filter(t => !['resolved','cancelled'].includes(t.status))
   const escalated = conversations.filter(c => c.status === 'escalated')
 
