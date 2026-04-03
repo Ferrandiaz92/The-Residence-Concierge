@@ -22,7 +22,7 @@ import {
   getOrCreateConversation, appendMessage, getConversationHistory,
   getPartners, createBooking, supabase,
 } from '../lib/supabase.js'
-import { sendWhatsApp, sendQuickAck, parseIncomingMessage } from '../lib/twilio.js'
+import { sendWhatsApp, parseIncomingMessage } from '../lib/twilio.js'
 import { detectLanguage, parseBookingRequest, formatPartnerAlert, buildSystemPrompt } from '../lib/language.js'
 import { logKnowledgeGap, detectHedging } from '../lib/knowledge-gaps.js'
 import { getLocalGuideContext, detectLocalGuideIntent } from '../lib/local-guide.js'
@@ -698,7 +698,7 @@ export async function handleInboundWhatsApp(rawBody) {
       detectionSource: wasEscalated ? 'escalation' : 'hedging',
       language:        guest.language || 'en',
       conversationId:  conv.id,
-    }).catch(() => {})
+    })
   }
 
   if (hasBooking && booking) {
@@ -822,7 +822,7 @@ async function _sendToPartner(partner, booking, hotel, guest, source, lowConfide
       title: `⚠ Low-confidence match — ${booking.type} for ${guest.name||'Guest'}`,
       body: `Sent to ${partner.name} but match score was low. Please verify.`,
       link_type: 'booking', link_id: saved.id,
-    }).catch(()=>{})
+    })
   }
 
   try {
@@ -888,7 +888,7 @@ async function processProductOrder(orderData, hotel, guest, convId, products, gu
         link_id:   order?.id || null,
         urgent:    true,
         department: dept,
-      }).catch(()=>{})
+      })
 
       log.info('Cash order created + dept notified', { ...hotelCtx(hotel), dept, total, product: product.name })
     } catch(e) {
