@@ -763,8 +763,8 @@ function ExpandableBooking({ booking: b, guest: g, tc }) {
             {b.commission_amount > 0 && <div>💰 <strong>Commission:</strong> €{b.commission_amount}</div>}
             <div style={{ marginTop:'4px' }}>
               <span style={{ fontSize:'10px', fontWeight:'700', padding:'2px 8px', borderRadius:'5px',
-                background: b.status==='confirmed'?'#DCFCE7':'#FEF3C7',
-                color:      b.status==='confirmed'?'#14532D':'#78350F',
+                background: b.status==='confirmed'?'#DCFCE7':b.status==='cancelled'?'#FEE2E2':'#FEF3C7',
+                color:      b.status==='confirmed'?'#14532D':b.status==='cancelled'?'#991B1B':'#78350F',
                 textTransform:'capitalize' }}>
                 {b.status}
               </span>
@@ -937,7 +937,7 @@ function IssuesPanel({ tickets, bookings, conversations = [], onOpenThread, onNa
   const escalatedChats = conversations.filter(c => c.status === 'escalated')
   const issues         = tickets.filter(t => !['resolved','cancelled'].includes(t.status))
   const upcoming       = bookings.filter(b => ['confirmed','pending'].includes(b.status))
-  const done           = bookings.filter(b => ['completed','resolved'].includes(b.status))
+  const done           = bookings.filter(b => ['completed','resolved','cancelled'].includes(b.status))
   const [depts,       setDepts]       = useState([])
   const [alertTab,    setAlertTab]    = useState('tickets')
   const [facOpen,     setFacOpen]     = useState(true)
@@ -1174,7 +1174,7 @@ function MobileExpandableBooking({ booking: b, guest: g, tc, matchConv, onOpenTh
             {b.details?.time        && <div>🕐 <strong>Time:</strong> {b.details.time}</div>}
             {b.details?.notes       && <div>📝 <strong>Notes:</strong> {b.details.notes}</div>}
             {b.commission_amount > 0 && <div>💰 <strong>Commission:</strong> €{b.commission_amount}</div>}
-            <span style={{ fontSize:'10px', fontWeight:'700', padding:'2px 7px', borderRadius:'4px', display:'inline-block', marginTop:'2px', background: b.status==='confirmed'?'#DCFCE7':'#FEF3C7', color: b.status==='confirmed'?'#14532D':'#78350F' }}>{b.status}</span>
+            <span style={{ fontSize:'10px', fontWeight:'700', padding:'2px 7px', borderRadius:'4px', display:'inline-block', marginTop:'2px', background: b.status==='confirmed'?'#DCFCE7':b.status==='cancelled'?'#FEE2E2':'#FEF3C7', color: b.status==='confirmed'?'#14532D':b.status==='cancelled'?'#991B1B':'#78350F' }}>{b.status}</span>
           </div>
           <div style={{ display:'flex', gap:'7px', flexWrap:'wrap' }}>
             {matchConv && onOpenThread && (
