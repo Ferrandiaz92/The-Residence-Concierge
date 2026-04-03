@@ -159,7 +159,7 @@ export default function BotQA({ hotelId }) {
       : guest.name ? guest.name+(guest.surname?' '+guest.surname:'') : 'Guest'
 
     return (
-      <div style={{ background:'white', border:`0.5px solid ${openFlags>0?'#f09595':'#e0dfd8'}`, borderRadius:'10px', overflow:'hidden', fontFamily:F }}>
+      <div style={{ background:'white', border:`0.5px solid ${openFlags>0?'#d3b0b0':'#e0dfd8'}`, borderRadius:'10px', overflow:'hidden', fontFamily:F }}>
         {/* Header */}
         <div onClick={() => toggleConv(conv.id)}
           style={{ padding:'10px 13px', display:'flex', alignItems:'center', gap:'9px', cursor:'pointer', background:isOpen?'#f9f8f5':'white' }}
@@ -185,18 +185,12 @@ export default function BotQA({ hotelId }) {
           <div style={{ borderTop:'0.5px solid #f1efe8', background:'#f9f8f5' }}>
             <div style={{ padding:'7px 12px', display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:'0.5px solid #f1efe8' }}>
               <span style={{ fontSize:'11px', color:'#888780' }}>{msgs.length} messages</span>
-              <div style={{ display:'flex', gap:'5px' }}>
-                <button onClick={() => setExpandedConv(expandedConv===conv.id ? null : conv.id)}
-                  style={{ fontSize:'11px', fontWeight:'500', padding:'3px 8px', borderRadius:'5px', border:'0.5px solid #d3d1c7', background:'white', color:'#3d3d3a', cursor:'pointer', fontFamily:F }}>
-                  {expandedConv===conv.id ? '⊡ Collapse' : '⊞ Expand'}
-                </button>
-                <button onClick={() => translateConversation(conv)} disabled={!!translating[conv.id]}
-                  style={{ fontSize:'11px', fontWeight:'500', padding:'3px 8px', borderRadius:'5px', border:'0.5px solid #b5d4f4', background:translations[conv.id]?'#e6f1fb':'white', color:'#0c447c', cursor:'pointer', fontFamily:F }}>
-                  {translating[conv.id] ? '⏳' : translations[conv.id] ? '🌐 EN · hide' : '🌐 Translate'}
-                </button>
-              </div>
+              <button onClick={() => translateConversation(conv)} disabled={!!translating[conv.id]}
+                style={{ fontSize:'11px', fontWeight:'500', padding:'3px 8px', borderRadius:'5px', border:'0.5px solid #b5d4f4', background:translations[conv.id]?'#e6f1fb':'white', color:'#0c447c', cursor:'pointer', fontFamily:F }}>
+                {translating[conv.id] ? '⏳' : translations[conv.id] ? '🌐 EN · hide' : '🌐 Translate'}
+              </button>
             </div>
-            <div style={{ padding:'10px 12px', display:'flex', flexDirection:'column', gap:'6px', maxHeight:expandedConv===conv.id?'calc(100vh - 220px)':'500px', overflowY:'auto' }}>
+            <div style={{ padding:'10px 12px', display:'flex', flexDirection:'column', gap:'6px', maxHeight:'500px', overflowY:'auto' }}>
               {displayMsgs.map((msg, idx) => {
                 const isBot     = msg.role === 'assistant'
                 const isFlagged = isMsgFlagged(conv, idx)
@@ -211,7 +205,7 @@ export default function BotQA({ hotelId }) {
                       <div style={{ padding:'7px 10px', borderRadius:isBot?'3px 10px 10px 10px':'10px 3px 10px 10px',
                         background:isBot?'white':'#1a3d2e', color:isBot?'#1a1a18':'white',
                         fontSize:'12px', lineHeight:'1.6',
-                        border:isBot?`0.5px solid ${isFlagged?'#f09595':'#e0dfd8'}`:'none' }}>
+                        border:isBot?`0.5px solid ${isFlagged?'#d3b0b0':'#e0dfd8'}`:'none' }}>
                         {msg.content}
                         {isFlagged && (
                           <div style={{ marginTop:'5px', fontSize:'11px', display:'flex', flexDirection:'column', gap:'3px' }}>
@@ -274,7 +268,7 @@ export default function BotQA({ hotelId }) {
             { label:'Open flags',      value: s.unresolvedFlags||0, warn:(s.unresolvedFlags||0)>0 },
             { label:'Total flags',     value: s.totalFlags||0 },
           ].map(k => (
-            <div key={k.label} style={{ background:k.warn?'#FEF2F2':'#f9f8f5', border:`0.5px solid ${k.warn?'#f09595':'#e0dfd8'}`, borderRadius:'8px', padding:'8px 12px' }}>
+            <div key={k.label} style={{ background:k.warn?'#FEF2F2':'#f9f8f5', border:`0.5px solid ${k.warn?'#d3b0b0':'#e0dfd8'}`, borderRadius:'8px', padding:'8px 12px' }}>
               <div style={{ fontSize:'11px', color:k.warn?'#A32D2D':'#5f5e5a', marginBottom:'3px', fontWeight:'600' }}>{k.label}</div>
               <div style={{ fontSize:'20px', fontWeight:'700', color:k.warn?'#A32D2D':'#1a1a18' }}>{k.value}</div>
             </div>
@@ -319,7 +313,7 @@ export default function BotQA({ hotelId }) {
 
         {/* Flagged panel — white background, only the text is red */}
         {allFlags.length > 0 && (
-          <div style={{ border:'0.5px solid #f09595', borderRadius:'10px', overflow:'hidden', marginBottom:'12px' }}>
+          <div style={{ border:'0.5px solid #e0dfd8', borderLeft:'3px solid #d3b0b0', borderRadius:'10px', overflow:'hidden', marginBottom:'12px' }}>
             <div style={{ background:'white', padding:'8px 14px', display:'flex', alignItems:'center', gap:'10px' }}>
               <span onClick={() => setFlagPanelOpen(o=>!o)}
                 style={{ fontSize:'13px', fontWeight:'600', color:'#A32D2D', cursor:'pointer' }}>
@@ -330,7 +324,7 @@ export default function BotQA({ hotelId }) {
                 {flagPanelOpen?'▲ hide':'▼ show'}
               </button>
               <button onClick={copyAllForClaude}
-                style={{ marginLeft:'auto', fontSize:'11px', fontWeight:'600', padding:'4px 10px', borderRadius:'6px', border:'0.5px solid #f09595', background:'white', color:'#A32D2D', cursor:'pointer', fontFamily:F, whiteSpace:'nowrap' }}>
+                style={{ marginLeft:'auto', fontSize:'11px', fontWeight:'600', padding:'4px 10px', borderRadius:'6px', border:'0.5px solid #d3b0b0', background:'white', color:'#A32D2D', cursor:'pointer', fontFamily:F, whiteSpace:'nowrap' }}>
                 📋 Copy all for Claude
               </button>
             </div>
