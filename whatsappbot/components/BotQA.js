@@ -47,9 +47,11 @@ export default function BotQA({ hotelId }) {
   const [flagNote, setFlagNote]           = useState('')
   const [saving, setSaving]               = useState(false)
   const [correctAnswer, setCorrectAnswer]  = useState('')
-  const [translating, setTranslating]      = useState({})   // { convId: true/false }
-  const [translations, setTranslations]    = useState({})   // { convId: [{role,content,ts}] }
-  const [expandedConv, setExpandedConv]    = useState(null) // convId of full-screen expanded conv
+  const [translating, setTranslating]      = useState({})
+  const [translations, setTranslations]    = useState({})
+  const [expandedConv, setExpandedConv]    = useState(null)
+  const [highlightMsg, setHighlightMsg]    = useState(null)
+  const [flagPanelOpen, setFlagPanelOpen]  = useState(true)
   const [month, setMonth]                 = useState(() => {
     const now = new Date()
     return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`
@@ -81,6 +83,15 @@ export default function BotQA({ hotelId }) {
       setFlagging(null); setFlagNote(''); setCorrectAnswer('')
       loadData()
     } finally { setSaving(false) }
+  }
+
+  function openAtFlag(conv, msgIndex) {
+    setSelectedConv(conv.id)
+    setHighlightMsg({ convId: conv.id, msgIndex })
+    setTimeout(() => {
+      const el = document.getElementById(`msg-${conv.id}-${msgIndex}`)
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 200)
   }
 
   async function translateConversation(conv) {
@@ -257,6 +268,66 @@ export default function BotQA({ hotelId }) {
         <div style={{ textAlign:'center', padding:'40px', color:'#9CA3AF', fontSize:'14px' }}>No conversations found</div>
       ) : (
         <div style={{ display:'flex', flexDirection:'column', gap:'10px' }}>
+          {/* ── FLAGGED MESSAGES PANEL ── */}
+          {(() => {
+            const allFlags = conversations.flatMap(conv =>
+              (conv.qa_flags || []).filter(f => !f.resolved).map(f => ({ ...f, conv }))
+            )
+            if (allFlags.length === 0) return null
+            return (
+              <div style={{ border:'1.5px solid #FCA5A5', borderRadius:'12px', overflow:'hidden', marginBottom:'8px' }}>
+                <div onClick={() => setFlagPanelOpen(o => !o)}
+                  style={{ background:'#FEF2F2', padding:'10px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer', userSelect:'none' }}>
+                  <span style={{ fontSize:'13px', fontWeight:'700', color:'#991B1B' }}>
+                    🚩 {allFlags.length} flagged message{allFlags.length !== 1 ? 's' : ''} needing review
+                  </span>
+                  <span style={{ fontSize:'11px', color:'#DC2626' }}>{flagPanelOpen ? '▲ Hide' : '▼ Show'}</span>
+                </div>
+                {flagPanelOpen && allFlags.map((f, fi) => {
+                  const conv   = f.conv
+                  const msgs   = conv.messages || []
+                  const msgIdx = f.message_index
+                  const flagMsg = msgs[msgIdx]
+                  const prevMsg = msgIdx > 0 ? msgs[msgIdx - 1] : null
+                  const prev2   = msgIdx > 1 ? msgs[msgIdx - 2] : null
+                  const ft     = FLAG_TYPES.find(t => t.key === f.flag_type) || FLAG_TYPES[FLAG_TYPES.length-1]
+                  const guest  = conv.guests || {}
+                  return (
+                    <div key={fi} style={{ borderTop: fi > 0 ? '1px solid #FEE2E2' : 'none', padding:'14px 16px', background:'white' }}>
+                      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'10px' }}>
+                        <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
+                          <span style={{ fontSize:'11px', fontWeight:'700', padding:'2px 8px', borderRadius:'5px', background:ft.bg, color:ft.color }}>{ft.label}</span>
+                          <span style={{ fontSize:'12px', color:'#6B7280' }}>{guest.name || 'Guest'}{guest.room ? ` · Room ${guest.room}` : ''}</span>
+                        </div>
+                        <button onClick={() => openAtFlag(conv, msgIdx)}
+                          style={{ fontSize:'11px', fontWeight:'600', padding:'3px 10px', borderRadius:'6px', border:'0.5px solid #93C5FD', background:'#DBEAFE', color:'#1E3A5F', cursor:'pointer' }}>
+                          View in conversation ↗
+                        </button>
+                      </div>
+                      {prev2 && <div style={{ fontSize:'12px', color:'#9CA3AF', padding:'6px 10px', borderRadius:'8px', background:'#F9FAFB', marginBottom:'4px', lineHeight:'1.5' }}>
+                        <span style={{ fontWeight:'600', marginRight:'4px' }}>{prev2.role === 'user' ? '👤' : '🤖'}</span>
+                        {(prev2.content||'').slice(0,120)}{(prev2.content||'').length>120?'…':''}
+                      </div>}
+                      {prevMsg && <div style={{ fontSize:'12px', color:'#6B7280', padding:'6px 10px', borderRadius:'8px', background:'#F9FAFB', marginBottom:'4px', lineHeight:'1.5' }}>
+                        <span style={{ fontWeight:'600', marginRight:'4px' }}>{prevMsg.role === 'user' ? '👤' : '🤖'}</span>
+                        {(prevMsg.content||'').slice(0,150)}{(prevMsg.content||'').length>150?'…':''}
+                      </div>}
+                      {flagMsg && <div style={{ fontSize:'12px', padding:'8px 10px', borderRadius:'8px', background:'#FEF2F2', border:'1px solid #FCA5A5', lineHeight:'1.6', marginTop:'2px' }}>
+                        <span style={{ fontWeight:'700', color:'#DC2626', marginRight:'6px' }}>🚩 Flagged reply:</span>
+                        <span style={{ color:'#111827' }}>{(flagMsg.content||'').slice(0,300)}{(flagMsg.content||'').length>300?'…':''}</span>
+                      </div>}
+                      {(f.note||f.correct_answer) && <div style={{ marginTop:'8px', fontSize:'11px', color:'#6B7280' }}>
+                        {f.note && <div>📝 {f.note}</div>}
+                        {f.correct_answer && <div style={{ color:'#14532D', marginTop:'2px' }}>✓ Correct: {f.correct_answer}</div>}
+                      </div>}
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })()}
+
+          {/* ── CONVERSATION LIST ── */}
           {conversations.map(conv => {
             const guest    = conv.guests || {}
             const msgs     = conv.messages || []
@@ -356,8 +427,11 @@ export default function BotQA({ hotelId }) {
                       const isFlagged = isMsgFlagged(conv, idx)
                       const msgFlag  = getMsgFlag(conv, idx)
 
+                      const isHighlighted = highlightMsg?.convId === conv.id && highlightMsg?.msgIndex === idx
                       return (
-                        <div key={idx} style={{ display:'flex', gap:'10px', alignItems:'flex-start', flexDirection:isBot?'row':'row-reverse' }}>
+                        <div key={idx} id={`msg-${conv.id}-${idx}`}
+                          style={{ display:'flex', gap:'10px', alignItems:'flex-start', flexDirection:isBot?'row':'row-reverse',
+                            ...(isHighlighted ? { background:'#FEF9C3', borderRadius:'10px', padding:'4px', margin:'-4px' } : {}) }}>
                           <div style={{ maxWidth:'70%' }}>
                             <div style={{ padding:'10px 14px', borderRadius:isBot?'4px 14px 14px 14px':'14px 4px 14px 14px', background:isBot?'white':'#1C3D2E', color:isBot?'#111827':'white', fontSize:'13px', lineHeight:'1.6', border:isBot?`1px solid ${isFlagged?'#FCA5A5':'#E5E7EB'}`:'none' }}>
                               {msg.content}
