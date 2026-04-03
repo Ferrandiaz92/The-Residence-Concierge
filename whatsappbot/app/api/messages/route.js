@@ -46,24 +46,21 @@ export async function POST(request) {
       body: message.trim(),
     })
 
-    // Save to conversation as 'assistant' message (appears as bot)
-    const { data: conv } = await supabase
-      .from('conversations').select('messages').eq('id', conversationId).single()
+    // Save to messages TABLE (same as bot via appendMessage)
+    // NOT to conversations.messages JSONB — that column is stale/unused for new convs
+    await supabase.from('messages').insert({
+      conversation_id: conversationId,
+      hotel_id:        hotelId,
+      role:            'assistant',
+      content:         message.trim(),
+      sent_by:         session.name || 'Staff',
+      created_at:      new Date().toISOString(),
+    })
 
-    const messages = [
-      ...(conv?.messages || []),
-      {
-        role:    'assistant',
-        content: message.trim(),
-        ts:      new Date().toISOString(),
-        sent_by: session.name || 'Staff', // track who sent it
-      }
-    ]
-
+    // Update conversation metadata + de-escalate
     await supabase.from('conversations').update({
-      messages,
       last_message_at: new Date().toISOString(),
-      status: 'active', // re-activate if was escalated
+      status:          'active', // clear escalated flag — staff has replied
     }).eq('id', conversationId)
 
     return Response.json({ status: 'sent' })
