@@ -144,31 +144,20 @@ export default function BotQA({ hotelId }) {
     navigator.clipboard.writeText(prompt).then(() => alert('Copied! Paste into Claude to get improved answers.'))
   }
 
-  // GDPR-aware guest display
-  // manager/receptionist/admin → show room + name (they handle PII in Live Tab anyway)
-  // communications/others → show room or anonymised ref only
+  // GDPR — QA tab always anonymises. Room number is enough to identify.
+  // If you need to investigate a specific guest, use the Live Tab.
   function guestDisplay(guest) {
-    const canSeePII = ['manager','admin','receptionist','supervisor'].includes(session?.role)
     const ref = (guest.id||'').slice(-4).toUpperCase() || '????'
     const typeLabel = guest.guest_type === 'prospect' ? 'Prospect'
       : guest.guest_type === 'day_visitor' ? 'Visitor'
       : guest.guest_type === 'event' ? 'Event guest'
       : 'Guest'
-    if (guest.room) {
-      return canSeePII && guest.name
-        ? `Room ${guest.room} · ${guest.name}`
-        : `Room ${guest.room}`
-    }
-    if (canSeePII && guest.name) {
-      return guest.name + (guest.surname ? ' ' + guest.surname : '')
-    }
+    if (guest.room) return `Room ${guest.room}`
     return `${typeLabel} #${ref}`
   }
 
   function guestAvatar(guest) {
     if (guest.room) return guest.room.toString().slice(0,3).toUpperCase()
-    const canSeePII = ['manager','admin','receptionist','supervisor'].includes(session?.role)
-    if (canSeePII && guest.name) return guest.name[0].toUpperCase()
     return (guest.id||'?').slice(-2).toUpperCase()
   }
 
