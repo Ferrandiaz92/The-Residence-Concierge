@@ -261,15 +261,22 @@ function ChatThread({ conv, session, onBack, onReload, onUpdateConv, orders = []
     setSending(true)
     try {
       const msgText = replyText.trim()
-      await fetch('/api/messages', {
+      const phone = conv.guests?.phone
+      if (!phone) { alert('No phone number for this guest.'); return }
+      const res = await fetch('/api/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           conversationId: conv.id,
-          guestPhone:     conv.guests?.phone,
+          guestPhone:     phone,
           message:        msgText,
         }),
       })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        alert('Failed to send: ' + (err.error || res.status))
+        return
+      }
       // Optimistically show message immediately — don't wait for reload
       const sentMsg = {
         role:    'assistant',

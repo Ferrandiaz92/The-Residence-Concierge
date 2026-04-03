@@ -502,25 +502,33 @@ function ReceptionistView({ hotelId, session, onSelectGuest }) {
     if (!replyText.trim() || !selectedConv) return
     setSending(true)
     try {
-      await fetch('/api/messages', {
+      const phone = selectedConv.guests?.phone
+      if (!phone) {
+        alert('No phone number found for this guest — cannot send WhatsApp.')
+        return
+      }
+      const res = await fetch('/api/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           conversationId: selectedConv.id,
-          guestPhone:     selectedConv.guests?.phone,
+          guestPhone:     phone,
           message:        replyText.trim(),
         }),
       })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        alert('Failed to send: ' + (err.error || res.status))
+        return
+      }
       const sentMsg = {
         role:    'assistant',
         content: replyText.trim(),
         ts:      new Date().toISOString(),
         sent_by: session?.name || 'Staff',
       }
-      // Optimistically add message to selectedConv so it appears immediately
       setSelectedConv(prev => prev ? { ...prev, messages: [...(prev.messages||[]), sentMsg], status:'active' } : prev)
       setReplyText('')
-      // Full reload in background to sync with server
       loadData()
     } finally { setSending(false) }
   }
