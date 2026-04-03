@@ -231,7 +231,7 @@ export async function POST(request) {
         link_id:    orderId,
         urgent:     true,
         department: dept,
-      }).catch(() => {})
+      })
 
       // ── Internal notification → dashboard ────────────────
       await supabase.from('notifications').insert({
@@ -241,7 +241,7 @@ export async function POST(request) {
         body:      `${session.metadata?.guest_name || 'Guest'} · €${total} · Commission: €${order.commission_amount?.toFixed(0)}`,
         link_type: 'order',
         link_id:   orderId,
-      }).catch(() => {})
+      })
 
       // ── Alert → partner ───────────────────────────────────
       const partnerPhone = product.partners?.phone
