@@ -201,6 +201,23 @@ export async function processFacilityRequest(facility, hotel, guest, convId) {
       link_id:   booking.id,
     })
 
+    // Internal ticket so the booking appears in the Live Tab Booking Requests → Facility tab
+    // link_id points to the facility_bookings row so the Confirm button works directly
+    const description = `Facility: ${facility.facility}\nDate: ${facility.date||'TBC'} at ${facility.time||'TBC'}\nGuests: ${facility.guests||1}\nGuest: ${guest.name||''} ${guest.surname||''}${guest.room?' · Room '+guest.room:''}`
+    await supabase.from('internal_tickets').insert({
+      hotel_id:   hotel.id,
+      guest_id:   guest.id,
+      department: 'concierge',
+      category:   'facility_booking',
+      description,
+      room:       guest.room || null,
+      priority:   'normal',
+      status:     'pending',
+      created_by: 'bot',
+      link_id:    booking.id,
+      link_type:  'facility_booking',
+    })
+
   } catch (e) {
     console.error('processFacilityRequest error:', e.message)
     await createFallbackTicket(facility, hotel, guest, convId)
