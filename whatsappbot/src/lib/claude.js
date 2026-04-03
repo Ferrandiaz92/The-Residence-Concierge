@@ -7,7 +7,7 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY
 })
 
-const MODEL      = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-5-20251022'
+const MODEL      = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-5'
 const MAX_TOKENS = 1200
 
 // ── CORE SECURITY PROMPT ──────────────────────────────────────
