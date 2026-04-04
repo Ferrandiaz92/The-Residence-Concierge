@@ -55,7 +55,7 @@ function MobileBookingRow({ b }) {
   return (
     <div style={{background:'#F9FAFB',borderRadius:'10px',overflow:'hidden',border:'0.5px solid #E5E7EB'}}>
       <div onClick={()=>setOpen(o=>!o)} style={{display:'flex',alignItems:'center',gap:'10px',padding:'11px 14px',cursor:'pointer'}}>
-        <div style={{width:'7px',height:'7px',borderRadius:'50%',background:isConfirmed?'#16A34A':isPending?'#F59E0B':'#9CA3AF',flexShrink:0}}/>
+        <div style={{width:'7px',height:'7px',borderRadius:'50%',background:isConfirmed?'#16A34A':isPending?'#F59E0B':b.status==='cancelled'?'#DC2626':'#9CA3AF',flexShrink:0}}/>
         <span style={{fontSize:'16px',flexShrink:0}}>{emoji}</span>
         <div style={{flex:1,minWidth:0}}>
           <div style={{fontSize:'13px',fontWeight:'600',color:'#374151',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
@@ -63,8 +63,8 @@ function MobileBookingRow({ b }) {
           </div>
           <div style={{fontSize:'11px',color:'#9CA3AF'}}>{dateStr}</div>
         </div>
-        <div style={{fontSize:'11px',fontWeight:'700',color:isConfirmed?'#14532D':isPending?'#78350F':'#9CA3AF',flexShrink:0}}>
-          {isConfirmed?'✅':isPending?'⏳':'✓'}
+        <div style={{fontSize:'11px',fontWeight:'700',color:isConfirmed?'#14532D':isPending?'#78350F':b.status==='cancelled'?'#DC2626':'#9CA3AF',flexShrink:0}}>
+          {isConfirmed?'✅':isPending?'⏳':b.status==='cancelled'?'🚫':b.status==='declined'?'❌':'✓'}
         </div>
         <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
           <path d={open?'M1 7L5 3L9 7':'M1 3L5 7L9 3'} stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
@@ -244,7 +244,7 @@ export default function MobileGuestsTab({ hotelId, selectedGuest }) {
                         <div style={{fontSize:'13px',fontWeight:'600',color:'#111827'}}>{item.partners?.name||item.type}</div>
                         <div style={{fontSize:'11px',color:'#9CA3AF'}}>{(()=>{try{return new Date(item.ts).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}catch{return ''}})()}</div>
                       </div>
-                      <div style={{fontSize:'12px',fontWeight:'600',color:done?'#9CA3AF':'#C9A84C'}}>{done?'Done':item.status}</div>
+                      <div style={{fontSize:'12px',fontWeight:'600',color:done?'#9CA3AF':'#C9A84C'}}>{item.status==='cancelled'?'Cancelled':done?'Done':item.status}</div>
                     </div>
                   )
                 }

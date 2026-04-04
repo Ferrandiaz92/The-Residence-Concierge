@@ -929,8 +929,8 @@ function TicketAlertRow({ ticket: t, depts = [], isPrivileged = false, onOpenThr
                 </button>
               )
             })()}
-            {t.guest_id && t.guests && onNavigateToGuest && (
-              <button onClick={() => onNavigateToGuest(t.guests)}
+            {t.guest_id && onNavigateToGuest && (
+              <button onClick={() => onNavigateToGuest(t.guests || { id: t.guest_id, name: t.guest_name, surname: t.guest_surname, phone: t.guest_phone, room: t.room })}
                 style={{ fontSize:'12px', fontWeight:'600', padding:'6px 12px', borderRadius:'7px', border:'0.5px solid #D1D5DB', background:'white', color:'#374151', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                 👤 View guest
               </button>
